@@ -1,0 +1,926 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d3b66">
+<title>COMPTIVA — Gestion de commerce</title>
+<style>
+:root{--navy:#0d3b66;--blue:#1267d6;--green:#079669;--bg:#f3f7fb;--text:#172b4d;--muted:#66758a;--line:#e2eaf2;--white:#fff;--red:#c63b46;--amber:#a65d00}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer;border:0;border-radius:10px;padding:11px 14px;font-weight:650}.primary{background:var(--blue);color:#fff}.green{background:var(--green);color:#fff}.soft{background:#eaf2fc;color:var(--navy)}.danger{background:#fff0f0;color:var(--red)}.app{min-height:100vh;display:grid;grid-template-columns:240px 1fr}.sidebar{background:var(--navy);color:#fff;padding:22px 14px;display:flex;flex-direction:column;gap:22px}.brand{font-size:22px;font-weight:850;letter-spacing:-.6px;padding:0 10px}.brand span{color:#52d4a1}.tag{font-size:12px;color:#c5d7ea;padding:0 10px;margin-top:-18px}.nav{display:grid;gap:6px}.nav button{background:transparent;color:#dce8f4;text-align:left;font-weight:600}.nav button.active,.nav button:hover{background:#1e5688;color:#fff}.side-note{margin-top:auto;font-size:12px;color:#c5d7ea;padding:10px}.main{min-width:0}.topbar{background:#fff;border-bottom:1px solid var(--line);padding:16px 26px;display:flex;justify-content:space-between;align-items:center;gap:12px}.topbar h1{margin:0;font-size:22px}.topbar small{color:var(--muted)}.content{padding:24px;max-width:1440px;margin:auto}.pagehead{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}.pagehead h2{margin:0;font-size:21px}.pagehead p{margin:4px 0 0;color:var(--muted)}.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:20px}.card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:17px;box-shadow:0 3px 12px #0d3b6608}.stat-label{color:var(--muted);font-size:13px}.stat-number{font-size:25px;font-weight:800;margin-top:5px;letter-spacing:-.5px}.stat-icon{float:right;background:#e9f4ff;color:var(--blue);border-radius:10px;padding:8px}.layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:16px}.card h3{margin:0 0 13px;font-size:16px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:570px}th,td{text-align:left;padding:12px 10px;border-bottom:1px solid var(--line);font-size:13px}th{color:var(--muted);font-weight:650;background:#fbfdff}tr:last-child td{border-bottom:0}.pill{display:inline-block;padding:4px 8px;border-radius:20px;font-size:11px;font-weight:750;background:#e5f8ef;color:#08774e}.pill.pending{background:#fff4db;color:var(--amber)}.pill.paid{background:#e5f8ef;color:#08774e}.pill.overdue{background:#ffebec;color:var(--red)}.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{padding:8px 10px;font-size:12px}.quick{display:grid;gap:9px}.quick button{text-align:left;background:#f4f8fc;color:var(--navy);border:1px solid var(--line)}.quick button span{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}.empty{text-align:center;color:var(--muted);padding:28px 10px}.formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-weight:650;font-size:13px}.field input,.field select,.field textarea{width:100%;border:1px solid #cbd7e4;border-radius:9px;padding:11px;background:#fff;color:var(--text)}.field textarea{min-height:100px;resize:vertical}.formactions{display:flex;gap:10px;justify-content:flex-end;margin-top:16px}.search{max-width:320px;width:100%;border:1px solid #cbd7e4;border-radius:10px;padding:10px 12px}.notice{background:#fff8e7;border:1px solid #f3dfa6;color:#704e08;border-radius:12px;padding:12px 14px;font-size:13px;margin-bottom:16px}.success{background:#e7f8ef;border:1px solid #b8ebd0;color:#086b46;border-radius:10px;padding:10px 12px;margin-bottom:12px}.hidden{display:none!important}.mobile-nav{display:none}.footer{color:var(--muted);font-size:12px;padding:18px 0 4px}.balance{font-weight:800}.positive{color:var(--green)}.negative{color:var(--red)}
+@media(max-width:1000px){.app{grid-template-columns:190px 1fr}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.layout{grid-template-columns:1fr}.content{padding:18px}.sidebar{padding:18px 10px}}
+@media(max-width:680px){.app{display:block;padding-bottom:122px}.sidebar{display:none}.topbar{padding:14px 16px}.topbar h1{font-size:19px}.topbar small{display:none}.content{padding:14px}.stats{gap:12px;column-gap:12px;row-gap:12px}.card{padding:15px;border-radius:13px}.stat-number{font-size:19px;line-height:1.35;overflow-wrap:anywhere;letter-spacing:0}.stat-label{font-size:12px}.pagehead h2{font-size:19px}.formgrid{grid-template-columns:1fr}.field.full{grid-column:auto}.mobile-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));row-gap:3px;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);padding:7px 6px calc(7px + env(safe-area-inset-bottom));z-index:5}.mobile-nav button{background:transparent;color:var(--muted);font-size:10px;line-height:1.2;padding:6px 2px;display:grid;justify-items:center;gap:3px;min-width:0}.mobile-nav button.active{color:var(--blue)}.mobile-nav b{font-size:18px}.top-actions button{padding:9px 10px}.table-wrap table{min-width:520px}.stat-icon{padding:6px}.notice{font-size:12px}.formactions{gap:8px;flex-wrap:wrap}.formactions button{flex:1 1 44%;min-width:120px}}
+
+/* Accueil modernisé — styles additionnels, fonctions existantes conservées */
+:root{--navy:#102b46;--blue:#1769e0;--green:#0b9b72;--bg:#f4f7fb;--text:#152b43;--muted:#697b90;--line:#e3eaf2}
+body{background:#f4f7fb}
+.sidebar{background:linear-gradient(180deg,#102b46 0%,#153e60 100%)}
+.brand{font-size:24px;letter-spacing:-.8px}.brand span{color:#56e0b0}
+.topbar{padding:20px 28px;background:rgba(255,255,255,.96)}
+.topbar h1{font-size:24px;letter-spacing:-.5px}.topbar small{display:inline-block;margin-top:4px;color:#718198}
+.content{padding:26px;max-width:1500px}
+#page-dashboard .pagehead{padding:22px 24px;margin-bottom:18px;border-radius:20px;background:linear-gradient(120deg,#12395b,#1769a8);color:#fff;box-shadow:0 12px 28px #12395b1c}
+#page-dashboard .pagehead h2{font-size:25px;letter-spacing:-.6px;color:#fff}
+#page-dashboard .pagehead p{color:#d7e8f7;font-size:14px}
+#page-dashboard .pagehead .actions{gap:8px}
+#page-dashboard .pagehead .actions button{border:1px solid #ffffff35;background:#ffffff16;color:#fff;font-size:12px}
+#page-dashboard .pagehead .actions .green{background:#0b9b72;border-color:#0b9b72}
+#page-dashboard .stats{gap:14px;margin-bottom:22px}
+#page-dashboard .stats .card{position:relative;min-height:118px;padding:19px 18px;border-radius:17px;border:1px solid #e5ebf3;box-shadow:0 5px 18px #1b3d5c08;transition:transform .15s ease,box-shadow .15s ease}
+#page-dashboard .stats .card:hover{transform:translateY(-2px);box-shadow:0 9px 24px #1b3d5c12}
+#page-dashboard .stat-icon{float:right;width:36px;height:36px;display:grid;place-items:center;padding:0;border-radius:12px;background:#eaf2ff;color:#1769e0;font-size:18px}
+#page-dashboard .stats .card:nth-child(2n) .stat-icon{background:#e5f8f1;color:#07875f}
+#page-dashboard .stat-label{font-size:12px;line-height:1.4;max-width:85%;color:#718198}
+#page-dashboard .stat-number{font-size:clamp(19px,2vw,25px);line-height:1.3;margin-top:12px;color:#172f4b;overflow-wrap:anywhere}
+#page-dashboard .layout{gap:18px}
+#page-dashboard .layout>.card{border-radius:18px;padding:21px;box-shadow:0 5px 18px #1b3d5c08}
+#page-dashboard .layout .card h3{font-size:17px;letter-spacing:-.2px}
+#page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+#page-dashboard .quick button{min-height:74px;border-radius:13px;padding:13px;background:#f7faff;border-color:#e5edf7;line-height:1.35}
+#page-dashboard .quick button:hover{background:#edf5ff;border-color:#c9def7}
+#page-dashboard .quick button span{font-size:11px;line-height:1.4;margin-top:5px}
+.notice{border-radius:12px}
+@media(max-width:1000px){#page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr))}.content{padding:18px}}
+@media(max-width:680px){.topbar{padding:15px 16px}.topbar h1{font-size:20px}#page-dashboard .pagehead{padding:18px 16px;border-radius:16px;align-items:flex-start}#page-dashboard .pagehead h2{font-size:22px}#page-dashboard .pagehead .actions{width:100%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#page-dashboard .pagehead .actions button{min-width:0;padding:10px 8px;font-size:11px}#page-dashboard .stats{gap:10px;row-gap:10px}#page-dashboard .stats .card{padding:14px 12px;min-height:112px;border-radius:14px}#page-dashboard .stat-icon{width:30px;height:30px;border-radius:9px;font-size:15px}#page-dashboard .stat-label{font-size:11px;max-width:100%}#page-dashboard .stat-number{font-size:18px;margin-top:10px;letter-spacing:-.2px}#page-dashboard .layout>.card{padding:16px}#page-dashboard .quick{grid-template-columns:1fr;gap:8px}#page-dashboard .quick button{min-height:64px;padding:12px;text-align:left}#page-dashboard .quick button span{font-size:12px}}
+
+/* Identité guinéenne et accueil lisible */
+.guinea-stripe{height:6px;display:flex;width:100%;overflow:hidden}
+.guinea-stripe i{display:block;flex:1}
+.guinea-stripe i:nth-child(1){background:#ce1126}.guinea-stripe i:nth-child(2){background:#fcd116}.guinea-stripe i:nth-child(3){background:#009460}
+.welcome-title{display:flex;align-items:center;gap:12px}
+.nimba-mark{width:46px;height:42px;flex:0 0 46px;border-radius:13px;background:linear-gradient(145deg,#e5f8ef,#fff4d2);display:grid;place-items:center;border:1px solid #dce9df}
+.nimba-mark svg{width:35px;height:30px}
+.welcome-copy{font-weight:800;letter-spacing:-.45px;font-size:clamp(18px,2vw,24px);line-height:1.2}
+.welcome-copy .guinea-name{color:#009460}
+.welcome-tagline{font-size:12px;color:var(--muted);margin-top:5px}
+#page-dashboard .pagehead{position:relative;overflow:hidden;background:linear-gradient(120deg,#fff 0%,#f4fbf7 65%,#fff9e6 100%);color:var(--text);border:1px solid #e2eadf;box-shadow:0 8px 22px #12395b0b}
+#page-dashboard .pagehead:before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:linear-gradient(to bottom,#ce1126 0 33.33%,#fcd116 33.33% 66.66%,#009460 66.66% 100%)}
+#page-dashboard .pagehead h2{color:#12395b}
+#page-dashboard .pagehead p{color:#607286}
+@media(max-width:680px){.app{padding-bottom:122px}.welcome-title{gap:9px}.nimba-mark{width:40px;height:38px;flex-basis:40px}.welcome-copy{font-size:18px}.welcome-tagline{font-size:11px}.topbar{border-top:0}.topbar small{display:block;font-size:12px}.stats{grid-template-columns:1fr!important}.stats .card{min-height:0!important;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;row-gap:4px}.stats .stat-icon{grid-column:2;grid-row:1/3;float:none}.stats .stat-label{grid-column:1;max-width:100%!important}.stats .stat-number{grid-column:1;font-size:21px!important;margin-top:0!important;overflow-wrap:anywhere}.notice.sync-note{line-height:1.5}}
+
+
+/* Indicateurs prioritaires demandés : dettes, clients débiteurs, dettes soldées */
+#page-dashboard .hero-kpis{grid-template-columns:repeat(3,minmax(0,1fr));margin-bottom:12px}
+#page-dashboard .hero-kpis .card{min-height:112px;border-top:3px solid var(--green)}
+#page-dashboard .hero-kpis .card:nth-child(2){border-top-color:var(--blue)}
+#page-dashboard .hero-kpis .card:nth-child(3){border-top-color:#0b9b72}
+#page-dashboard .detailed-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+#cloudSyncPanel{margin:12px 18px!important;border-radius:14px!important;box-shadow:0 3px 12px #102b460c}
+#cloudSyncPanel input{min-width:0;max-width:100%}
+@media(max-width:680px){#page-dashboard .hero-kpis{grid-template-columns:1fr!important}#page-dashboard .hero-kpis .card{min-height:82px}#page-dashboard .detailed-stats{grid-template-columns:repeat(2,minmax(0,1fr))}#cloudSyncPanel{margin:10px!important;padding:12px!important}#cloudSyncPanel button{flex:1 1 42%}}
+
+
+/* V2 — mise en page alignée sur le modèle visuel validé */
+:root{--navy:#082f68;--blue:#1256b4;--green:#0b9b72;--bg:#f4f7fd;--text:#10264b;--muted:#5d6d8a;--line:#e5ebf5}
+body{background:#f4f7fd;color:var(--text)}
+.sidebar{background:#082f68}
+.topbar{background:#082f68;color:#fff;border:0;padding:20px 28px;min-height:104px}
+.topbar h1,.topbar small{color:#fff}.topbar small{opacity:.82}
+.welcome-title{gap:14px}.kg-mark{width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#fff;color:#082f68;display:grid;place-items:center;font-size:20px;font-weight:900;letter-spacing:-1px}
+.welcome-copy{font-size:clamp(20px,2.3vw,28px);font-weight:850;color:#fff}.welcome-copy .guinea-name{color:#fff}.welcome-tagline{color:#dce8ff;font-size:14px}.top-actions .primary{background:#fff;color:#082f68}
+.content{max-width:1500px;padding:24px 26px}
+#page-dashboard .pagehead{background:linear-gradient(110deg,#e7efff,#f6f9ff);border:1px solid #e1eaff;border-radius:20px;padding:20px 22px;box-shadow:none;color:#10264b}
+#page-dashboard .pagehead h2,#page-dashboard .pagehead p{color:#10264b}
+#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+#page-dashboard .stats .card{min-height:142px;display:grid;grid-template-columns:104px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;column-gap:16px;padding:18px 20px;border-radius:24px;border:1px solid #e6ecf7;box-shadow:0 5px 18px #0b36700d}
+#page-dashboard .stat-icon{grid-column:1;grid-row:1/3;float:none;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;padding:0;background:#e5efff;color:#1256b4;font-size:35px}
+#page-dashboard .stats .card:nth-child(2n) .stat-icon{background:#e5efff;color:#1256b4}
+#page-dashboard .stat-label{grid-column:2;font-size:14px;max-width:100%;color:#253b60;line-height:1.35}
+#page-dashboard .stat-number{grid-column:2;font-size:clamp(21px,2.2vw,30px);font-weight:850;margin-top:2px;color:#10264b;overflow-wrap:anywhere}
+#page-dashboard .hero-kpis .card{border-top:0}
+#page-dashboard .layout>.card{border-radius:20px}
+#page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Client identity icons and clear action */
+#page-dashboard .actions .green{background:#1256b4;border-color:#1256b4}
+@media(max-width:1000px){.app{grid-template-columns:190px 1fr}#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){
+ .app{padding-bottom:88px}.topbar{padding:17px 16px;min-height:104px}.welcome-title{gap:11px}.kg-mark{width:45px;height:45px;flex-basis:45px;font-size:17px}.welcome-copy{font-size:19px}.welcome-tagline{font-size:12px}.topbar small{display:none}
+ .content{padding:14px 12px}.notice.sync-note{font-size:11px;padding:9px 11px;margin-bottom:12px}
+ #page-dashboard .pagehead{padding:15px 14px;border-radius:17px;gap:10px}#page-dashboard .pagehead h2{font-size:19px}#page-dashboard .pagehead p{font-size:12px}#page-dashboard .pagehead .actions{width:100%;display:flex;flex-wrap:wrap}#page-dashboard .pagehead .actions button{flex:1 1 30%;font-size:10px;padding:8px 5px}
+ #page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px;row-gap:10px}
+ #page-dashboard .stats .card{min-height:128px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;padding:12px 12px;border-radius:19px}
+ #page-dashboard .stat-icon{width:42px;height:42px;flex:none;border-radius:50%;font-size:19px;margin-bottom:3px}
+ #page-dashboard .stat-label{font-size:11px;line-height:1.3;max-width:100%}
+ #page-dashboard .stat-number{font-size:clamp(16px,4.6vw,21px);line-height:1.25;margin:0;overflow-wrap:anywhere}
+ #page-dashboard .layout>.card{padding:14px}#page-dashboard .quick{grid-template-columns:1fr}
+ .mobile-nav{padding:6px 4px calc(6px + env(safe-area-inset-bottom));grid-template-columns:repeat(5,minmax(0,1fr))}.mobile-nav button{font-size:10px}.mobile-nav b{font-size:19px}
+}
+
+
+/* Écran de connexion COMPTIVA — inspiré du visuel validé */
+body:not(.auth-ready) .app,body:not(.auth-ready) .mobile-nav{display:none!important}
+body.auth-ready #authScreen{display:none!important}
+body:not(.auth-ready) #authScreen{display:flex!important}
+#authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 14px;background:radial-gradient(ellipse at 50% 0%,#e7f3ff 0,#f5f9ff 55%,#e9f2ff 100%);position:relative;overflow:hidden}
+#authScreen:before{content:"";position:absolute;inset:0 0 auto;height:13px;background:linear-gradient(165deg,#0753a5 0 34%,#f5bd20 34% 39%,transparent 39%)}
+#authScreen:after{content:"";position:absolute;left:-5%;right:-5%;bottom:0;height:13px;background:linear-gradient(165deg,#0b4b99 0 42%,#f5c21b 42% 48%,#07945f 48% 100%);transform:skewY(-2deg)}
+.auth-shell{width:min(100%,690px);position:relative;z-index:1}
+.auth-brand{display:flex;align-items:center;justify-content:center;gap:18px;margin:8px auto 24px;color:#082f68;text-align:left}
+.auth-logo{width:88px;height:78px;border-right:3px solid #0b4c9b;display:grid;place-items:center;font-size:38px;font-weight:950;letter-spacing:-3px;color:#0a55a5;position:relative}
+.auth-logo:before{content:"";position:absolute;top:2px;left:18px;width:50px;height:28px;background:linear-gradient(90deg,#1769d2 0 30%,#1488c8 30% 65%,#07945f 65%);clip-path:polygon(0 100%,0 55%,30% 55%,30% 25%,65% 25%,65% 0,100% 0,100% 100%)}
+.auth-brand-name{font-size:clamp(30px,7vw,48px);font-weight:950;line-height:1;letter-spacing:-1.5px}
+.auth-brand-tag{font-size:clamp(12px,2.7vw,17px);font-weight:750;font-style:italic;margin-top:7px}
+.auth-flag{display:flex;width:62px;height:38px;border-radius:5px;overflow:hidden;margin-left:10px;flex:0 0 auto}.auth-flag i{flex:1}.auth-flag i:nth-child(1){background:#ce1126}.auth-flag i:nth-child(2){background:#fcd116}.auth-flag i:nth-child(3){background:#009460}
+.auth-welcome{background:linear-gradient(110deg,#0752a5,#0b62b8);border-radius:24px;padding:24px 16px;color:white;text-align:center;box-shadow:0 8px 24px #0b4d9b24;margin-bottom:20px}
+.auth-welcome h1{font-size:clamp(25px,6vw,38px);margin:0 0 7px;font-weight:850}.auth-welcome p{font-size:clamp(14px,3.5vw,20px);font-style:italic;margin:0;color:#eef6ff}
+.auth-card{background:#fff;border:1px solid #d7e5fa;border-radius:24px;padding:24px;box-shadow:0 8px 26px #0b4d9b14}
+.auth-field{position:relative;margin-bottom:14px}.auth-field input{width:100%;height:62px;border:2px solid #b9c9e3;border-radius:16px;padding:12px 54px 12px 58px;font-size:18px;color:#172b4d;background:#fff;outline:none}.auth-field input:focus{border-color:#1769d2;box-shadow:0 0 0 3px #1769d21a}.auth-field .field-icon{position:absolute;left:18px;top:50%;transform:translateY(-50%);font-size:23px;color:#0759b1}.auth-field .toggle-pass{position:absolute;right:10px;top:50%;transform:translateY(-50%);background:transparent;color:#40516d;padding:8px;font-size:13px}
+.auth-forgot{display:block;text-align:right;margin:2px 0 17px;color:#0759b1;font-weight:650;text-decoration:none;background:none;padding:5px 0}
+.auth-primary{width:100%;height:64px;background:linear-gradient(110deg,#0752a5,#0b62b8);color:#fff;border-radius:15px;font-size:20px;font-weight:800;box-shadow:0 5px 12px #0b4d9b22}
+.auth-divider{display:flex;align-items:center;gap:15px;color:#1456a0;font-weight:750;margin:17px 0}.auth-divider:before,.auth-divider:after{content:"";height:2px;background:#1759aa;flex:1}
+.auth-create{width:100%;min-height:66px;background:#d9eaff;color:#0b3d79;border-radius:16px;font-size:18px;font-weight:800}
+.auth-message{min-height:22px;margin:12px 0 0;font-size:13px;text-align:center;color:#a12a32}.auth-message.ok{color:#08764e}.auth-small{text-align:center;font-size:12px;color:#65758c;margin-top:14px;line-height:1.5}
+.auth-mode{font-size:12px;color:#dcecff;margin-top:12px;min-height:18px}
+.top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.top-actions .logout-btn{background:#eaf2ff;color:#082f68}
+@media(max-width:520px){#authScreen{padding:24px 12px 30px}.auth-brand{gap:10px;margin-bottom:18px}.auth-logo{width:62px;height:60px;font-size:30px}.auth-logo:before{width:38px;height:22px;left:11px}.auth-brand-name{font-size:30px}.auth-brand-tag{font-size:11px}.auth-flag{width:42px;height:28px;margin-left:0}.auth-welcome{padding:19px 12px;border-radius:19px}.auth-card{padding:17px;border-radius:20px}.auth-field input{height:57px;font-size:16px}.auth-primary{height:58px;font-size:18px}.auth-create{font-size:16px}}
+
+
+/* COMPTIVA — tableau de bord après connexion, décliné comme le modèle fourni */
+#page-dashboard .pagehead{background:#fff;border:0;border-radius:0;padding:2px 2px 14px;box-shadow:none;margin-bottom:12px}
+#page-dashboard .pagehead:before{display:none}
+#page-dashboard .pagehead h2{font-size:21px;color:#10264b}
+#page-dashboard .pagehead p{color:#65758c}
+#page-dashboard .hero-kpis{grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:14px}
+#page-dashboard .hero-kpis .card{min-height:84px;display:grid;grid-template-columns:38px minmax(0,1fr);grid-template-rows:auto auto;align-items:center;column-gap:10px;padding:13px 14px;border-radius:12px;border:1px solid #e5ebf5;box-shadow:none}
+#page-dashboard .hero-kpis .stat-icon{grid-column:1;grid-row:1/3;width:34px;height:34px;border-radius:10px;font-size:17px}
+#page-dashboard .hero-kpis .stat-label{grid-column:2;font-size:11px;max-width:none}
+#page-dashboard .hero-kpis .stat-number{grid-column:2;font-size:clamp(17px,1.8vw,23px);margin:0}
+#page-dashboard .detailed-stats{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+#page-dashboard .detailed-stats .card{padding:12px;border-radius:12px;box-shadow:none}
+.dashboard-overview{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(280px,1fr);gap:14px;margin:14px 0}
+.dashboard-overview>.card{padding:16px;border:1px solid #e5ebf5;border-radius:13px;box-shadow:none;min-width:0}
+.dashboard-card-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.dashboard-card-heading h3{margin:0;font-size:14px}
+.dashboard-card-heading button{font-size:11px;padding:7px 9px;white-space:nowrap}
+.text-action{background:transparent;color:#1256b4;padding:5px}
+.dashboard-client-row{display:grid;grid-template-columns:34px minmax(0,1fr) auto;align-items:center;gap:9px;padding:9px 0;border-bottom:1px solid #edf1f6}
+.dashboard-client-row:last-child{border-bottom:0}
+.dashboard-client-avatar{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:#e8f1ff;color:#1256b4;font-weight:800}
+.dashboard-client-name{font-size:12px;font-weight:750;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dashboard-client-balance{font-size:11px;color:#65758c;margin-top:2px}
+.dashboard-client-row .pill{font-size:9px;padding:4px 6px}
+.add-client-dashboard{width:100%;margin-top:10px;background:#1256b4;border-radius:8px;padding:9px;font-size:12px}
+.dashboard-debt-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #edf1f6;font-size:11px}
+.dashboard-debt-row:last-child{border-bottom:0}
+.dashboard-debt-row strong{font-size:11px}
+.dashboard-lower-layout{margin-top:14px}
+.dashboard-accounting-note{font-size:10px}
+@media(min-width:1001px){.app{grid-template-columns:220px minmax(0,1fr)}.sidebar{padding:22px 13px}.content{max-width:1500px;padding:22px 26px}#page-dashboard .layout.dashboard-lower-layout{grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr)}}
+@media(min-width:681px) and (max-width:1000px){.app{grid-template-columns:178px minmax(0,1fr)}.sidebar{padding:18px 9px}.nav button{font-size:12px;padding:9px 7px}.content{padding:17px 15px}#page-dashboard .hero-kpis .card{padding:11px 9px;grid-template-columns:32px minmax(0,1fr);column-gap:7px}#page-dashboard .hero-kpis .stat-icon{width:29px;height:29px}.dashboard-overview{grid-template-columns:minmax(0,1.1fr) minmax(230px,1fr);gap:10px}.dashboard-overview>.card{padding:12px}#page-dashboard .detailed-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){
+ .app{padding-bottom:75px}.sidebar{display:none}.topbar{background:#082f68;color:#fff;padding:12px 14px;min-height:66px}.welcome-title{gap:9px}.kg-mark{width:38px;height:38px;flex-basis:38px;font-size:15px}.welcome-copy{font-size:17px;color:#fff}.welcome-copy .guinea-name{color:#fff}.welcome-tagline{display:none}.topbar small{display:none!important}.top-actions .primary{display:none}.top-actions .logout-btn{background:#ffffff1c;color:#fff;font-size:10px;padding:7px 8px}
+ .content{padding:12px 11px}.notice.sync-note{display:none}#page-dashboard .pagehead{padding:9px 7px 12px;margin-bottom:9px}#page-dashboard .pagehead h2{font-size:18px}#page-dashboard .pagehead p{font-size:11px}#page-dashboard .pagehead .actions{display:none}
+ #page-dashboard .hero-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px;margin-bottom:12px}#page-dashboard .hero-kpis .card{min-height:68px;padding:9px 8px;grid-template-columns:minmax(0,1fr) 28px;column-gap:5px;border-radius:10px}#page-dashboard .hero-kpis .card:nth-child(3){display:none}#page-dashboard .hero-kpis .stat-icon{grid-column:2;grid-row:1/3;width:27px;height:27px;font-size:14px}#page-dashboard .hero-kpis .stat-label{grid-column:1;font-size:10px}#page-dashboard .hero-kpis .stat-number{grid-column:1;font-size:16px;overflow-wrap:anywhere}
+ #page-dashboard .detailed-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}#page-dashboard .detailed-stats .card{padding:10px;border-radius:10px}#page-dashboard .detailed-stats .stat-number{font-size:16px}
+ .dashboard-overview{grid-template-columns:1fr;gap:10px;margin:12px 0}.dashboard-overview>.card{padding:12px;border-radius:11px}.dashboard-card-heading h3{font-size:13px}.dashboard-client-row{grid-template-columns:31px minmax(0,1fr) auto;gap:7px;padding:8px 0}.dashboard-client-avatar{width:29px;height:29px;font-size:11px}.dashboard-client-name{font-size:11px}.dashboard-client-balance{font-size:10px}.dashboard-client-row .pill{font-size:9px}.add-client-dashboard{margin-top:9px;padding:9px;font-size:12px}
+ #page-dashboard .dashboard-lower-layout{grid-template-columns:1fr;gap:10px}.dashboard-accounting-note{display:none}.mobile-nav{grid-template-columns:repeat(5,minmax(0,1fr));padding:5px 4px calc(5px + env(safe-area-inset-bottom));box-shadow:0 -3px 12px #10264b0a}.mobile-nav button{font-size:10px;padding:5px 2px}.mobile-nav button:nth-child(n+6){display:none}.mobile-nav b{font-size:18px}
+}
+
+/* Ajustement final du tableau de bord téléphone selon la maquette fournie */
+@media(max-width:680px){
+ #page-dashboard .pagehead{display:block!important;background:linear-gradient(110deg,#078b61,#079b6b)!important;color:#fff!important;border:0!important;border-radius:12px!important;padding:16px 14px!important;margin:0 0 10px!important;box-shadow:none!important}
+ #page-dashboard .pagehead h2{color:#fff!important;font-size:16px!important;font-weight:800!important}
+ #page-dashboard .pagehead p{color:#e5fff4!important;font-size:10px!important;margin-top:3px!important}
+ #page-dashboard .hero-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important;margin-bottom:11px!important}
+ #page-dashboard .hero-kpis .card{display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center!important;gap:4px!important;min-height:83px!important;padding:10px!important;border:1px solid #e5ebf5!important;border-radius:11px!important;background:#fff!important}
+ #page-dashboard .hero-kpis .card:nth-child(3){display:none!important}
+ #page-dashboard .hero-kpis .stat-icon{float:none!important;width:25px!important;height:25px!important;border-radius:7px!important;font-size:13px!important;margin:0!important}
+ #page-dashboard .hero-kpis .stat-label{font-size:10px!important;color:#63738a!important}
+ #page-dashboard .hero-kpis .stat-number{font-size:17px!important;color:#10264b!important;font-weight:850!important}
+ #page-dashboard .detailed-stats{display:none!important}
+ #page-dashboard .dashboard-overview{display:block!important;margin:0!important}
+ #page-dashboard .dashboard-due-card{display:none!important}
+ #page-dashboard .dashboard-clients-card{padding:12px!important;border-radius:11px!important}
+ #page-dashboard .dashboard-card-heading h3{font-size:13px!important}
+ #page-dashboard .dashboard-client-row{grid-template-columns:31px minmax(0,1fr) auto!important;padding:8px 0!important}
+ #page-dashboard .add-client-dashboard{display:block!important;width:100%!important;background:#1267d6!important;border-radius:7px!important;padding:9px!important;margin-top:9px!important;font-size:12px!important}
+ #page-dashboard .dashboard-lower-layout,#page-dashboard .dashboard-accounting-note{display:none!important}
+ .mobile-nav{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+ .mobile-more-menu{position:fixed;z-index:8;right:10px;bottom:70px;width:min(245px,calc(100vw - 20px));display:grid;gap:5px;padding:10px;background:#fff;border:1px solid #dce6f1;border-radius:14px;box-shadow:0 10px 35px #10264b26}
+ .mobile-more-menu.hidden{display:none!important}
+ .mobile-more-menu button{background:#f5f8fc;color:#12395b;text-align:left;padding:10px 12px;font-size:13px;border-radius:9px}
+}
+</style>
+</head>
+<body>
+<section id="authScreen" aria-label="Connexion Comptiva">
+  <div class="auth-shell">
+    <div class="auth-brand">
+      <div class="auth-logo">KG</div>
+      <div><div class="auth-brand-name">COMPTIVA</div><div class="auth-brand-tag">Votre commerce, toujours sous contrôle.</div></div>
+      <div class="auth-flag" aria-label="Drapeau de la Guinée"><i></i><i></i><i></i></div>
+    </div>
+    <div class="auth-welcome"><h1 id="authHeading">Bienvenue sur COMPTIVA</h1><p id="authSubtitle">Connectez-vous pour accéder à votre commerce.</p></div>
+    <div class="auth-card">
+      <form id="authForm">
+        <div class="auth-field"><span class="field-icon">✉</span><input id="cloudEmail" type="email" autocomplete="username" placeholder="Adresse e-mail" aria-label="Adresse e-mail" required></div>
+        <div class="auth-field"><span class="field-icon">🔒</span><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required><button class="toggle-pass" type="button" onclick="krediTogglePassword()" aria-label="Afficher ou masquer le mot de passe">Afficher</button></div>
+        <button class="auth-forgot" type="button" onclick="krediForgotPassword()">Mot de passe oublié ?</button>
+        <button class="auth-primary" id="authSubmit" type="submit">↪ &nbsp; Se connecter</button>
+      </form>
+      <div class="auth-divider">Ou</div>
+      <button class="auth-create" id="authCreate" type="button" onclick="krediSetAuthMode('signup')">＋ &nbsp; Première visite ? Créer un compte</button>
+      <p class="auth-message" id="authMessage" role="alert"></p>
+      <p class="auth-small">Vos informations commerciales sont accessibles uniquement avec votre compte. Ne partagez jamais votre mot de passe.</p>
+    </div>
+  </div>
+</section>
+
+<div class="app">
+<aside class="sidebar">
+  <div class="brand">COMPT<span>IVA</span></div><div class="tag">Gestion simple de votre commerce</div>
+  <div class="tag">Ventes, crédits et stock simplement</div>
+  <nav class="nav" id="sideNav">
+    <button data-page="dashboard" class="active">▦ &nbsp; Tableau de bord</button>
+    <button data-page="sales">🛒 &nbsp; Ventes</button>
+    <button data-page="stock">📦 &nbsp; Stock</button>
+    <button data-page="reports">▥ &nbsp; Chiffres</button>
+    <button data-page="clients">👤 &nbsp; Clients</button>
+    <button data-page="debts">▤ &nbsp; Dettes</button>
+    <button data-page="payments">↻ &nbsp; Remboursements</button>
+    <button data-page="purchases">📦 &nbsp; Achats marchandises</button>
+    <button data-page="expenses">💸 &nbsp; Dépenses</button>
+    <button data-page="reminders">✉ &nbsp; Rappels</button>
+    <button data-page="subscription">💳 &nbsp; Abonnement</button>
+  </nav>
+  <div class="side-note">Prototype de démonstration<br>Montants en GNF · Français · Hors connexion</div>
+</aside>
+<main class="main">
+  
+  <header class="topbar">
+    <div class="welcome-title">
+      <div class="kg-mark" aria-label="Comptiva">KG</div>
+      <div><div class="welcome-copy">Bonjour, bienvenue sur <span class="guinea-name">Comptiva</span></div><div class="welcome-tagline">Votre commerce, toujours sous contrôle.</div><small id="topTitle">Tableau de bord</small><small id="cloudSyncStatus" role="status">Connexion en cours…</small></div>
+    </div>
+    <div class="top-actions"><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button><button class="logout-btn" onclick="krediSignOut()">Déconnexion</button></div>
+  </header>
+  <div class="content">
+    <div class="notice sync-note"><b>Connexion et utilisation :</b> Comptiva peut fonctionner hors connexion sur cet appareil. Pour synchroniser les ventes, dettes et achats entre téléphone, tablette et ordinateur, une connexion Internet est nécessaire et la synchronisation Firebase doit être configurée. <b>La synchronisation entre appareils est disponible uniquement après connexion Firebase et validation des règles Firestore.</b> Sauvegarde régulièrement tes données.</div>
+    <div id="flash" class="success hidden"></div>
+    <section id="page-dashboard">
+      <div class="pagehead"><div><h2 id="dashboardGreeting">Bonjour, bienvenue sur COMPTIVA</h2><p id="dashboardSubGreeting">Voici la situation de votre commerce.</p></div><div class="actions"><button class="soft" onclick="exportCSV()">Exporter CSV</button><button class="green" onclick="backupData()">Sauvegarder les données</button><button class="soft" onclick="document.getElementById('restoreFile').click()">Restaurer une sauvegarde</button><input id="restoreFile" type="file" accept="application/json,.json" style="display:none" onchange="restoreData(event)"></div></div>
+      <div class="stats hero-kpis" aria-label="Indicateurs principaux">
+        <div class="card"><div class="stat-icon">₲</div><div class="stat-label">Total des dettes restantes</div><div class="stat-number" id="kpiDebtTotal">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">👤</div><div class="stat-label">Clients débiteurs</div><div class="stat-number" id="kpiDebtorClients">0</div></div>
+        <div class="card"><div class="stat-icon">✓</div><div class="stat-label">Dettes entièrement réglées</div><div class="stat-number" id="kpiPaidDebts">0</div></div>
+      </div>
+      <div class="stats detailed-stats">
+        <div class="card"><div class="stat-icon">▤</div><div class="stat-label">Chiffre d’affaires du jour</div><div class="stat-number" id="dashDayRevenue">0 GNF</div><div class="stat-label" id="dashDayCount">0 vente</div></div>
+        <div class="card"><div class="stat-icon">↗</div><div class="stat-label">Chiffre d’affaires de la semaine</div><div class="stat-number" id="dashWeekRevenue">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">▦</div><div class="stat-label">Chiffre d’affaires du mois</div><div class="stat-number" id="dashMonthRevenue">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">₲</div><div class="stat-label">Encaissé sur les ventes aujourd’hui</div><div class="stat-number" id="dashDayCollected">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">◷</div><div class="stat-label">Ventes à crédit aujourd’hui</div><div class="stat-number" id="dashDayCredit">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">₲</div><div class="stat-label">Total restant dû</div><div class="stat-number" id="statBalance">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">👤</div><div class="stat-label">Clients enregistrés</div><div class="stat-number" id="statClients">0</div></div>
+        <div class="card"><div class="stat-icon">▤</div><div class="stat-label">Dettes en cours</div><div class="stat-number" id="statDebts">0</div></div>
+        <div class="card"><div class="stat-icon">↻</div><div class="stat-label">Remboursements saisis</div><div class="stat-number" id="statPayments">0</div></div>
+        <div class="card"><div class="stat-icon">📦</div><div class="stat-label">Achats de marchandises ce mois</div><div class="stat-number" id="dashMonthPurchases">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">💸</div><div class="stat-label">Dépenses ce mois</div><div class="stat-number" id="dashMonthExpenses">0 GNF</div></div>
+        <div class="card"><div class="stat-icon">＝</div><div class="stat-label">CA − achats − dépenses (indicateur simple)</div><div class="stat-number" id="dashSimpleResult">0 GNF</div></div>
+      </div>
+      <div class="dashboard-overview">
+        <div class="card dashboard-clients-card"><div class="dashboard-card-heading"><h3>Derniers clients</h3><button class="text-action" onclick="navigate('clients')">Voir tout ›</button></div><div id="dashboardRecentClients"></div><button class="primary add-client-dashboard" onclick="openForm('client')">＋ Ajouter un client</button></div>
+        <div class="card dashboard-due-card"><div class="dashboard-card-heading"><h3>Prochaines échéances</h3><button class="green" onclick="openForm('debt')">＋ Ajouter une dette</button></div><div id="dashboardUpcomingDebts"></div></div>
+      </div>
+      <p class="footer dashboard-accounting-note">L’indicateur « CA − achats − dépenses » est une estimation simplifiée : il ne tient pas compte du stock restant, des dettes fournisseurs ni de tous les ajustements comptables. Ce n’est pas le bénéfice comptable exact.</p>
+      <div class="layout dashboard-lower-layout">
+        <div class="card"><h3>Dernières dettes</h3><div class="table-wrap" id="recentDebts"></div></div>
+        <div class="card"><h3>Actions rapides</h3><div class="quick">
+          <button onclick="navigate('stock')">📦 Gérer le stock<span>Produits, quantités et alertes</span></button>
+          <button onclick="openForm('sale')">🛒 Enregistrer une vente<span>Produit, quantité, prix et mode de paiement</span></button>
+          <button onclick="navigate('reports')">▥ Voir les chiffres<span>Jour, semaine et mois</span></button>
+          <button onclick="openForm('client')">＋ Ajouter un client<span>Créer une fiche client</span></button>
+          <button onclick="openForm('debt')">＋ Enregistrer une dette<span>Montant et date</span></button>
+          <button onclick="openForm('payment')">↻ Enregistrer un remboursement<span>Paiement total ou partiel</span></button>
+          <button onclick="openForm('purchase')">📦 Enregistrer un achat de marchandises<span>Fournisseur, articles et montant</span></button>
+          <button onclick="openForm('expense')">💸 Enregistrer une dépense<span>Loyer, transport, électricité, etc.</span></button>
+          <button onclick="navigate('reminders')">✉ Préparer un rappel<span>Copier un message à envoyer</span></button>
+        </div></div>
+      </div>
+    </section>
+    <section id="page-sales" class="hidden">
+      <div class="pagehead"><div><h2>Ventes</h2><p>Enregistrez chaque article vendu, en espèces/mobile money ou à crédit.</p></div><button class="primary" onclick="openForm('sale')">+ Enregistrer une vente</button></div>
+      <div class="card"><div class="table-wrap" id="salesTable"></div></div>
+      <p class="footer">Le chiffre d’affaires correspond à la valeur totale des ventes enregistrées, même si certaines ventes sont à crédit.</p>
+    </section>
+    <section id="page-reports" class="hidden">
+      <div class="pagehead"><div><h2>Chiffres de la boutique</h2><p>Consultez les ventes, les crédits et les encaissements.</p></div><button class="soft" onclick="exportCSV()">Exporter CSV</button></div>
+      <div class="card" style="margin-bottom:14px"><div class="field" style="max-width:240px"><label for="reportDate">Date de référence</label><input id="reportDate" type="date" onchange="renderReports()"></div><p class="footer">Le jour choisi sert aussi à calculer la semaine (lundi à dimanche) et le mois correspondant.</p></div>
+      <div class="stats">
+        <div class="card"><div class="stat-label">CA du jour</div><div class="stat-number" id="dayRevenue">0 GNF</div><div class="stat-label" id="dayCount">0 vente</div></div>
+        <div class="card"><div class="stat-label">CA de la semaine</div><div class="stat-number" id="weekRevenue">0 GNF</div><div class="stat-label" id="weekCount">0 vente</div></div>
+        <div class="card"><div class="stat-label">CA du mois</div><div class="stat-number" id="monthRevenue">0 GNF</div><div class="stat-label" id="monthCount">0 vente</div></div>
+        <div class="card"><div class="stat-label">Total restant dû</div><div class="stat-number" id="reportDebt">0 GNF</div><div class="stat-label">Crédits clients non remboursés</div></div>
+      </div>
+      <div class="layout">
+        <div class="card"><h3>Détail par période</h3><div class="table-wrap" id="periodTable"></div></div>
+        <div class="card"><h3>Répartition du chiffre d’affaires</h3><div class="table-wrap" id="revenueSplit"></div></div>
+      </div>
+      <div class="card" style="margin-top:16px"><h3>Articles vendus pendant la journée choisie</h3><div class="table-wrap" id="dayItems"></div></div>
+    </section>
+    <section id="page-clients" class="hidden">
+      <div class="pagehead"><div><h2>Clients</h2><p>Répertoire des clients (utilisez des codes pendant les tests).</p></div><button class="primary" onclick="openForm('client')">+ Ajouter un client</button></div>
+      <input class="search" id="clientSearch" placeholder="Rechercher un client..." oninput="renderClients()">
+      <div class="card" style="margin-top:14px"><div class="table-wrap" id="clientsTable"></div></div>
+    </section>
+    <section id="page-debts" class="hidden">
+      <div class="pagehead"><div><h2>Dettes</h2><p>Chaque dette est suivie séparément.</p></div><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button></div>
+      <div class="card"><div class="table-wrap" id="debtsTable"></div></div>
+    </section>
+    <section id="page-payments" class="hidden">
+      <div class="pagehead"><div><h2>Remboursements</h2><p>Enregistrez aussi les paiements partiels.</p></div><button class="primary" onclick="openForm('payment')">+ Ajouter un remboursement</button></div>
+      <div class="card"><div class="table-wrap" id="paymentsTable"></div></div>
+    </section>
+    <section id="page-purchases" class="hidden">
+      <div class="pagehead"><div><h2>Achats de marchandises</h2><p>Enregistrez les marchandises achetées pour votre boutique.</p></div><button class="primary" onclick="openForm('purchase')">+ Nouvel achat</button></div>
+      <div class="stats"><div class="card"><div class="stat-label">Achats du jour</div><div class="stat-number" id="purchaseDayTotal">0 GNF</div></div><div class="card"><div class="stat-label">Achats du mois</div><div class="stat-number" id="purchaseMonthTotal">0 GNF</div></div></div>
+      <div class="card"><div class="table-wrap" id="purchasesTable"></div></div>
+    </section>
+    <section id="page-stock" class="hidden">
+      <div class="pagehead"><div><h2>Gestion du stock</h2><p>Pour tous les commerces : alimentation, vêtements, cosmétiques, pièces détachées et autres.</p></div><button class="primary" onclick="openForm('product')">+ Ajouter un produit</button></div>
+      <div class="notice">Ajoute les produits avec leur quantité disponible. Quand tu enregistres une vente d’un produit du stock, la quantité est déduite automatiquement. Les achats saisis avec le même nom augmentent le stock.</div>
+      <div class="stats"><div class="card"><div class="stat-label">Produits enregistrés</div><div class="stat-number" id="stockProductCount">0</div></div><div class="card"><div class="stat-label">Unités en stock</div><div class="stat-number" id="stockUnitCount">0</div></div><div class="card"><div class="stat-label">Produits à réapprovisionner</div><div class="stat-number" id="stockLowCount">0</div></div></div>
+      <input class="search" id="stockSearch" placeholder="Rechercher un produit..." oninput="renderStock()">
+      <div class="card" style="margin-top:14px"><div class="table-wrap" id="stockTable"></div></div>
+    </section>
+    <section id="page-expenses" class="hidden">
+      <div class="pagehead"><div><h2>Dépenses de la boutique</h2><p>Notez le loyer, le transport, l’électricité et les autres frais.</p></div><button class="primary" onclick="openForm('expense')">+ Nouvelle dépense</button></div>
+      <div class="stats"><div class="card"><div class="stat-label">Dépenses du jour</div><div class="stat-number" id="expenseDayTotal">0 GNF</div></div><div class="card"><div class="stat-label">Dépenses du mois</div><div class="stat-number" id="expenseMonthTotal">0 GNF</div></div></div>
+      <div class="card"><div class="table-wrap" id="expensesTable"></div></div>
+    </section>
+    <section id="page-reminders" class="hidden">
+      <div class="pagehead"><div><h2>Préparer un rappel</h2><p>Préparez un message courtois à envoyer vous-même au client.</p></div></div>
+      <div class="card">
+        <div class="formgrid">
+          <div class="field"><label for="reminderClient">Client</label><select id="reminderClient" onchange="updateReminder()"></select></div>
+          <div class="field"><label for="reminderDebt">Dette à rappeler</label><select id="reminderDebt" onchange="updateReminder()"></select></div>
+          <div class="field full"><label for="reminderMessage">Message proposé</label><textarea id="reminderMessage"></textarea></div>
+        </div>
+        <div class="formactions"><button class="soft" onclick="updateReminder()">Régénérer le message</button><button class="soft" onclick="copyReminder()">Copier le message</button><button class="green" onclick="openReminderChannel('whatsapp')">Ouvrir WhatsApp</button><button class="green" onclick="openReminderChannel('sms')">Envoyer par SMS</button></div>
+        <p class="footer">Le message est préparé pour vous. Vérifiez le montant et le numéro : WhatsApp ou SMS s’ouvre pour que vous puissiez relire et envoyer vous-même. Aucun message n’est envoyé automatiquement.</p>
+      </div>
+    </section>
+    <section id="page-subscription" class="hidden">
+      <div class="pagehead"><div><h2>Mon abonnement Comptiva</h2><p>Essai gratuit de 14 jours, puis 75 000 GNF par mois.</p></div></div>
+      <div class="notice"><b>Important :</b> cette page est une démonstration. Aucun paiement réel n’est effectué ici. Les paiements Mobile Money devront être reliés à un prestataire et confirmés par son serveur avant activation.</div>
+      <div class="stats">
+        <div class="card"><div class="stat-label">Tarif mensuel</div><div class="stat-number">75 000 GNF</div><div class="stat-label">Pour une boutique</div></div>
+        <div class="card"><div class="stat-label">Statut</div><div class="stat-number" id="subStatus">Essai gratuit</div><div class="stat-label" id="subEndDate">14 jours d’essai</div></div>
+      </div>
+      <div class="card" style="margin-bottom:14px"><h3>Message à lire par les commerçants</h3><p>Bienvenue sur <b>Comptiva</b>, votre application de gestion commerciale ! Gérez vos ventes, vos clients, les crédits, les remboursements et votre stock au même endroit.</p><p><b>Abonnement : 75 000 GNF par mois.</b></p><div class="notice"><b>Pour payer par Orange Money :</b><br>Numéro : <b>+224 623 08 29 46</b><br>Nom du bénéficiaire : <b>Aïssatou Thiam</b><br>Montant : <b>75 000 GNF</b></div><ol><li>Envoyez le montant exact au numéro indiqué.</li><li>Vérifiez le nom du bénéficiaire avant de confirmer le transfert.</li><li>Conservez la référence de transaction.</li><li>Renseignez le nom de votre boutique et la référence ci-dessous pour demander la vérification.</li></ol><p>Votre abonnement sera activé après vérification de la réception du paiement. Ne communiquez jamais votre code secret Orange Money ni un code SMS.</p><button class="soft" onclick="copyMerchantMessage()">Copier le message commerçant</button></div>
+      <div class="layout">
+        <div class="card"><h3>1. Essai gratuit</h3><p>Tu peux démarrer l’essai de démonstration. La date de fin sera enregistrée sur cet appareil.</p><button class="primary" onclick="startTrial()">Démarrer les 14 jours gratuits</button></div>
+        <div class="card"><h3>2. Coordonnées de paiement</h3><p>Envoie le montant exact au numéro affiché ci-dessous. Vérifie le nom du bénéficiaire dans Orange Money avant de confirmer.</p><div class="notice" style="margin-top:10px"><b>Numéro Orange Money :</b> <span id="displayOmNumber">À configurer</span><br><b>Nom du bénéficiaire :</b> <span id="displayOmName">À configurer</span><br><b>Montant :</b> 75 000 GNF / mois</div><p class="footer">Le numéro doit être renseigné par l’administrateur après accord du titulaire et vérification des conditions d’Orange Guinée.</p></div>
+        <div class="card"><h3>3. Envoyer la demande de vérification</h3><div class="field"><label for="manualBusiness">Nom de la boutique / entreprise</label><input id="manualBusiness" maxlength="80" placeholder="Ex. Boutique Aminata" required></div><div class="field"><label for="manualPhone">Téléphone du commerçant (facultatif)</label><input id="manualPhone" maxlength="30" placeholder="Ex. +224..."></div><div class="field"><label for="manualReference">Référence de la transaction</label><input id="manualReference" maxlength="80" placeholder="Référence Orange Money"></div><div class="field"><label for="manualMethod">Moyen utilisé</label><select id="manualMethod"><option>Orange Money</option><option>MTN MoMo</option><option>Virement</option><option>Autre</option></select></div><button class="green" onclick="submitManualPayment()">Envoyer pour vérification</button><p class="footer">N’indique jamais ton code PIN ni un code SMS. La demande ne confirme pas que l’argent a été reçu.</p></div>
+      </div>
+      <div class="card" style="margin-top:14px"><h3>Historique de mes demandes</h3><div id="subscriptionHistory"></div></div>
+      <div class="card" style="margin-top:14px"><h3>Zone de gestion — démonstration locale</h3><p>Configure les coordonnées affichées et vérifie les demandes sur cet appareil. Cette zone n’est pas protégée par un vrai compte administrateur : ne publie pas de vraies coordonnées avant d’avoir mis en place une connexion sécurisée.</p><div class="formgrid"><div class="field"><label for="adminOmNumber">Numéro Orange Money à afficher</label><input id="adminOmNumber" maxlength="30" placeholder="Numéro du bénéficiaire"></div><div class="field"><label for="adminOmName">Nom du bénéficiaire</label><input id="adminOmName" maxlength="80" placeholder="Nom affiché dans Orange Money"></div></div><div class="formactions"><button class="primary" onclick="savePaymentSettings()">Enregistrer les coordonnées</button></div><h3 style="margin-top:20px">Demandes à vérifier</h3><div id="adminPaymentRequests"></div></div>
+      <div class="notice" style="margin-top:14px"><b>Protection de tes données :</b> l’expiration de l’abonnement ne supprime jamais les ventes, les dettes, les remboursements ou le stock. Dans cette démonstration, les données restent toutefois enregistrées uniquement dans le navigateur de cet appareil. Pour un vrai service multi-appareils, il faudra une base de données sécurisée sur un serveur et des sauvegardes.</div>
+    </section>
+    <section id="page-form" class="hidden">
+      <div class="pagehead"><div><h2 id="formTitle">Ajouter</h2><p id="formDesc">Saisissez les informations.</p></div><button class="soft" onclick="navigate('dashboard')">← Retour</button></div>
+      <div class="card"><form id="dataForm" onsubmit="saveForm(event)"><div id="formFields" class="formgrid"></div><div class="formactions"><button type="button" class="soft" onclick="navigate('dashboard')">Annuler</button><button type="submit" class="green">Enregistrer</button></div></form></div>
+    </section>
+    <div class="footer">Comptiva — Version de travail · Prototype à tester · Paiements non connectés · Ne remplace pas une comptabilité certifiée.</div>
+  </div>
+</main>
+</div>
+<div id="mobileMoreMenu" class="mobile-more-menu hidden" aria-label="Autres rubriques">
+  <button onclick="navigate('sales');toggleMobileMore(false)">🛒 Ventes</button>
+  <button onclick="navigate('stock');toggleMobileMore(false)">📦 Stock</button>
+  <button onclick="navigate('reports');toggleMobileMore(false)">▥ Chiffres</button>
+  <button onclick="navigate('payments');toggleMobileMore(false)">↻ Remboursements</button>
+  <button onclick="navigate('purchases');toggleMobileMore(false)">📦 Achats</button>
+  <button onclick="navigate('expenses');toggleMobileMore(false)">💸 Dépenses</button>
+  <button onclick="navigate('subscription');toggleMobileMore(false)">💳 Abonnement</button>
+</div>
+<nav class="mobile-nav" id="mobileNav">
+  <button data-page="dashboard" class="active"><b>▦</b>Accueil</button>
+  <button data-page="clients"><b>👤</b>Clients</button>
+  <button data-page="debts"><b>▤</b>Dettes</button>
+  <button data-page="reminders"><b>✉</b>Rappels</button>
+  <button type="button" id="mobileMoreButton" onclick="toggleMobileMore()"><b>＋</b>Plus</button>
+</nav>
+<!-- Firebase SDK : chargement séquentiel avec secours CDN et délais bornés -->
+<script>
+(function(){
+  window.__comptivaEarlyErrors=window.__comptivaEarlyErrors||[];
+  function loadOne(file,check){
+    var sources=[
+      'https://www.gstatic.com/firebasejs/10.14.1/'+file+'.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/firebase/10.14.1/'+file+'.min.js'
+    ];
+    var failures=[];
+    function attempt(i){
+      if(i>=sources.length) return Promise.reject(new Error('SDK Firebase '+file+' indisponible. '+failures.join(' ; ')));
+      return new Promise(function(resolve,reject){
+        var script=document.createElement('script'),done=false,url=sources[i];
+        script.src=url;script.async=false;script.crossOrigin='anonymous';
+        window.__comptivaLoadingScriptUrl=url;
+        var timer=setTimeout(function(){if(done)return;done=true;script.remove();failures.push('délai dépassé '+url);reject(new Error('timeout'))},12000);
+        script.onload=function(){if(done)return;done=true;clearTimeout(timer);window.__comptivaLoadingScriptUrl='';
+          try{if(check())resolve();else{failures.push('API absente après chargement '+url);script.remove();reject(new Error('API Firebase absente'))}}catch(e){failures.push((e.message||String(e))+' '+url);reject(e)}
+        };
+        script.onerror=function(){if(done)return;done=true;clearTimeout(timer);window.__comptivaLoadingScriptUrl='';script.remove();failures.push('chargement refusé '+url);reject(new Error('network-error'))};
+        document.head.appendChild(script);
+      }).catch(function(){return attempt(i+1)});
+    }
+    return attempt(0);
+  }
+  window.__comptivaFirebaseSdkReady=(async function(){
+    await loadOne('firebase-app-compat',function(){return !!(window.firebase&&firebase.initializeApp&&firebase.apps)});
+    await loadOne('firebase-auth-compat',function(){return !!(window.firebase&&typeof firebase.auth==='function')});
+    try{
+      await loadOne('firebase-firestore-compat',function(){return !!(window.firebase&&typeof firebase.firestore==='function')});
+      window.krediFirestoreSdkLoadError=null;
+    }catch(e){window.krediFirestoreSdkLoadError=e.message;console.warn('[COMPTIVA] Firestore SDK non chargé : la connexion Auth reste disponible.',e)}
+    window.krediSdkLoadError=null;
+    return true;
+  })().catch(function(e){
+    window.krediSdkLoadError=e&&e.message?e.message:String(e);
+    console.error('[COMPTIVA] Firebase App/Auth non chargés.',e);
+    throw e;
+  });
+})();
+</script>
+<script>
+let STORE='comptiva_guest_v1';
+let db=loadDB(), currentForm='';
+let SUB_STORE='comptiva_guest_subscription_v1';
+let subscription=loadSubscription();
+function loadSubscription(){try{return JSON.parse(localStorage.getItem(SUB_STORE))||{trialStart:null,trialEnd:null,requests:[],paymentSettings:{number:'',name:''},paidUntil:null}}catch(e){return {trialStart:null,trialEnd:null,requests:[],paymentSettings:{number:'',name:''},paidUntil:null}}}
+if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings)subscription.paymentSettings={number:'',name:''};
+function saveSubscription(){localStorage.setItem(SUB_STORE,JSON.stringify(subscription));renderSubscription()}
+function loadDB(){try{return JSON.parse(localStorage.getItem(STORE))||{clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}catch(e){return {clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}}
+if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];
+function saveDB(){localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediQueueCloudSave()}
+function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
+function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('fr-FR')}
+function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client supprimé/inconnu'}
+function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId).reduce((a,p)=>a+Number(p.amount||0),0)}
+function balance(d){return Math.max(0,Number(d.amount||0)-paidFor(d.id))}
+function status(d){let b=balance(d);if(b<=0)return '<span class="pill paid">Soldé</span>';if(d.due && d.due<new Date().toISOString().slice(0,10))return '<span class="pill overdue">En retard</span>';return '<span class="pill pending">En cours</span>'}
+function flash(msg){let el=document.getElementById('flash');el.textContent=msg;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),3200)}
+function navigate(page){document.querySelectorAll('[id^="page-"]').forEach(x=>x.classList.add('hidden'));let p=document.getElementById('page-'+page);if(p)p.classList.remove('hidden');let titles={dashboard:'Tableau de bord',sales:'Ventes',reports:'Chiffres de la boutique',clients:'Clients',debts:'Dettes',payments:'Remboursements',purchases:'Achats de marchandises',expenses:'Dépenses',stock:'Gestion du stock',reminders:'Rappels',subscription:'Abonnement',form:document.getElementById('formTitle').textContent};document.getElementById('topTitle').textContent=titles[page]||'Comptiva';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='reminders')renderReminderOptions();if(page==='reports')renderReports();if(page==='sales')renderSales();if(page==='stock')renderStock();if(page==='purchases')renderPurchases();if(page==='expenses')renderExpenses();if(page==='subscription')renderSubscription();window.scrollTo(0,0)}
+document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
+function table(headers,rows){if(!rows.length)return '<div class="empty">Aucune donnée pour le moment. Ajoutez un premier élément pour commencer.</div>';return '<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>'}
+function renderAll(){renderDashboard();renderClients();renderDebts();renderPayments();renderSales();renderStock();renderReports();renderPurchases();renderExpenses();if(!document.getElementById('page-reminders').classList.contains('hidden'))renderReminderOptions()}
+function renderDashboard(){const outstanding=db.debts.filter(d=>balance(d)>0);const remaining=outstanding.reduce((a,d)=>a+balance(d),0);const debtorCount=new Set(outstanding.map(d=>d.clientId)).size;document.getElementById('kpiDebtTotal').textContent=money(remaining);document.getElementById('kpiDebtorClients').textContent=debtorCount;document.getElementById('kpiPaidDebts').textContent=db.debts.filter(d=>balance(d)<=0).length;document.getElementById('statClients').textContent=db.clients.length;document.getElementById('statDebts').textContent=outstanding.length;document.getElementById('statPayments').textContent=db.payments.length;document.getElementById('statBalance').textContent=money(remaining);let today=new Date(),todayKey=dayKey(today),weekStart=new Date(today);weekStart.setDate(today.getDate()-((today.getDay()+6)%7));weekStart.setHours(0,0,0,0);let weekEnd=new Date(weekStart);weekEnd.setDate(weekStart.getDate()+7);let monthStart=new Date(today.getFullYear(),today.getMonth(),1),daySales=db.sales.filter(s=>s.date===todayKey),weekSales=db.sales.filter(s=>{let d=parseDay(s.date);return d>=weekStart&&d<weekEnd}),monthSales=db.sales.filter(s=>{let d=parseDay(s.date);return d>=monthStart&&d<new Date(today.getFullYear(),today.getMonth()+1,1)});document.getElementById('dashDayRevenue').textContent=money(sumSales(daySales));document.getElementById('dashDayCount').textContent=daySales.length+' vente(s) aujourd’hui';document.getElementById('dashWeekRevenue').textContent=money(sumSales(weekSales));document.getElementById('dashMonthRevenue').textContent=money(sumSales(monthSales));document.getElementById('dashDayCollected').textContent=money(daySales.reduce((n,s)=>n+paidOfSale(s),0));document.getElementById('dashDayCredit').textContent=money(daySales.reduce((n,s)=>n+creditOfSale(s),0));let monthKey=dayKey(new Date(today.getFullYear(),today.getMonth(),1)).slice(0,7),monthPurchases=db.purchases.filter(x=>(x.date||'').slice(0,7)===monthKey).reduce((n,x)=>n+Number(x.amount||0),0),monthExpenses=db.expenses.filter(x=>(x.date||'').slice(0,7)===monthKey).reduce((n,x)=>n+Number(x.amount||0),0);document.getElementById('dashMonthPurchases').textContent=money(monthPurchases);document.getElementById('dashMonthExpenses').textContent=money(monthExpenses);document.getElementById('dashSimpleResult').textContent=money(sumSales(monthSales)-monthPurchases-monthExpenses);let rows=db.debts.slice().reverse().slice(0,8).map(d=>'<tr><td>'+esc(clientName(d.clientId))+'</td><td>'+money(d.amount)+'</td><td>'+money(balance(d))+'</td><td>'+dateFmt(d.date)+'</td><td>'+status(d)+'</td></tr>');document.getElementById('recentDebts').innerHTML=table(['Client','Dette initiale','Reste dû','Date','Statut'],rows);
+let recentClients=db.clients.slice().reverse().slice(0,4).map(c=>{let total=db.debts.filter(d=>d.clientId===c.id).reduce((n,d)=>n+balance(d),0);let label=total>0?'En cours':'À jour';return '<div class="dashboard-client-row"><div class="dashboard-client-avatar">'+esc((c.name||'C').trim().charAt(0).toUpperCase())+'</div><div><div class="dashboard-client-name">'+esc(c.name||'Client')+'</div><div class="dashboard-client-balance">'+money(total)+'</div></div><span class="pill '+(total>0?'pending':'paid')+'">'+label+'</span></div>'});
+document.getElementById('dashboardRecentClients').innerHTML=recentClients.length?recentClients.join(''):'<div class="empty">Aucun client pour le moment.</div>';
+let upcoming=db.debts.filter(d=>balance(d)>0).slice().sort((a,b)=>(a.due||'9999').localeCompare(b.due||'9999')).slice(0,4).map(d=>'<div class="dashboard-debt-row"><span>'+esc(clientName(d.clientId))+'</span><strong>'+money(balance(d))+'</strong>'+status(d)+'</div>');
+document.getElementById('dashboardUpcomingDebts').innerHTML=upcoming.length?upcoming.join(''):'<div class="empty">Aucune échéance à afficher.</div>';
+let greet=document.getElementById('dashboardGreeting');if(greet&&krediUser){let display=(krediUser.displayName||'').trim()||((krediUser.email||'').split('@')[0]||'Commerçant');greet.textContent='Bonjour, '+display;}
+}
+function renderClients(){let q=(document.getElementById('clientSearch')?.value||'').toLowerCase();let rows=db.clients.filter(c=>c.name.toLowerCase().includes(q)).map(c=>{let total=db.debts.filter(d=>d.clientId===c.id).reduce((a,d)=>a+balance(d),0);return '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.phone||'—')+'</td><td>'+money(total)+'</td><td><button class="soft" onclick="startReminderForClient(\''+c.id+'\')">Rappel</button></td></tr>'});let el=document.getElementById('clientsTable');if(el)el.innerHTML=table(['Client / code','Téléphone','Solde total','Action'],rows)}
+function renderDebts(){let rows=db.debts.slice().reverse().map(d=>'<tr><td>'+esc(clientName(d.clientId))+'</td><td>'+money(d.amount)+'</td><td>'+money(paidFor(d.id))+'</td><td class="balance">'+money(balance(d))+'</td><td>'+dateFmt(d.date)+'</td><td>'+dateFmt(d.due)+'</td><td>'+status(d)+'</td><td><button class="soft" onclick="openPaymentFor(\''+d.id+'\')">+ Paiement</button></td></tr>');document.getElementById('debtsTable').innerHTML=table(['Client','Dette','Payé','Reste','Date','Échéance','Statut','Action'],rows)}
+function renderPayments(){let rows=db.payments.slice().reverse().map(p=>{let d=db.debts.find(d=>d.id===p.debtId);return '<tr><td>'+esc(d?clientName(d.clientId):'Dette inconnue')+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td><button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Imprimer reçu</button></td></tr>'});document.getElementById('paymentsTable').innerHTML=table(['Client','Montant payé','Date','Mode','Reçu'],rows)}
+function printPaymentReceipt(paymentId){let p=db.payments.find(x=>x.id===paymentId);if(!p){alert('Remboursement introuvable.');return}let d=db.debts.find(x=>x.id===p.debtId);if(!d){alert('Dette introuvable.');return}let paidThrough=0;for(let x of db.payments){if(x.debtId===d.id)paidThrough+=Number(x.amount||0);if(x.id===p.id)break}let remaining=Math.max(0,Number(d.amount||0)-paidThrough),client=clientName(d.clientId),receiptNo=String(p.id).slice(-8).toUpperCase(),w=window.open('','_blank','width=420,height=650');if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reçu de remboursement ${receiptNo}</title><style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:18px;max-width:360px}h1{font-size:22px;text-align:center;margin:0 0 5px}p{margin:7px 0;font-size:13px}.center{text-align:center}.line{border-top:1px dashed #555;margin:12px 0}.item{display:flex;justify-content:space-between;gap:12px;margin:9px 0;font-size:14px}.total{font-weight:bold;font-size:17px}.small{font-size:12px}@media print{body{padding:0;max-width:none}@page{margin:6mm}}
+/* V2 — mise en page alignée sur le modèle visuel validé */
+:root{--navy:#082f68;--blue:#1256b4;--green:#0b9b72;--bg:#f4f7fd;--text:#10264b;--muted:#5d6d8a;--line:#e5ebf5}
+body{background:#f4f7fd;color:var(--text)}
+.sidebar{background:#082f68}
+.topbar{background:#082f68;color:#fff;border:0;padding:20px 28px;min-height:104px}
+.topbar h1,.topbar small{color:#fff}.topbar small{opacity:.82}
+.welcome-title{gap:14px}.kg-mark{width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#fff;color:#082f68;display:grid;place-items:center;font-size:20px;font-weight:900;letter-spacing:-1px}
+.welcome-copy{font-size:clamp(20px,2.3vw,28px);font-weight:850;color:#fff}.welcome-copy .guinea-name{color:#fff}.welcome-tagline{color:#dce8ff;font-size:14px}.top-actions .primary{background:#fff;color:#082f68}
+.content{max-width:1500px;padding:24px 26px}
+#page-dashboard .pagehead{background:linear-gradient(110deg,#e7efff,#f6f9ff);border:1px solid #e1eaff;border-radius:20px;padding:20px 22px;box-shadow:none;color:#10264b}
+#page-dashboard .pagehead h2,#page-dashboard .pagehead p{color:#10264b}
+#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+#page-dashboard .stats .card{min-height:142px;display:grid;grid-template-columns:104px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;column-gap:16px;padding:18px 20px;border-radius:24px;border:1px solid #e6ecf7;box-shadow:0 5px 18px #0b36700d}
+#page-dashboard .stat-icon{grid-column:1;grid-row:1/3;float:none;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;padding:0;background:#e5efff;color:#1256b4;font-size:35px}
+#page-dashboard .stats .card:nth-child(2n) .stat-icon{background:#e5efff;color:#1256b4}
+#page-dashboard .stat-label{grid-column:2;font-size:14px;max-width:100%;color:#253b60;line-height:1.35}
+#page-dashboard .stat-number{grid-column:2;font-size:clamp(21px,2.2vw,30px);font-weight:850;margin-top:2px;color:#10264b;overflow-wrap:anywhere}
+#page-dashboard .hero-kpis .card{border-top:0}
+#page-dashboard .layout>.card{border-radius:20px}
+#page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Client identity icons and clear action */
+#page-dashboard .actions .green{background:#1256b4;border-color:#1256b4}
+@media(max-width:1000px){.app{grid-template-columns:190px 1fr}#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){
+ .app{padding-bottom:88px}.topbar{padding:17px 16px;min-height:104px}.welcome-title{gap:11px}.kg-mark{width:45px;height:45px;flex-basis:45px;font-size:17px}.welcome-copy{font-size:19px}.welcome-tagline{font-size:12px}.topbar small{display:none}
+ .content{padding:14px 12px}.notice.sync-note{font-size:11px;padding:9px 11px;margin-bottom:12px}
+ #page-dashboard .pagehead{padding:15px 14px;border-radius:17px;gap:10px}#page-dashboard .pagehead h2{font-size:19px}#page-dashboard .pagehead p{font-size:12px}#page-dashboard .pagehead .actions{width:100%;display:flex;flex-wrap:wrap}#page-dashboard .pagehead .actions button{flex:1 1 30%;font-size:10px;padding:8px 5px}
+ #page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px;row-gap:10px}
+ #page-dashboard .stats .card{min-height:128px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;padding:12px 12px;border-radius:19px}
+ #page-dashboard .stat-icon{width:42px;height:42px;flex:none;border-radius:50%;font-size:19px;margin-bottom:3px}
+ #page-dashboard .stat-label{font-size:11px;line-height:1.3;max-width:100%}
+ #page-dashboard .stat-number{font-size:clamp(16px,4.6vw,21px);line-height:1.25;margin:0;overflow-wrap:anywhere}
+ #page-dashboard .layout>.card{padding:14px}#page-dashboard .quick{grid-template-columns:1fr}
+ .mobile-nav{padding:6px 4px calc(6px + env(safe-area-inset-bottom));grid-template-columns:repeat(5,minmax(0,1fr))}.mobile-nav button{font-size:10px}.mobile-nav b{font-size:19px}
+}
+
+</style></head><body><h1>Comptiva</h1><p class="center"><b>REÇU DE REMBOURSEMENT DE CRÉDIT</b></p><div class="line"></div><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(p.date))}</p><p><b>Client :</b> ${esc(client)}</p><p><b>Dette initiale :</b> ${money(d.amount)}</p><div class="line"></div><div class="item total"><span>Montant remboursé</span><span>${money(p.amount)}</span></div><div class="item"><span>Mode de paiement</span><span>${esc(p.method||'—')}</span></div><div class="line"></div><div class="item total"><span>Reste à payer</span><span>${money(remaining)}</span></div><p class="center"><b>${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'Remboursement partiel'}</b></p><div class="line"></div><p class="center">Merci. Conservez ce reçu comme preuve de paiement.</p><p class="center small">Reçu généré avec Comptiva</p><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\/script></body></html>`);w.document.close()}
+function field(name,label,type='text',opts={}){let req=opts.required?'required':'';let full=opts.full?' full':'';let value=opts.value??'';if(type==='select')return '<div class="field'+full+'"><label for="'+name+'">'+label+(opts.required?' *':'')+'</label><select id="'+name+'" name="'+name+'" '+req+'>'+opts.options.map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('')+'</select></div>';return '<div class="field'+full+'"><label for="'+name+'">'+label+(opts.required?' *':'')+'</label><input id="'+name+'" name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(opts.min!==undefined?'min="'+opts.min+'"':'')+' '+(opts.step?'step="'+opts.step+'"':'')+' '+req+' placeholder="'+esc(opts.placeholder||'')+'"></div>'}
+function openForm(kind,extra={}){currentForm=kind;let fields='',title='',desc='';if(kind==='product'){title='Ajouter un produit au stock';desc='Choisis une catégorie adaptée à ton commerce. Tu pourras vendre des articles avec ou sans suivi de stock.';fields=field('name','Nom du produit','text',{required:true,placeholder:'Ex. riz 25 kg, robe, crème...'})+field('category','Catégorie','select',{required:true,options:[{value:'Alimentation',label:'Alimentation'},{value:'Vêtements / chaussures',label:'Vêtements / chaussures'},{value:'Cosmétiques',label:'Cosmétiques'},{value:'Électronique',label:'Électronique'},{value:'Pièces détachées',label:'Pièces détachées'},{value:'Quincaillerie',label:'Quincaillerie'},{value:'Maison',label:'Maison'},{value:'Autre',label:'Autre'}]})+field('sku','Référence (facultatif)','text',{placeholder:'Code ou référence'})+field('quantity','Quantité disponible','number',{required:true,min:0,step:0.01,value:0})+field('purchasePrice','Prix d’achat unitaire (GNF)','number',{required:true,min:0,step:1,value:0})+field('salePrice','Prix de vente unitaire (GNF)','number',{required:true,min:0,step:1,value:0})+field('alertAt','Alerte lorsque le stock atteint','number',{required:true,min:0,step:0.01,value:2});}
+if(kind==='client'){title='Ajouter un client';desc='Pendant le test, privilégiez un code ou un prénom fictif.';fields=field('name','Nom ou code du client','text',{required:true,placeholder:'Ex. Client 01'})+field('phone','Téléphone (facultatif)','tel',{placeholder:'+224 ...'})+field('address','Adresse (facultatif)','text',{placeholder:'Quartier, ville...'})+field('note','Note (facultatif)','text',{placeholder:'Ex. boutique du marché'})}
+if(kind==='debt'){title='Enregistrer une dette';desc='Le montant doit être positif. Le solde se calcule automatiquement.';fields=field('clientId','Client','select',{required:true,options:db.clients.map(c=>({value:c.id,label:c.name}))})+field('amount','Montant en GNF','number',{required:true,min:1,step:1,placeholder:'200000'})+field('date','Date','date',{required:true,value:new Date().toISOString().slice(0,10)})+field('due','Date de retour prévue','date')+field('description','Motif (facultatif)','text',{placeholder:'Marchandises, achat...'})}
+if(kind==='sale'){title='Enregistrer une vente';desc='Choisissez comment la vente est réglée. Le crédit crée automatiquement une dette client.';fields=field('product','Article vendu','text',{required:true,placeholder:'Choisir ou saisir un produit'})+'<datalist id="stockProductOptions">'+db.products.map(p=>'<option value="'+esc(p.name)+'"></option>').join('')+'</datalist>'+field('quantity','Quantité','number',{required:true,min:0.01,step:0.01,value:1})+field('unitPrice','Prix unitaire en GNF','number',{required:true,min:1,step:1,placeholder:'10000'})+'<div class="field full"><label>Total de la vente</label><div id="saleTotalPreview" class="stat-number">0 GNF</div></div>'+field('date','Date de vente','date',{required:true,value:new Date().toISOString().slice(0,10)})+field('method','Mode de paiement','select',{required:true,options:[{value:'Espèces',label:'Espèces'},{value:'Orange Money',label:'Orange Money'},{value:'Mobile Money',label:'Mobile Money'},{value:'credit',label:'Crédit client'},{value:'mixed',label:'Paiement mixte (espèces + mobile money)'}]})+field('clientId','Client (obligatoire pour le crédit)','select',{options:[{value:'',label:'— Aucun client —'},...db.clients.map(c=>({value:c.id,label:c.name}))]})+field('cashPart','Montant payé en espèces (GNF)','number',{min:0,step:1,value:0})+field('mobilePart','Montant payé en mobile money (GNF)','number',{min:0,step:1,value:0});} 
+if(kind==='purchase'){title='Enregistrer un achat de marchandises';desc='Notez le montant total payé ou engagé auprès du fournisseur.';fields=field('item','Marchandise / description','text',{required:true,placeholder:'Ex. sacs de riz, huile, savon'})+field('supplier','Fournisseur (facultatif)','text',{placeholder:'Nom du fournisseur'})+field('quantity','Quantité (facultatif)','number',{min:0,step:0.01,placeholder:'Ex. 10'})+field('amount','Montant total en GNF','number',{required:true,min:1,step:1,placeholder:'250000'})+field('date','Date de l’achat','date',{required:true,value:new Date().toISOString().slice(0,10)})+field('method','Mode de paiement','select',{options:[{value:'Espèces',label:'Espèces'},{value:'Orange Money',label:'Orange Money'},{value:'Mobile Money',label:'Mobile Money'},{value:'Crédit fournisseur',label:'Crédit fournisseur'},{value:'Autre',label:'Autre'}]})+field('note','Note (facultatif)','text',{placeholder:'Facture, référence...'})}
+if(kind==='expense'){title='Enregistrer une dépense';desc='Enregistrez les frais liés à la boutique, avec la date et la catégorie.';fields=field('category','Catégorie','select',{required:true,options:[{value:'Loyer',label:'Loyer'},{value:'Transport',label:'Transport'},{value:'Électricité / eau',label:'Électricité / eau'},{value:'Téléphone / Internet',label:'Téléphone / Internet'},{value:'Salaire',label:'Salaire'},{value:'Réparation / entretien',label:'Réparation / entretien'},{value:'Taxes / frais administratifs',label:'Taxes / frais administratifs'},{value:'Autre',label:'Autre'}]})+field('description','Description','text',{required:true,placeholder:'Ex. transport des marchandises'})+field('amount','Montant en GNF','number',{required:true,min:1,step:1,placeholder:'30000'})+field('date','Date de la dépense','date',{required:true,value:new Date().toISOString().slice(0,10)})+field('method','Mode de paiement','select',{options:[{value:'Espèces',label:'Espèces'},{value:'Orange Money',label:'Orange Money'},{value:'Mobile Money',label:'Mobile Money'},{value:'Autre',label:'Autre'}]})+field('note','Note (facultatif)','text',{placeholder:'Précision...'})}
+if(kind==='payment'){title='Enregistrer un remboursement';desc='Un paiement partiel est accepté.';let debts=db.debts.filter(d=>balance(d)>0);fields=field('debtId','Dette','select',{required:true,options:debts.map(d=>({value:d.id,label:clientName(d.clientId)+' — reste '+money(balance(d))})),value:extra.debtId})+field('amount','Montant payé en GNF','number',{required:true,min:1,step:1,placeholder:'50000'})+field('date','Date du paiement','date',{required:true,value:new Date().toISOString().slice(0,10)})+field('method','Mode de paiement','select',{options:[{value:'Espèces',label:'Espèces'},{value:'Orange Money',label:'Orange Money'},{value:'Mobile Money',label:'Mobile Money'},{value:'Virement',label:'Virement'},{value:'Autre',label:'Autre'}]})}
+document.getElementById('formTitle').textContent=title;document.getElementById('formDesc').textContent=desc;document.getElementById('formFields').innerHTML=fields;document.getElementById('dataForm').reset();if(kind==='debt'){let date=document.getElementById('date');if(date)date.value=new Date().toISOString().slice(0,10)}if(kind==='payment'){let date=document.getElementById('date');if(date)date.value=new Date().toISOString().slice(0,10);if(extra.debtId&&document.getElementById('debtId'))document.getElementById('debtId').value=extra.debtId}if(kind==='client'){setTimeout(()=>{let first=document.getElementById('name');if(first){first.setAttribute('inputmode','text');first.focus({preventScroll:false});first.scrollIntoView({behavior:'smooth',block:'center'});}},180)}if(kind==='sale'){let prodInput=document.getElementById('product');if(prodInput)prodInput.setAttribute('list','stockProductOptions');['quantity','unitPrice'].forEach(k=>document.getElementById(k)?.addEventListener('input',updateSaleTotal));let method=document.getElementById('method'),client=document.getElementById('clientId');const toggleSaleFields=()=>{let m=method?.value; if(client)client.required=m==='credit';['cashPart','mobilePart'].forEach(k=>{let el=document.getElementById(k);if(el){el.parentElement.style.display=m==='mixed'?'':'none';el.required=m==='mixed';}})};method?.addEventListener('change',toggleSaleFields);toggleSaleFields();updateSaleTotal()}navigate('form')}
+function saveForm(e){e.preventDefault();let f=new FormData(e.target),v=Object.fromEntries(f.entries());if(currentForm==='product'){let name=v.name.trim();if(!name){alert('Saisis le nom du produit.');return}if(db.products.some(p=>p.name.toLowerCase()===name.toLowerCase())){alert('Ce produit existe déjà. Utilise un achat pour augmenter le stock.');return}db.products.push({id:id('PR'),name,category:v.category||'Autre',sku:v.sku.trim(),quantity:Number(v.quantity||0),purchasePrice:Number(v.purchasePrice||0),salePrice:Number(v.salePrice||0),alertAt:Number(v.alertAt||0)});flash('Produit ajouté au stock.')}
+if(currentForm==='client'){db.clients.push({id:id('C'),name:(v.name||'').trim(),phone:(v.phone||'').trim(),address:(v.address||'').trim(),note:(v.note||'').trim()});flash('Client enregistré.')}
+if(currentForm==='sale'){let qty=Number(v.quantity),price=Number(v.unitPrice),total=Math.round(qty*price),method=v.method||'Espèces',isCredit=method==='credit',isMixed=method==='mixed',cashPart=isMixed?Number(v.cashPart||0):0,mobilePart=isMixed?Number(v.mobilePart||0):0,paidAmount=isCredit?0:(isMixed?cashPart+mobilePart:total),creditAmount=isCredit?total:0;if(!v.product.trim()||qty<=0||price<=0||total<=0){alert('Vérifiez le nom de l’article, la quantité et le prix.');return}if(isCredit&&!db.clients.some(c=>c.id===v.clientId)){alert('Pour une vente à crédit, choisissez un client enregistré.');return}if(isMixed&&(cashPart<0||mobilePart<0||Math.round(cashPart+mobilePart)!==total)){alert('Pour un paiement mixte, la somme espèces + mobile money doit être égale au total de la vente.');return}let sale={id:id('S'),product:v.product.trim(),quantity:qty,unitPrice:price,total,date:v.date,saleType:isCredit?'credit':'paid',clientId:v.clientId||'',method:isMixed?'Paiement mixte':(isCredit?'Crédit client':method),paidAmount,creditAmount,cashPart,mobilePart};let stockProduct=db.products.find(p=>p.name.trim().toLowerCase()===sale.product.trim().toLowerCase());if(stockProduct&&Number(stockProduct.quantity)<qty){alert('Stock insuffisant pour '+stockProduct.name+'. Stock disponible : '+stockProduct.quantity+'.');return}if(stockProduct){stockProduct.quantity=Math.max(0,Number(stockProduct.quantity)-qty);sale.stockProductId=stockProduct.id;}db.sales.push(sale);if(isCredit){db.debts.push({id:id('D'),clientId:v.clientId,amount:total,date:v.date,due:'',description:'Vente à crédit : '+v.product,saleId:sale.id});}flash('Vente enregistrée : '+money(total)+'. Encaissé : '+money(paidAmount)+'. Crédit : '+money(creditAmount)+'.');}
+if(currentForm==='purchase'){let amount=Number(v.amount);if(!v.item.trim()||amount<=0){alert('Saisissez une description et un montant positif.');return}let purchaseQty=Number(v.quantity||0);db.purchases.push({id:id('A'),item:v.item.trim(),supplier:v.supplier.trim(),quantity:purchaseQty,amount,date:v.date,method:v.method||'Espèces',note:v.note.trim()});let matchedProduct=db.products.find(p=>p.name.trim().toLowerCase()===v.item.trim().toLowerCase());if(matchedProduct&&purchaseQty>0)matchedProduct.quantity=Number(matchedProduct.quantity||0)+purchaseQty;flash(matchedProduct&&purchaseQty>0?'Achat enregistré et stock augmenté.':'Achat de marchandises enregistré.')}
+if(currentForm==='expense'){let amount=Number(v.amount);if(!v.description.trim()||amount<=0){alert('Saisissez une description et un montant positif.');return}db.expenses.push({id:id('E'),category:v.category,description:v.description.trim(),amount,date:v.date,method:v.method||'Espèces',note:v.note.trim()});flash('Dépense enregistrée.')}
+if(currentForm==='debt'){if(!db.clients.some(c=>c.id===v.clientId)){alert('Ajoutez d’abord un client.');return}db.debts.push({id:id('D'),clientId:v.clientId,amount:Number(v.amount),date:v.date,due:v.due,description:v.description});flash('Dette enregistrée.')}
+if(currentForm==='payment'){let d=db.debts.find(d=>d.id===v.debtId);if(!d){alert('Ajoutez d’abord une dette en cours.');return}let amount=Number(v.amount);if(amount<=0){alert('Le montant doit être positif.');return}if(amount>balance(d)){if(!confirm('Le montant dépasse le solde restant. Enregistrer quand même ?'))return}db.payments.push({id:id('P'),debtId:v.debtId,amount,date:v.date,method:v.method});flash('Remboursement enregistré.')}
+saveDB();navigate(currentForm==='client'?'clients':currentForm==='debt'?'debts':currentForm==='payment'?'payments':currentForm==='sale'?'sales':currentForm==='purchase'?'purchases':currentForm==='expense'?'expenses':'dashboard')}
+function openPaymentFor(debtId){openForm('payment',{debtId})}
+
+function updateSaleTotal(){let q=Number(document.getElementById('quantity')?.value||0),p=Number(document.getElementById('unitPrice')?.value||0),el=document.getElementById('saleTotalPreview');if(el)el.textContent=money(q*p)}
+function renderSales(){let el=document.getElementById('salesTable');if(!el)return;let rows=db.sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s=>'<tr><td>'+dateFmt(s.date)+'</td><td>'+esc(s.product)+'</td><td>'+esc(String(s.quantity))+'</td><td>'+money(s.unitPrice)+'</td><td><b>'+money(s.total)+'</b></td><td>'+esc(s.method||(s.saleType==='credit'?'Crédit client':'Espèces'))+'</td><td>'+money(s.paidAmount!==undefined?s.paidAmount:(s.saleType==='credit'?0:s.total))+'</td><td>'+money(s.creditAmount!==undefined?s.creditAmount:(s.saleType==='credit'?s.total:0))+'</td><td>'+esc(s.clientId?clientName(s.clientId):'—')+'</td><td><button class="soft" onclick="printReceipt(\''+s.id+'\')">🖨 Imprimer reçu</button></td></tr>');el.innerHTML=table(['Date','Article','Qté','Prix unitaire','Total vente','Mode','Encaissé','À crédit','Client','Reçu'],rows)}
+function renderStock(){let el=document.getElementById('stockTable');if(!el)return;let q=(document.getElementById('stockSearch')?.value||'').toLowerCase(),items=db.products.filter(p=>(p.name+' '+(p.category||'')+' '+(p.sku||'')).toLowerCase().includes(q));document.getElementById('stockProductCount').textContent=db.products.length;document.getElementById('stockUnitCount').textContent=db.products.reduce((n,p)=>n+Number(p.quantity||0),0).toLocaleString('fr-FR');document.getElementById('stockLowCount').textContent=db.products.filter(p=>Number(p.quantity||0)<=Number(p.alertAt||0)).length;let rows=items.map(p=>{let low=Number(p.quantity||0)<=Number(p.alertAt||0);return '<tr><td><b>'+esc(p.name)+'</b><br><span class="stat-label">'+esc(p.sku||'')+'</span></td><td>'+esc(p.category||'Autre')+'</td><td><b>'+Number(p.quantity||0).toLocaleString('fr-FR')+'</b> '+(low?'<span class="pill pending">Stock faible</span>':'<span class="pill paid">Disponible</span>')+'</td><td>'+money(p.purchasePrice||0)+'</td><td>'+money(p.salePrice||0)+'</td><td>'+money((Number(p.salePrice||0)-Number(p.purchasePrice||0)))+'</td></tr>'});el.innerHTML=table(['Produit / référence','Catégorie','Quantité restante','Prix d’achat unitaire','Prix de vente unitaire','Marge unitaire estimée'],rows)}
+function renderPurchases(){let el=document.getElementById('purchasesTable');if(!el)return;let today=dayKey(new Date()),month=today.slice(0,7);document.getElementById('purchaseDayTotal').textContent=money(db.purchases.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));document.getElementById('purchaseMonthTotal').textContent=money(db.purchases.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));let rows=db.purchases.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>'<tr><td>'+dateFmt(x.date)+'</td><td>'+esc(x.item)+'</td><td>'+esc(x.supplier||'—')+'</td><td>'+esc(x.quantity?String(x.quantity):'—')+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td></tr>');el.innerHTML=table(['Date','Marchandise','Fournisseur','Quantité','Montant','Paiement','Note'],rows)}
+function renderExpenses(){let el=document.getElementById('expensesTable');if(!el)return;let today=dayKey(new Date()),month=today.slice(0,7);document.getElementById('expenseDayTotal').textContent=money(db.expenses.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));document.getElementById('expenseMonthTotal').textContent=money(db.expenses.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));let rows=db.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>'<tr><td>'+dateFmt(x.date)+'</td><td>'+esc(x.category)+'</td><td>'+esc(x.description)+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td></tr>');el.innerHTML=table(['Date','Catégorie','Description','Montant','Paiement','Note'],rows)}
+function printReceipt(saleId){let s=db.sales.find(x=>x.id===saleId);if(!s){alert('Vente introuvable.');return}let paid=paidOfSale(s),credit=creditOfSale(s),client=s.clientId?clientName(s.clientId):'—',receiptNo=s.id.slice(-8).toUpperCase();let w=window.open('','_blank','width=420,height=650');if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reçu ${receiptNo}</title><style>body{font-family:Arial,sans-serif;color:#111;margin:0;padding:18px;max-width:360px}h1{font-size:22px;text-align:center;margin:0 0 5px}p{margin:5px 0;font-size:13px}.center{text-align:center}.line{border-top:1px dashed #555;margin:12px 0}.item{display:flex;justify-content:space-between;gap:12px;margin:8px 0;font-size:14px}.total{font-weight:bold;font-size:17px}.small{font-size:12px}@media print{body{padding:0;max-width:none}@page{margin:6mm}}
+/* V2 — mise en page alignée sur le modèle visuel validé */
+:root{--navy:#082f68;--blue:#1256b4;--green:#0b9b72;--bg:#f4f7fd;--text:#10264b;--muted:#5d6d8a;--line:#e5ebf5}
+body{background:#f4f7fd;color:var(--text)}
+.sidebar{background:#082f68}
+.topbar{background:#082f68;color:#fff;border:0;padding:20px 28px;min-height:104px}
+.topbar h1,.topbar small{color:#fff}.topbar small{opacity:.82}
+.welcome-title{gap:14px}.kg-mark{width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#fff;color:#082f68;display:grid;place-items:center;font-size:20px;font-weight:900;letter-spacing:-1px}
+.welcome-copy{font-size:clamp(20px,2.3vw,28px);font-weight:850;color:#fff}.welcome-copy .guinea-name{color:#fff}.welcome-tagline{color:#dce8ff;font-size:14px}.top-actions .primary{background:#fff;color:#082f68}
+.content{max-width:1500px;padding:24px 26px}
+#page-dashboard .pagehead{background:linear-gradient(110deg,#e7efff,#f6f9ff);border:1px solid #e1eaff;border-radius:20px;padding:20px 22px;box-shadow:none;color:#10264b}
+#page-dashboard .pagehead h2,#page-dashboard .pagehead p{color:#10264b}
+#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin-bottom:18px}
+#page-dashboard .stats .card{min-height:142px;display:grid;grid-template-columns:104px minmax(0,1fr);grid-template-rows:auto 1fr;align-items:center;column-gap:16px;padding:18px 20px;border-radius:24px;border:1px solid #e6ecf7;box-shadow:0 5px 18px #0b36700d}
+#page-dashboard .stat-icon{grid-column:1;grid-row:1/3;float:none;width:96px;height:96px;border-radius:50%;display:grid;place-items:center;padding:0;background:#e5efff;color:#1256b4;font-size:35px}
+#page-dashboard .stats .card:nth-child(2n) .stat-icon{background:#e5efff;color:#1256b4}
+#page-dashboard .stat-label{grid-column:2;font-size:14px;max-width:100%;color:#253b60;line-height:1.35}
+#page-dashboard .stat-number{grid-column:2;font-size:clamp(21px,2.2vw,30px);font-weight:850;margin-top:2px;color:#10264b;overflow-wrap:anywhere}
+#page-dashboard .hero-kpis .card{border-top:0}
+#page-dashboard .layout>.card{border-radius:20px}
+#page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr))}
+/* Client identity icons and clear action */
+#page-dashboard .actions .green{background:#1256b4;border-color:#1256b4}
+@media(max-width:1000px){.app{grid-template-columns:190px 1fr}#page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:680px){
+ .app{padding-bottom:88px}.topbar{padding:17px 16px;min-height:104px}.welcome-title{gap:11px}.kg-mark{width:45px;height:45px;flex-basis:45px;font-size:17px}.welcome-copy{font-size:19px}.welcome-tagline{font-size:12px}.topbar small{display:none}
+ .content{padding:14px 12px}.notice.sync-note{font-size:11px;padding:9px 11px;margin-bottom:12px}
+ #page-dashboard .pagehead{padding:15px 14px;border-radius:17px;gap:10px}#page-dashboard .pagehead h2{font-size:19px}#page-dashboard .pagehead p{font-size:12px}#page-dashboard .pagehead .actions{width:100%;display:flex;flex-wrap:wrap}#page-dashboard .pagehead .actions button{flex:1 1 30%;font-size:10px;padding:8px 5px}
+ #page-dashboard .stats{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px;row-gap:10px}
+ #page-dashboard .stats .card{min-height:128px;display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;padding:12px 12px;border-radius:19px}
+ #page-dashboard .stat-icon{width:42px;height:42px;flex:none;border-radius:50%;font-size:19px;margin-bottom:3px}
+ #page-dashboard .stat-label{font-size:11px;line-height:1.3;max-width:100%}
+ #page-dashboard .stat-number{font-size:clamp(16px,4.6vw,21px);line-height:1.25;margin:0;overflow-wrap:anywhere}
+ #page-dashboard .layout>.card{padding:14px}#page-dashboard .quick{grid-template-columns:1fr}
+ .mobile-nav{padding:6px 4px calc(6px + env(safe-area-inset-bottom));grid-template-columns:repeat(5,minmax(0,1fr))}.mobile-nav button{font-size:10px}.mobile-nav b{font-size:19px}
+}
+
+</style></head><body><h1>Comptiva</h1><p class="center">Reçu de vente</p><div class="line"></div><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(s.date))}</p><p><b>Client :</b> ${esc(client)}</p><div class="line"></div><div class="item"><span>${esc(s.product)} × ${esc(String(s.quantity))}</span><span>${money(s.total)}</span></div><p class="small">Prix unitaire : ${money(s.unitPrice)}</p><div class="line"></div><div class="item total"><span>Total</span><span>${money(s.total)}</span></div><div class="item"><span>Mode de paiement</span><span>${esc(s.method||'Espèces')}</span></div><div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div><div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div><div class="line"></div><p class="center">Merci pour votre achat !</p><p class="center small">Reçu généré avec Comptiva</p><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\/script></body></html>`);w.document.close()}
+function startTrial(){if(subscription.trialStart){flash('L’essai a déjà été démarré sur cet appareil.');renderSubscription();return}let now=new Date();subscription.trialStart=now.toISOString();let end=new Date(now);end.setDate(end.getDate()+14);subscription.trialEnd=end.toISOString();saveSubscription();flash('Essai de démonstration démarré pour 14 jours.')}
+function copyMerchantMessage(){const msg='Bienvenue sur Comptiva, votre application de gestion commerciale ! Gérez vos ventes, vos clients, les crédits, les remboursements et votre stock.\n\nAbonnement : 75 000 GNF par mois.\nPaiement Orange Money : +224 623 08 29 46\nBénéficiaire : Aïssatou Thiam\n\nEnvoyez le montant exact, vérifiez le nom du bénéficiaire et conservez la référence de transaction. Renseignez ensuite le nom de votre boutique et la référence dans Comptiva pour demander la vérification. Votre abonnement sera activé après confirmation de la réception du paiement. Ne communiquez jamais votre code secret ni un code SMS.';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>alert('Message commerçant copié.')).catch(()=>alert(msg));}else{alert(msg)}}
+function showPaymentInfo(){alert('Démonstration uniquement : aucun paiement réel n’est activé. La prochaine étape technique sera de choisir un prestataire Mobile Money, vérifier ses frais et intégrer son API de paiement et ses confirmations serveur.')}
+function submitManualPayment(){let business=document.getElementById('manualBusiness').value.trim(),phone=document.getElementById('manualPhone').value.trim(),ref=document.getElementById('manualReference').value.trim(),method=document.getElementById('manualMethod').value;if(!business||!ref){alert('Indique le nom de la boutique et la référence de transaction.');return}if(subscription.requests.some(x=>x.reference.toLowerCase()===ref.toLowerCase())){alert('Cette référence existe déjà dans cet appareil. Vérifie-la avant de renvoyer.');return}subscription.requests.unshift({id:id('PAY'),business,phone,reference:ref,method,date:new Date().toISOString(),status:'En attente de vérification',amount:75000});saveSubscription();document.getElementById('manualBusiness').value='';document.getElementById('manualPhone').value='';document.getElementById('manualReference').value='';flash('Demande enregistrée localement. Le paiement reste en attente de vérification.')} 
+function savePaymentSettings(){let number=document.getElementById('adminOmNumber').value.trim(),name=document.getElementById('adminOmName').value.trim();if(!number||!name){alert('Saisis le numéro et le nom du bénéficiaire.');return}subscription.paymentSettings={number,name};saveSubscription();flash('Coordonnées enregistrées sur cet appareil.')} 
+function verifyPayment(requestId,approved){let r=subscription.requests.find(x=>x.id===requestId);if(!r)return;if(r.status!=='En attente de vérification'){alert('Cette demande a déjà été traitée.');return}if(approved){if(!confirm('Confirmer que les 75 000 GNF ont réellement été reçus sur Orange Money ?'))return;let now=new Date(),base=subscription.paidUntil&&new Date(subscription.paidUntil)>now?new Date(subscription.paidUntil):now;base.setDate(base.getDate()+30);subscription.paidUntil=base.toISOString();r.status='Paiement vérifié (démo)';r.verifiedAt=new Date().toISOString();r.paidUntil=subscription.paidUntil;}else{if(!confirm('Refuser cette demande ?'))return;r.status='Refusé — paiement non confirmé';r.verifiedAt=new Date().toISOString()}saveSubscription();flash('Statut mis à jour dans la démonstration locale.')} 
+function renderSubscription(){let status='Non démarré',endText='Démarre ton essai gratuit de 14 jours';let now=new Date();if(subscription.paidUntil&&new Date(subscription.paidUntil)>now){status='Abonnement payé (démo)';endText='Valable jusqu’au : '+new Date(subscription.paidUntil).toLocaleDateString('fr-FR')}else if(subscription.trialStart&&subscription.trialEnd){let end=new Date(subscription.trialEnd);if(now<end){let days=Math.max(1,Math.ceil((end-now)/(24*60*60*1000)));status='Essai gratuit';endText='Fin de l’essai : '+end.toLocaleDateString('fr-FR')+' ('+days+' jour(s) restant(s))'}else{status='Essai terminé';endText='Choisis un moyen de paiement pour continuer'}}let st=document.getElementById('subStatus'),et=document.getElementById('subEndDate'),hist=document.getElementById('subscriptionHistory');if(st)st.textContent=status;if(et)et.textContent=endText;let settings=subscription.paymentSettings||{};let dn=document.getElementById('displayOmNumber'),dname=document.getElementById('displayOmName'),an=document.getElementById('adminOmNumber'),aName=document.getElementById('adminOmName');if(dn)dn.textContent=settings.number||'À configurer';if(dname)dname.textContent=settings.name||'À configurer';if(an&&document.activeElement!==an)an.value=settings.number||'';if(aName&&document.activeElement!==aName)aName.value=settings.name||'';if(hist)hist.innerHTML=table(['Date','Boutique','Moyen','Référence','Statut'],subscription.requests.map(x=>'<tr><td>'+new Date(x.date).toLocaleString('fr-FR')+'</td><td>'+esc(x.business||'—')+'</td><td>'+esc(x.method)+'</td><td>'+esc(x.reference)+'</td><td>'+esc(x.status)+'</td></tr>'));let admin=document.getElementById('adminPaymentRequests');if(admin)admin.innerHTML=subscription.requests.length?'<div class="table-wrap"><table><thead><tr><th>Date</th><th>Boutique</th><th>Référence</th><th>Montant</th><th>Statut</th><th>Action</th></tr></thead><tbody>'+subscription.requests.map(x=>'<tr><td>'+new Date(x.date).toLocaleString('fr-FR')+'</td><td>'+esc(x.business||'—')+'</td><td>'+esc(x.reference)+'</td><td>'+money(x.amount||75000)+'</td><td>'+esc(x.status)+'</td><td>'+(x.status==='En attente de vérification'?'<div class="actions"><button class="green" onclick="verifyPayment(\''+x.id+'\',true)">Confirmer reçu</button><button class="danger" onclick="verifyPayment(\''+x.id+'\',false)">Refuser</button></div>':'—')+'</td></tr>').join('')+'</tbody></table></div>':'<div class="empty">Aucune demande à vérifier sur cet appareil.</div>'}
+function parseDay(s){return new Date(s+'T12:00:00')}
+function dayKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
+function sumSales(arr){return arr.reduce((n,s)=>n+Number(s.total||0),0)}
+function paidOfSale(s){return Number(s.paidAmount!==undefined?s.paidAmount:(s.saleType==='credit'?0:s.total||0))}
+function creditOfSale(s){return Number(s.creditAmount!==undefined?s.creditAmount:(s.saleType==='credit'?s.total||0:0))}
+function renderReports(){let ref=document.getElementById('reportDate');if(!ref)return;if(!ref.value)ref.value=new Date().toISOString().slice(0,10);let chosen=ref.value,dt=parseDay(chosen),start=new Date(dt);start.setDate(dt.getDate()-((dt.getDay()+6)%7));let end=new Date(start);end.setDate(start.getDate()+7);let monthStart=new Date(dt.getFullYear(),dt.getMonth(),1),monthEnd=new Date(dt.getFullYear(),dt.getMonth()+1,1);let day=db.sales.filter(s=>s.date===chosen),week=db.sales.filter(s=>{let d=parseDay(s.date);return d>=start&&d<end}),month=db.sales.filter(s=>{let d=parseDay(s.date);return d>=monthStart&&d<monthEnd});document.getElementById('dayRevenue').textContent=money(sumSales(day));document.getElementById('weekRevenue').textContent=money(sumSales(week));document.getElementById('monthRevenue').textContent=money(sumSales(month));document.getElementById('dayCount').textContent=day.length+' vente(s)';document.getElementById('weekCount').textContent=week.length+' vente(s)';document.getElementById('monthCount').textContent=month.length+' vente(s)';document.getElementById('reportDebt').textContent=money(db.debts.reduce((n,d)=>n+balance(d),0));let periodRows=[['Jour',day],['Semaine',week],['Mois',month]].map(r=>'<tr><td>'+r[0]+'</td><td><b>'+money(sumSales(r[1]))+'</b></td><td>'+money(r[1].reduce((n,s)=>n+paidOfSale(s),0))+'</td><td>'+money(r[1].reduce((n,s)=>n+creditOfSale(s),0))+'</td><td>'+r[1].length+'</td></tr>');document.getElementById('periodTable').innerHTML=table(['Période','Chiffre d’affaires','Encaissé à la vente','Ventes à crédit','Nombre de ventes'],periodRows);let dailyRefunds=db.payments.filter(p=>p.date===chosen).reduce((n,p)=>n+Number(p.amount||0),0);let splitRows=[['Ventes payées / encaissées',day.reduce((n,s)=>n+paidOfSale(s),0)],['Ventes à crédit',day.reduce((n,s)=>n+creditOfSale(s),0)],['Remboursements reçus sur anciennes dettes',dailyRefunds]].map(r=>'<tr><td>'+r[0]+'</td><td><b>'+money(r[1])+'</b></td></tr>');document.getElementById('revenueSplit').innerHTML=table(['Catégorie (jour choisi)','Montant'],splitRows);let itemRows=day.map(s=>'<tr><td>'+esc(s.product)+'</td><td>'+esc(String(s.quantity))+'</td><td>'+money(s.unitPrice)+'</td><td>'+money(s.total)+'</td><td>'+esc(s.method||(s.saleType==='credit'?'Crédit client':'Espèces'))+'</td><td>'+money(paidOfSale(s))+'</td><td>'+money(creditOfSale(s))+'</td></tr>');document.getElementById('dayItems').innerHTML=table(['Article','Quantité','Prix unitaire','Total','Mode','Encaissé','À crédit'],itemRows)}
+
+function renderReminderOptions(){let cs=document.getElementById('reminderClient'),ds=document.getElementById('reminderDebt');if(!cs||!ds)return;let old=cs.value;cs.innerHTML=db.clients.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');if(old)cs.value=old;updateDebtOptions()}
+function updateDebtOptions(){let cid=document.getElementById('reminderClient').value,ds=document.getElementById('reminderDebt');let old=ds.value;ds.innerHTML=db.debts.filter(d=>d.clientId===cid&&balance(d)>0).map(d=>'<option value="'+d.id+'">'+money(balance(d))+' — '+dateFmt(d.date)+'</option>').join('');if(old)ds.value=old;updateReminder()}
+function updateReminder(){let cs=document.getElementById('reminderClient'),ds=document.getElementById('reminderDebt'),msg=document.getElementById('reminderMessage');if(!cs||!ds||!msg)return;if(!cs.value){msg.value='Ajoutez d’abord un client.';return}let c=db.clients.find(c=>c.id===cs.value),d=db.debts.find(d=>d.id===ds.value);msg.value=d?`Bonjour ${c.name}, ici Comptiva / votre boutique. Petit rappel concernant le solde de ${money(balance(d))} lié à notre vente du ${dateFmt(d.date)}. Merci de me dire quand vous pensez pouvoir régler. Bonne journée.`:`Bonjour ${c.name}, ici Comptiva / votre boutique. Je vous contacte au sujet de notre compte. Pouvez-vous me confirmer la situation du paiement ? Merci et bonne journée.`}
+function openReminderChannel(channel){let cs=document.getElementById('reminderClient'),c=db.clients.find(x=>x.id===cs?.value),msg=document.getElementById('reminderMessage')?.value||'';if(!c){flash('Choisissez un client.');return}let phone=String(c.phone||'').replace(/[^0-9+]/g,'').replace(/^00/,'+');let digits=phone.replace(/\D/g,'');if(digits.startsWith('0'))digits='224'+digits.slice(1);else if(digits.length===9)digits='224'+digits;if(!digits){flash('Ajoutez d’abord le numéro de téléphone du client.');return}let url=channel==='whatsapp'?'https://wa.me/'+digits+'?text='+encodeURIComponent(msg):'sms:'+digits+'?body='+encodeURIComponent(msg);window.open(url,'_blank','noopener');}
+function copyReminder(){let msg=document.getElementById('reminderMessage').value;if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>flash('Message copié. Vous pouvez le coller dans WhatsApp.')).catch(()=>fallbackCopy(msg))}else fallbackCopy(msg)}
+function fallbackCopy(text){let t=document.getElementById('reminderMessage');t.focus();t.select();try{document.execCommand('copy');flash('Message sélectionné/copier si autorisé par le navigateur.')}catch(e){alert('Copiez le message manuellement.')}} 
+function startReminderForClient(cid){navigate('reminders');renderReminderOptions();document.getElementById('reminderClient').value=cid;updateDebtOptions()}
+
+function backupData(){try{const payload={app:'Comptiva',version:6,createdAt:new Date().toISOString(),data:db};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='krediguinee-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);flash('Sauvegarde téléchargée. Garde ce fichier en lieu sûr.')}catch(e){alert('Impossible de créer la sauvegarde sur ce navigateur.')}}
+function restoreData(event){const file=event.target.files&&event.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=function(){try{const parsed=JSON.parse(reader.result);const restored=parsed&&parsed.data?parsed.data:parsed;if(!restored||!Array.isArray(restored.clients)||!Array.isArray(restored.sales)||!Array.isArray(restored.debts))throw new Error('invalid');if(!confirm('Restaurer cette sauvegarde remplacera les données actuellement enregistrées sur cet appareil. As-tu déjà sauvegardé les données actuelles ?'))return;db={clients:restored.clients||[],debts:restored.debts||[],payments:restored.payments||[],sales:restored.sales||[],purchases:restored.purchases||[],expenses:restored.expenses||[],products:restored.products||[]};saveDB();flash('Sauvegarde restaurée avec succès.')}catch(e){alert('Fichier de sauvegarde invalide ou incompatible. Aucune donnée n’a été restaurée.')}finally{event.target.value=''}};reader.readAsText(file)}
+
+function exportCSV(){let lines=[['Type','Article/Client','Quantité','Prix unitaire','Montant vente/dette','Mode de paiement','Encaissé à la vente','Crédit vente','Montant payé dette','Solde dette','Date','Échéance']];db.sales.forEach(s=>lines.push(['Vente',s.product,s.quantity,s.unitPrice,s.total,s.method||'',paidOfSale(s),creditOfSale(s),'','',s.date,'']));db.debts.forEach(d=>lines.push(['Dette',clientName(d.clientId),'','',d.amount,'', '', '',paidFor(d.id),balance(d),d.date,d.due||'']));db.purchases.forEach(x=>lines.push(['Achat marchandise',x.item,x.quantity||'', '',x.amount,x.method||'', '', '', '', '',x.date,'']));db.expenses.forEach(x=>lines.push(['Dépense: '+x.category,x.description,'','',x.amount,x.method||'','','','','',x.date,'']));let csv=lines.map(r=>r.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(';')).join('\n');let blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='krediguinee-export.csv';a.click();URL.revokeObjectURL(url);flash('Export préparé.')}
+// Le rendu initial ne doit jamais empêcher le démarrage de Firebase Authentication.
+try {
+  renderAll();
+} catch (renderError) {
+  console.error('[COMPTIVA] Erreur pendant le rendu initial :', renderError);
+  const statusElement = document.getElementById('authCloudStatus');
+  if (statusElement) statusElement.textContent = 'Interface chargée · initialisation sécurisée en cours…';
+}
+
+function toggleMobileMore(force){const menu=document.getElementById('mobileMoreMenu');if(!menu)return;const show=typeof force==='boolean'?force:menu.classList.contains('hidden');menu.classList.toggle('hidden',!show)}
+// Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
+// COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
+const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
+let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false;
+const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[]});
+function krediStatus(t){['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t})}
+function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
+function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-email':'Adresse e-mail invalide.','auth/user-not-found':'Aucun compte ne correspond à cet e-mail.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'E-mail ou mot de passe incorrect.','auth/email-already-in-use':'Cette adresse e-mail possède déjà un compte.','auth/weak-password':'Choisissez un mot de passe d’au moins 6 caractères.','auth/too-many-requests':'Trop de tentatives. Réessayez plus tard.','auth/network-request-failed':'Connexion Internet indisponible. Vérifiez votre réseau.','auth/unauthorized-domain':'Cette adresse du site doit être autorisée dans Firebase Authentication.','auth/operation-not-allowed':'La connexion par e-mail/mot de passe n’est pas activée dans Firebase.','client-timeout':'La connexion prend plus de temps que prévu. Vérifiez votre connexion Internet puis réessayez. Vos données locales sont conservées.','permission-denied':'Accès Firestore refusé. Vérifiez les règles et le compte connecté.','unavailable':'Firestore indique que le service est indisponible.'};return (map[c]||((e&&e.message)||'Une erreur inconnue est survenue.'))+(c?' [code: '+c+']':'')}
+function krediDiagnosticError(e,phase){const code=(e&&e.code)||'code_absent';const message=(e&&e.message)||String(e||'Erreur sans message');const status=e&&(e.status||e.customData&&e.customData.httpStatus);const name=e&&e.name||'Erreur';return 'DIAGNOSTIC '+phase+' | '+name+' | code='+code+(status?' | HTTP='+status:'')+' | message='+message;}
+function krediShowDiagnostic(e,phase){const detail=krediDiagnosticError(e,phase);krediStatus(detail+' · données locales conservées.');console.error('[COMPTIVA Firebase]',detail,e);}
+function krediTogglePassword(){const p=document.getElementById('cloudPassword'),b=document.querySelector('.toggle-pass');if(!p||!b)return;const show=p.type==='password';p.type=show?'text':'password';b.textContent=show?'Masquer':'Afficher'}
+let krediAuthMode='signin';
+function krediSetAuthMode(mode){krediAuthMode=mode;const h=document.getElementById('authHeading'),sub=document.getElementById('authSubtitle'),submit=document.getElementById('authSubmit'),create=document.getElementById('authCreate'),form=document.getElementById('authForm');if(!h||!sub||!submit||!create||!form)return;if(mode==='signup'){h.textContent='Créer votre compte COMPTIVA';sub.textContent='Commencez à gérer votre commerce simplement.';submit.textContent='Créer mon compte';submit.onclick=null;form.onsubmit=null;create.textContent='J’ai déjà un compte · Se connecter';create.onclick=()=>krediSetAuthMode('signin')}else{h.textContent='Bienvenue sur COMPTIVA';sub.textContent='Connectez-vous pour accéder à votre commerce.';submit.textContent='↪  Se connecter';form.onsubmit=null;create.textContent='＋  Première visite ? Créer un compte';create.onclick=()=>krediSetAuthMode('signup')}krediAuthMessage('')}
+function krediShowApp(user){document.body.classList.add('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.setAttribute('aria-hidden','true');const who=document.getElementById('topTitle');if(who)who.textContent='Tableau de bord';const subtitle=document.querySelector('.topbar .welcome-tagline');if(subtitle)subtitle.textContent='Votre commerce, toujours sous contrôle. · '+(user.email||'Compte connecté');}
+function krediShowLogin(){document.body.classList.remove('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.removeAttribute('aria-hidden');krediSetAuthMode('signin');}
+function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comptiva_subscription_v1_'+uid;db=loadDB();if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];subscription=loadSubscription();if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings)subscription.paymentSettings={number:'',name:''};}
+function krediMergeDatabases(localData,remoteData,preferLocal){
+  const base=krediEmptyDB(),out={...base};
+  for(const key of Object.keys(base)){
+    const localRows=Array.isArray(localData&&localData[key])?localData[key]:[];
+    const remoteRows=Array.isArray(remoteData&&remoteData[key])?remoteData[key]:[];
+    const first=preferLocal?remoteRows:localRows;
+    const second=preferLocal?localRows:remoteRows;
+    const map=new Map();
+    for(const item of first){if(!item||typeof item!=='object')continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
+    for(const item of second){if(!item||typeof item!=='object')continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
+    out[key]=Array.from(map.values());
+  }
+  return out;
+}
+async function krediInitFirebase(){try{
+  // V16 : ne jamais laisser l'écran de connexion attendre indéfiniment le chargement des SDK.
+  // La promesse du chargeur est bornée ; en cas d'échec, l'écran affiche un diagnostic exploitable.
+  if(window.__comptivaFirebaseSdkReady){
+    krediStatus('Chargement sécurisé de Firebase…');
+    await Promise.race([
+      window.__comptivaFirebaseSdkReady,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('firebase-sdk-startup-timeout: les scripts Firebase n’ont pas répondu après 10 secondes. Vérifiez la connexion Internet, le bloqueur de contenu et le réseau utilisé.')),10000))
+    ]);
+  }
+  if(window.krediSdkLoadError){krediStatus('Chargement Firebase impossible : '+window.krediSdkLoadError+'. Rechargez la page après vérification du réseau.');return}
+  // Authentication doit rester indépendante de Firestore : une panne du SDK
+  // Firestore ne doit jamais empêcher l'ouverture d'une session commerçant.
+  if(window.krediSdkLoadError){krediStatus(window.krediSdkLoadError);return}
+  if(!window.firebase||!firebase.apps||!firebase.initializeApp||!firebase.auth){
+    krediStatus('Firebase App ou Authentication indisponible. Vérifiez le chargement du SDK et Internet.');return;
+  }
+  if(!firebase.apps.length)firebase.initializeApp(krediFirebaseConfig);
+  krediAuth=firebase.auth();
+  if(!krediAuth||typeof krediAuth.onAuthStateChanged!=='function'){
+    krediStatus('Firebase Authentication est chargé, mais son service Auth est indisponible.');return;
+  }
+  // V15 : ne jamais attendre setPersistence avant d'enregistrer onAuthStateChanged.
+  // L'ancien ordre V14 pouvait retarder le démarrage de l'écouteur Auth.
+  // La préparation SESSION est lancée en arrière-plan et bornée à 5 secondes.
+  krediStore=null;
+  window.krediAuthPersistence='SESSION_PENDING';
+  krediStatus('Firebase Auth initialisé · écoute de session en cours…');
+  window.krediAuthPersistencePromise=Promise.resolve();
+  if(firebase.auth.Auth && firebase.auth.Auth.Persistence && typeof krediAuth.setPersistence==='function'){
+    window.krediAuthPersistencePromise=Promise.race([
+      krediAuth.setPersistence(firebase.auth.Auth.Persistence.SESSION),
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('auth-persistence-timeout')),5000))
+    ]).then(()=>{
+      window.krediAuthPersistence='SESSION';
+      krediStatus('Persistance SESSION prête · Firebase Auth disponible.');
+    }).catch(persistenceError=>{
+      console.warn('[COMPTIVA V15] Persistance SESSION non confirmée ; Auth continue.',persistenceError);
+      window.krediAuthPersistence='SESSION_FALLBACK';
+      krediStatus('Firebase Auth chargé · persistance non confirmée, diagnostic en cours…');
+    });
+  }else{
+    window.krediAuthPersistence='DEFAULT';
+  }
+  let krediAuthStateReceived=false;
+  const krediAuthWaitTimer=setTimeout(()=>{
+    if(!krediAuthStateReceived){
+      let storageState='inconnu';
+      try{const testKey='__comptiva_storage_test__';localStorage.setItem(testKey,'1');localStorage.removeItem(testKey);storageState='localStorage-ok'}catch(storageError){storageState='localStorage-bloque-'+(storageError&&storageError.name||'erreur')}
+      const indexedDBState=(typeof indexedDB==='undefined')?'indisponible':'disponible';
+      const onlineState=(typeof navigator!=='undefined'&&typeof navigator.onLine==='boolean')?(navigator.onLine?'oui':'non'):'inconnu';
+      const sdkVersion=(window.firebase&&firebase.SDK_VERSION)||'inconnue';
+      const currentUserState=(krediAuth&&krediAuth.currentUser)?'session-presente':'aucune-session-lue';
+      const appState=(krediAuth&&krediAuth.app&&krediAuth.app.name)||'inconnue';
+      const diagnostic='auth-state-timeout | SDK='+sdkVersion+' | app='+appState+' | reseau-navigateur='+onlineState+' | '+storageState+' | IndexedDB='+indexedDBState+' | currentUser='+currentUserState;
+      krediStatus('Firebase Auth ne termine pas la lecture initiale de session après 15 secondes. Persistance='+window.krediAuthPersistence+'. '+diagnostic+'. Ce délai survient avant la vérification du mot de passe. Les données locales ne sont pas modifiées. Copiez ce diagnostic.');
+      console.error('[COMPTIVA AUTH DIAGNOSTIC]',diagnostic);
+    }
+  },15000);
+  krediAuth.onAuthStateChanged(async user=>{
+    krediAuthStateReceived=true;
+    clearTimeout(krediAuthWaitTimer);
+    krediUser=user||null;krediCloudReady=false;krediServerReady=false;
+    krediLocalDirty=!!(user&&localStorage.getItem('comptiva_pending_'+user.uid)==='1');
+    if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
+    if(!user){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
+    krediUseAccountStore(user.uid);krediShowApp(user);renderAll();
+    // Firestore est initialisé seulement après confirmation Auth.
+    if(!krediStore && firebase.firestore){
+      try{
+        krediStore=firebase.firestore();
+        krediStore.settings({experimentalAutoDetectLongPolling:true});
+        krediStore.enableNetwork().catch(networkError=>console.warn('[COMPTIVA] Réactivation réseau Firestore :',networkError));
+      }catch(storeError){
+        krediStore=null;
+        console.warn('[COMPTIVA] Firestore indisponible, Authentication continue.',storeError);
+      }
+    }
+    if(!krediStore){
+      krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
+      return;
+    }
+    krediStatus('Compte connecté. Vérification des données en ligne…');
+    const activeUid=user.uid;
+    const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
+    let serverProbeFinished=false;
+    const serverProbeTimer=setTimeout(()=>{
+      if(!krediUser||krediUser.uid!==activeUid||krediServerReady||serverProbeFinished)return;
+      krediCloudReady=false;
+      krediStatus('Compte connecté, mais Firestore ne confirme pas encore le serveur. Données locales conservées. Vérifiez Internet et les règles Firestore.');
+    },12000);
+    ref.get({source:'server'}).then(()=>{
+      serverProbeFinished=true;clearTimeout(serverProbeTimer);
+      if(krediUser&&krediUser.uid===activeUid&&!krediServerReady){
+        krediStatus('Serveur Firestore joignable. Vérification de la synchronisation…');
+      }
+    }).catch(err=>{
+      serverProbeFinished=true;clearTimeout(serverProbeTimer);
+      if(krediUser&&krediUser.uid===activeUid&&!krediServerReady){
+        krediCloudReady=false;
+        krediShowDiagnostic(err,'LECTURE SERVEUR users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'));
+      }
+    });
+    krediUnsubscribe=ref.onSnapshot({includeMetadataChanges:true},async snap=>{
+      if(!krediUser||krediUser.uid!==activeUid)return;
+      if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
+      clearTimeout(serverProbeTimer);
+      krediServerReady=true;
+      const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
+      const localData=loadDB();
+      const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
+      const merged=krediMergeDatabases(localData,remoteData,hasPending);
+      const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
+      krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
+      if(!snap.exists||mergedText!==remoteText){
+        krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
+        krediStatus('Envoi des données locales vers Firebase…');
+        try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid)return;krediLastWrite=mergedText;krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
+        catch(e){krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
+        return;
+      }
+      krediCloudReady=true;krediLocalDirty=false;localStorage.removeItem('comptiva_pending_'+activeUid);
+      krediStatus(navigator.onLine?'Connecté · données synchronisées':'Hors connexion · données locales disponibles');renderAll();
+    },err=>{clearTimeout(serverProbeTimer);krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
+  },err=>{
+    krediAuthStateReceived=true;
+    clearTimeout(krediAuthWaitTimer);
+    krediShowDiagnostic(err,'ERREUR AUTHENTICATION');
+  });
+  window.addEventListener('online',()=>{if(krediUser){krediStatus('Internet revenu. Reprise de la synchronisation…');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),1200)}});
+  window.addEventListener('offline',()=>{if(krediUser)krediStatus('Hors connexion · les changements restent sur cet appareil.')});
+}catch(e){
+  const detail=(e&&e.code?e.code+' · ':'')+(e&&e.message?e.message:'erreur JavaScript');
+  krediStatus('Connexion sécurisée non initialisée : '+detail+' Les données locales ne sont pas modifiées.');
+  console.error('[COMPTIVA] Initialisation Firebase',e);
+}}
+function krediQueueCloudSave(){
+  if(!krediUser||krediApplyingCloud||!krediStore)return;
+  const uid=krediUser.uid;
+  krediLocalDirty=true;
+  localStorage.setItem('comptiva_pending_'+uid,'1');
+  clearTimeout(krediSaveTimer);
+  if(!navigator.onLine){krediStatus('Hors connexion · données conservées sur cet appareil. Envoi dès le retour d’Internet.');return}
+  if(!krediServerReady){krediStatus('Données enregistrées sur cet appareil · attente de la connexion Firebase…');krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediQueueCloudSave()},2500);return}
+  if(krediSaveInFlight)return;
+  krediSaveTimer=setTimeout(async()=>{
+    if(!krediUser||krediUser.uid!==uid||!krediServerReady||!navigator.onLine)return;
+    krediSaveInFlight=true;
+    const payload=JSON.stringify(db);
+    try{
+      await krediStore.collection('users').doc(uid).collection('comptivaData').doc('main').set({db:JSON.parse(payload),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      if(!krediUser||krediUser.uid!==uid)return;
+      krediLastWrite=payload;
+      if(JSON.stringify(db)===payload){
+        krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+uid);
+        krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');
+      }else{
+        krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+uid,'1');
+        krediStatus('Nouvelle modification détectée · envoi en cours…');
+      }
+      renderAll();
+    }catch(e){
+      krediCloudReady=false;krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+uid,'1');
+      krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
+    }finally{
+      krediSaveInFlight=false;
+      if(krediUser&&krediUser.uid===uid&&krediLocalDirty&&navigator.onLine){clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),3000)}
+    }
+  },650);
+}
+async function krediTestAuthNetwork(){
+  const email=(document.getElementById('cloudEmail')?.value||'').trim();
+  if(!email){krediAuthMessage('Saisissez votre adresse e-mail avant le test. Aucun mot de passe n’est nécessaire pour ce contrôle.');return}
+  const button=document.getElementById('authNetworkTest');
+  if(button)button.disabled=true;
+  krediAuthMessage('Test du réseau vers Firebase Authentication en cours…',true);
+  const controller=(typeof AbortController!=='undefined')?new AbortController():null;
+  const timer=setTimeout(()=>{if(controller)controller.abort()},12000);
+  try{
+    const endpoint='https://identitytoolkit.googleapis.com/v1/accounts:createAuthUri?key='+encodeURIComponent(krediFirebaseConfig.apiKey);
+    const response=await fetch(endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({identifier:email,continueUri:"https://"+krediFirebaseConfig.authDomain+"/"}),
+      signal:controller?controller.signal:undefined,
+      cache:'no-store'
+    });
+    const body=await response.json().catch(()=>({}));
+    if(response.ok){
+      const methods=Array.isArray(body.signinMethods)?body.signinMethods.join(', '):'réponse reçue';
+      krediAuthMessage('TEST RÉUSSI · Firebase Authentication répond (HTTP '+response.status+'). Méthodes : '+methods+'. Le réseau atteint Firebase ; le test ne vérifie pas le mot de passe.',true);
+      krediStatus('Test réseau Auth réussi · HTTP '+response.status+' · connexion du compte à tester séparément.');
+    }else{
+      const detail=(body&&body.error&&body.error.message)||('HTTP '+response.status);
+      krediAuthMessage('FIREBASE RÉPOND MAIS REFUSE LA REQUÊTE · '+detail+' · HTTP '+response.status+'. Le réseau fonctionne ; la configuration/API key doit être vérifiée.');
+      krediStatus('Test réseau Auth : réponse Firebase HTTP '+response.status+' · '+detail);
+    }
+  }catch(error){
+    const detail=error&&error.name==='AbortError'?'délai dépassé après 12 secondes':(error&&error.message||String(error));
+    krediAuthMessage('TEST RÉSEAU ÉCHOUÉ · '+detail+'. Aucun mot de passe n’a été envoyé. Vérifiez le réseau ou le blocage de identitytoolkit.googleapis.com.');
+    krediStatus('Test réseau Firebase Auth échoué · '+detail);
+  }finally{
+    clearTimeout(timer);
+    if(button)button.disabled=false;
+  }
+}
+
+async function krediSignIn(){
+  if(!krediAuth){krediAuthMessage('Le service de connexion n’est pas encore prêt. Attendez quelques secondes puis réessayez.');return}
+  const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;
+  if(!email||!password){krediAuthMessage('Saisissez votre adresse e-mail et votre mot de passe.');return}
+  const b=document.getElementById('authSubmit');if(b)b.disabled=true;
+  krediAuthMessage('Connexion au compte en cours…',true);
+  try{
+    if(window.krediAuthPersistencePromise)await Promise.race([window.krediAuthPersistencePromise,new Promise(resolve=>setTimeout(resolve,5500))]);
+    const timeoutError=Object.assign(new Error('La demande de connexion n’a pas reçu de réponse à temps.'),{code:'client-timeout'});
+    const credential=await Promise.race([
+      krediAuth.signInWithEmailAndPassword(email,password),
+      new Promise((_,reject)=>setTimeout(()=>reject(timeoutError),30000))
+    ]);
+    if(credential&&credential.user){krediUser=credential.user;krediAuthMessage('Connexion réussie. Ouverture de votre commerce…',true);krediStatus('Compte connecté. Ouverture de votre espace…')}
+  }catch(e){
+    console.error('[COMPTIVA] Échec de connexion Firebase Auth :',e);
+    krediAuthMessage(krediFriendlyError(e));
+    krediStatus('Connexion non confirmée. Vos données locales sont conservées.');
+  }finally{if(b)b.disabled=false}
+}
+async function krediSignUp(){if(!krediAuth){krediAuthMessage('Le service Firebase Auth n’est pas initialisé. Diagnostic : auth-not-initialized.');return}const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;if(!email||password.length<6){krediAuthMessage('Saisissez un e-mail valide et un mot de passe de 6 caractères minimum.');return}const b=document.getElementById('authSubmit');if(b)b.disabled=true;krediAuthMessage('Création du compte en cours…',true);try{const credential=await krediAuth.createUserWithEmailAndPassword(email,password);if(credential&&credential.user){krediUser=credential.user;krediAuthMessage('Compte créé. Ouverture de votre espace…',true)}}catch(e){console.error('[COMPTIVA] Échec de création du compte Firebase Auth :',e);krediAuthMessage(krediFriendlyError(e))}finally{if(b)b.disabled=false}}
+async function krediForgotPassword(){if(!krediAuth){krediAuthMessage('Firebase n’est pas encore chargé.');return}const email=document.getElementById('cloudEmail').value.trim();if(!email){krediAuthMessage('Saisissez votre adresse e-mail pour recevoir le lien de réinitialisation.');return}try{await krediAuth.sendPasswordResetEmail(email);krediAuthMessage('Un lien de réinitialisation a été envoyé si ce compte existe.',true)}catch(e){krediAuthMessage(krediFriendlyError(e))}}
+async function krediSignOut(){if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}if(!confirm('Voulez-vous vous déconnecter de votre compte Comptiva ?'))return;try{if(krediSaveTimer)clearTimeout(krediSaveTimer);localStorage.setItem(STORE,JSON.stringify(db));await krediAuth.signOut()}catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}}
+window.addEventListener('error',event=>{if(event&&event.message&&event.message!=='Script error.')krediStatus('Erreur JavaScript : '+event.message)});
+// Le formulaire est relié immédiatement, sans attendre le retour du listener Firebase.
+const krediLoginForm=document.getElementById('authForm');
+if(krediLoginForm && !krediLoginForm.dataset.comptivaSubmitBound){
+  krediLoginForm.dataset.comptivaSubmitBound='1';
+  krediLoginForm.addEventListener('submit',function(event){
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const email=document.getElementById('cloudEmail');
+    const password=document.getElementById('cloudPassword');
+    if(!email||!password||!email.value.trim()||!password.value){
+      krediAuthMessage('Saisissez votre adresse e-mail et votre mot de passe.');
+      if(email&&!email.value.trim())email.focus();else if(password)password.focus();
+      return;
+    }
+    if(location.protocol==='file:'){
+      krediAuthMessage('Cette copie est ouverte comme fichier local. La connexion Firebase exige une adresse HTTPS publiée. Ouvrez la version du site COMPTIVA après publication.');
+      krediStatus('Connexion impossible depuis file:// : ouvrez COMPTIVA avec une adresse HTTPS.');
+      return;
+    }
+    if(!krediAuth){
+      krediAuthMessage('Firebase Authentication n’est pas encore prêt. Attendez le message « Connexion sécurisée prête », puis réessayez.');
+      krediStatus('Connexion non démarrée : Firebase Authentication n’est pas prêt.');
+      return;
+    }
+    if(krediAuthMode==='signup')krediSignUp();else krediSignIn();
+  },true);
+}
+// Affiche le mode de connexion dès l’ouverture, même si Firebase tarde à répondre.
+krediSetAuthMode('signin');
+
+let krediFirebaseInitStarted=false;
+function krediStartFirebaseOnce(){
+  if(krediFirebaseInitStarted)return;
+  if(location.protocol==='file:'){krediStatus('Fichier local détecté : pour utiliser Firebase, COMPTIVA doit être ouvert depuis une adresse HTTPS publiée.');}
+  krediFirebaseInitStarted=true;
+  krediInitFirebase().catch(e=>{
+    krediStatus('Initialisation COMPTIVA impossible : '+(e&&e.code?e.code+' · ':'')+(e&&e.message||String(e||'erreur inconnue')));
+  });
+  setTimeout(()=>{
+    if(!krediAuth){
+      krediStatus(window.krediSdkLoadError||'Firebase Auth ne répond pas. Vérifiez Internet et rechargez COMPTIVA.');
+    }
+  },15000);
+}
+if(document.readyState==='complete')krediStartFirebaseOnce();
+else window.addEventListener('load',krediStartFirebaseOnce,{once:true});
+</script>
+</body>
+</html>
