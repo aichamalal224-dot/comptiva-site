@@ -462,6 +462,13 @@ body:not(.auth-ready) #authScreen{display:flex!important}
   <button onclick="navigate('purchases');toggleMobileMore(false)">📦 Achats</button>
   <button onclick="navigate('expenses');toggleMobileMore(false)">💸 Dépenses</button>
   <button onclick="navigate('subscription');toggleMobileMore(false)">💳 Abonnement</button>
+  <div class="mobile-tools" aria-label="Langue et impression">
+    <label for="mobileAppLanguage">🌐 Langue</label>
+    <select id="mobileAppLanguage" aria-label="Langue de l’application" onchange="setAppLanguage(this.value)"><option value="fr">Français</option><option value="en">English</option></select>
+    <button type="button" onclick="printLatestSale();toggleMobileMore(false)">🖨 Imprimer le dernier reçu de vente</button>
+    <button type="button" onclick="printLatestDebt();toggleMobileMore(false)">🖨 Imprimer le dernier relevé de dette</button>
+    <button type="button" onclick="printLatestPayment();toggleMobileMore(false)">🖨 Imprimer le dernier reçu de remboursement</button>
+  </div>
 </div>
 <nav class="mobile-nav" id="mobileNav">
   <button data-page="dashboard" class="active"><b>▦</b>Accueil</button>
@@ -665,6 +672,12 @@ body{background:#f4f7fd;color:var(--text)}
   #page-dashboard .quick button{min-width:0!important;text-align:left!important;border:1px solid #e5ebf3!important;border-radius:10px!important;padding:10px!important;background:#f8fafd!important;font-size:11px!important}
   #page-dashboard .quick button span{display:block!important;font-size:9px!important;color:#748399!important;margin-top:4px!important}
 }
+/* Outils mobiles : langue et impression accessibles depuis Plus */
+.mobile-tools{display:grid;grid-template-columns:1fr;gap:7px;padding:10px;margin-top:6px;border-top:1px solid var(--line)}
+.mobile-tools label{font-size:12px;font-weight:800;color:var(--muted)}
+.mobile-tools select,.mobile-tools button{width:100%;text-align:left;border:1px solid var(--line);border-radius:9px;background:#f5f8fc;color:var(--text);padding:9px 10px;font-size:12px}
+.mobile-tools button{font-weight:700}
+@media(min-width:681px){.mobile-tools{display:none}}
 </style></head><body><h1>Comptiva</h1><p class="center">Reçu de vente</p><div class="line"></div><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(s.date))}</p><p><b>Client :</b> ${esc(client)}</p><div class="line"></div><div class="item"><span>${esc(s.product)} × ${esc(String(s.quantity))}</span><span>${money(s.total)}</span></div><p class="small">Prix unitaire : ${money(s.unitPrice)}</p><div class="line"></div><div class="item total"><span>Total</span><span>${money(s.total)}</span></div><div class="item"><span>Mode de paiement</span><span>${esc(s.method||'Espèces')}</span></div><div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div><div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div><div class="line"></div><p class="center">Merci pour votre achat !</p><p class="center small">Reçu généré avec Comptiva</p><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\/script></body></html>`);w.document.close()}
 function startTrial(){if(subscription.trialStart){flash('L’essai a déjà été démarré sur cet appareil.');renderSubscription();return}let now=new Date();subscription.trialStart=now.toISOString();let end=new Date(now);end.setDate(end.getDate()+14);subscription.trialEnd=end.toISOString();saveSubscription();flash('Essai de démonstration démarré pour 14 jours.')}
 function copyMerchantMessage(){const msg='Bienvenue sur Comptiva, votre application de gestion commerciale ! Gérez vos ventes, vos clients, les crédits, les remboursements et votre stock.\n\nAbonnement : 75 000 GNF par mois.\nPaiement Orange Money : +224 623 08 29 46\nBénéficiaire : Aïssatou Thiam\n\nEnvoyez le montant exact, vérifiez le nom du bénéficiaire et conservez la référence de transaction. Renseignez ensuite le nom de votre boutique et la référence dans Comptiva pour demander la vérification. Votre abonnement sera activé après confirmation de la réception du paiement. Ne communiquez jamais votre code secret ni un code SMS.';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>alert('Message commerçant copié.')).catch(()=>alert(msg));}else{alert(msg)}}
@@ -733,7 +746,7 @@ function setAppLanguage(language){
   comptivaLanguage=language==='en'?'en':'fr';
   try{localStorage.setItem('comptiva_language',comptivaLanguage)}catch(e){}
   document.documentElement.lang=comptivaLanguage;
-  const selector=document.getElementById('appLanguage');if(selector)selector.value=comptivaLanguage;
+  const selector=document.getElementById('appLanguage');if(selector)selector.value=comptivaLanguage;const mobileSelector=document.getElementById('mobileAppLanguage');if(mobileSelector)mobileSelector.value=comptivaLanguage;
   comptivaTranslateElement(document.body);
   if(typeof renderAll==='function')renderAll();
   const title=document.getElementById('topTitle');if(title&&typeof navigate==='function'){const active=document.querySelector('.nav [data-page].active,.mobile-nav [data-page].active');if(active)title.textContent=active.textContent.trim()}
