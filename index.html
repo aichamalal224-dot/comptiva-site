@@ -776,7 +776,7 @@ let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediClo
 const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[]});
 function krediStatus(t){['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t});const loginStatus=document.getElementById('authRuntimeStatus');if(loginStatus&&!document.body.classList.contains('auth-ready')){loginStatus.textContent=t||'';loginStatus.hidden=!t}}
 function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
-function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-email':'Adresse e-mail invalide.','auth/user-not-found':'Aucun compte ne correspond à cet e-mail.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'E-mail ou mot de passe incorrect.','auth/email-already-in-use':'Cette adresse e-mail possède déjà un compte.','auth/weak-password':'Choisissez un mot de passe d’au moins 6 caractères.','auth/too-many-requests':'Trop de tentatives. Réessayez plus tard.','auth/network-request-failed':'Connexion Internet indisponible. Vérifiez votre réseau.','auth/unauthorized-domain':'Cette adresse du site doit être autorisée dans Firebase Authentication.','auth/operation-not-allowed':'La connexion par e-mail/mot de passe n’est pas activée dans Firebase.','client-timeout':'La connexion prend plus de temps que prévu. Vérifiez votre connexion Internet puis réessayez. Vos données locales sont conservées.','permission-denied':'Accès Firestore refusé. Vérifiez les règles et le compte connecté.','unavailable':'Firestore indique que le service est indisponible.'};return (map[c]||((e&&e.message)||'Une erreur inconnue est survenue.'))+(c?' [code: '+c+']':'')}
+function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-email':'Adresse e-mail invalide.','auth/user-not-found':'Aucun compte ne correspond à cet e-mail.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'E-mail ou mot de passe incorrect.','auth/email-already-in-use':'Cette adresse e-mail possède déjà un compte.','auth/weak-password':'Choisissez un mot de passe d’au moins 6 caractères.','auth/too-many-requests':'Trop de tentatives. Réessayez plus tard.','auth/network-request-failed':'Connexion Internet indisponible. Vérifiez votre réseau.','auth/unauthorized-domain':'Cette adresse du site doit être autorisée dans Firebase Authentication.','auth/operation-not-allowed':'La connexion par e-mail/mot de passe n’est pas activée dans Firebase.','auth/request-timeout':'Firebase Auth ne répond pas après 20 secondes. Vérifiez la connexion Internet ou un éventuel blocage de identitytoolkit.googleapis.com, puis rechargez COMPTIVA.','client-timeout':'La connexion prend plus de temps que prévu. Vérifiez votre connexion Internet puis réessayez. Vos données locales sont conservées.','permission-denied':'Accès Firestore refusé. Vérifiez les règles et le compte connecté.','unavailable':'Firestore indique que le service est indisponible.'};return (map[c]||((e&&e.message)||'Une erreur inconnue est survenue.'))+(c?' [code: '+c+']':'')}
 function krediDiagnosticError(e,phase){const code=(e&&e.code)||'code_absent';const message=(e&&e.message)||String(e||'Erreur sans message');const status=e&&(e.status||e.customData&&e.customData.httpStatus);const name=e&&e.name||'Erreur';return 'DIAGNOSTIC '+phase+' | '+name+' | code='+code+(status?' | HTTP='+status:'')+' | message='+message;}
 function krediShowDiagnostic(e,phase){const detail=krediDiagnosticError(e,phase);krediStatus(detail+' · données locales conservées.');console.error('[COMPTIVA Firebase]',detail,e);}
 window.krediTogglePassword=function(){const p=document.getElementById('cloudPassword'),b=document.querySelector('.toggle-pass');if(!p||!b)return false;const show=p.type==='password';p.type=show?'text':'password';b.textContent=show?'Masquer':'Afficher';b.setAttribute('aria-pressed',show?'true':'false');return show};document.addEventListener('click',function(event){const b=event.target&&event.target.closest?event.target.closest('.toggle-pass'):null;if(!b)return;event.preventDefault();event.stopPropagation();window.krediTogglePassword();});
@@ -1047,7 +1047,18 @@ async function krediSignIn(){
     // Attendre la fin réelle du réglage de persistance avant d'envoyer
     // les identifiants : ne pas lancer deux opérations Auth en concurrence.
     if(window.krediAuthPersistencePromise)await window.krediAuthPersistencePromise;
-    const credential=await krediAuth.signInWithEmailAndPassword(email,password);
+    const authRequest=krediAuth.signInWithEmailAndPassword(email,password);
+    let authRequestTimer;
+    const credential=await Promise.race([
+      authRequest,
+      new Promise((_,reject)=>{
+        authRequestTimer=setTimeout(()=>{
+          const error=new Error('Firebase Authentication ne répond pas après 20 secondes. Vérifiez Internet et le chargement du service identitytoolkit.googleapis.com, puis rechargez la page.');
+          error.code='auth/request-timeout';
+          reject(error);
+        },20000);
+      })
+    ]).finally(()=>clearTimeout(authRequestTimer));
     if(!credential||!credential.user)throw Object.assign(new Error('Firebase n’a pas retourné de compte utilisateur.'),{code:'auth/no-user'});
     krediUser=credential.user;
     krediUseAccountStore(credential.user.uid);
