@@ -273,7 +273,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     </div>
     <div class="auth-welcome"><h1 id="authHeading">Bienvenue sur COMPTIVA</h1><p id="authSubtitle">Connectez-vous pour accéder à votre commerce.</p></div>
     <div class="auth-card">
-      <form id="authForm">
+      <form id="authForm" onsubmit="event.preventDefault(); event.stopPropagation(); if(this.reportValidity()){if(krediAuthMode==='signup')krediSignUp();else krediSignIn();} return false;">
         <div class="auth-field"><span class="field-icon">✉</span><input id="cloudEmail" type="email" autocomplete="username" placeholder="Adresse e-mail" aria-label="Adresse e-mail" required></div>
         <div class="auth-field"><span class="field-icon">🔒</span><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required><button class="toggle-pass" type="button" onclick="krediTogglePassword()" aria-label="Afficher ou masquer le mot de passe">Afficher</button></div>
         <button class="auth-forgot" type="button" onclick="krediForgotPassword()">Mot de passe oublié ?</button>
