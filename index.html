@@ -255,6 +255,12 @@ body:not(.auth-ready) #authScreen{display:flex!important}
  #page-dashboard .quick button{font-size:11px!important;padding:10px!important}
  #page-dashboard .quick button span{font-size:9px!important}
 }
+
+/* FIX AUTH MOBILE — le formulaire reste visible tant que le compte n'est pas connecté */
+body:not(.auth-ready) #authScreen{display:flex!important;visibility:visible!important;opacity:1!important}
+body:not(.auth-ready) #authScreen .auth-card,
+body:not(.auth-ready) #authScreen #authForm{display:block!important;visibility:visible!important;opacity:1!important}
+body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
 </style>
 </head>
 <body>
