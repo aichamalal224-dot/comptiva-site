@@ -314,7 +314,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
       <div class="kg-mark" aria-label="COMPTIVA">C</div>
       <div><div class="welcome-copy">Bonjour, bienvenue sur <span class="guinea-name">Comptiva</span></div><div class="welcome-tagline">Votre commerce, toujours sous contrôle.</div><small id="topTitle">Tableau de bord</small><small id="cloudSyncStatus" role="status">Connexion en cours…</small></div>
     </div>
-    <div class="top-actions"><button class="soft hidden" id="creatorTopButton" onclick="navigate('creator')">🛡️ Espace Créateur</button><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button><button class="logout-btn" onclick="krediSignOut()">Déconnexion</button></div>
+    <div class="top-actions"><label class="language-control" for="appLanguage" style="display:flex;align-items:center;gap:6px;color:inherit;font-size:12px;font-weight:700"><span>🌐</span><select id="appLanguage" aria-label="Application language" onchange="setAppLanguage(this.value)" style="border:1px solid #ffffff55;border-radius:9px;padding:8px;background:#ffffff;color:#12345a;font-weight:700"><option value="fr">Français</option><option value="en">English</option></select></label><button class="soft hidden" id="creatorTopButton" onclick="navigate('creator')">🛡️ Espace Créateur</button><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button><button class="logout-btn" onclick="krediSignOut()">Déconnexion</button></div>
   </header>
   <div class="content">
     <div class="notice sync-note"><b>Connexion et utilisation :</b> Comptiva peut fonctionner hors connexion sur cet appareil. Pour synchroniser les ventes, dettes et achats entre téléphone, tablette et ordinateur, une connexion Internet est nécessaire et la synchronisation Firebase doit être configurée. <b>La synchronisation entre appareils est disponible uniquement après connexion Firebase et validation des règles Firestore.</b> Sauvegarde régulièrement tes données.</div>
@@ -361,7 +361,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
       </div>
     </section>
     <section id="page-sales" class="hidden">
-      <div class="pagehead"><div><h2>Ventes</h2><p>Enregistrez chaque article vendu, en espèces/mobile money ou à crédit.</p></div><button class="primary" onclick="openForm('sale')">+ Enregistrer une vente</button></div>
+      <div class="pagehead"><div><h2>Ventes</h2><p>Enregistrez chaque article vendu, en espèces/mobile money ou à crédit.</p></div><div class="actions"><button class="soft" onclick="printLatestSale()">🖨 Dernier reçu</button><button class="primary" onclick="openForm('sale')">+ Enregistrer une vente</button></div></div>
       <div class="card"><div class="table-wrap" id="salesTable"></div></div>
       <p class="footer">Le chiffre d’affaires correspond à la valeur totale des ventes enregistrées, même si certaines ventes sont à crédit.</p>
     </section>
@@ -386,11 +386,11 @@ body:not(.auth-ready) #authScreen{display:flex!important}
       <div class="card" style="margin-top:14px"><div class="table-wrap" id="clientsTable"></div></div>
     </section>
     <section id="page-debts" class="hidden">
-      <div class="pagehead"><div><h2>Dettes</h2><p>Chaque dette est suivie séparément.</p></div><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button></div>
+      <div class="pagehead"><div><h2>Dettes</h2><p>Chaque dette est suivie séparément.</p></div><div class="actions"><button class="soft" onclick="printLatestDebt()">🖨 Dernier relevé</button><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button></div></div>
       <div class="card"><div class="table-wrap" id="debtsTable"></div></div>
     </section>
     <section id="page-payments" class="hidden">
-      <div class="pagehead"><div><h2>Remboursements</h2><p>Enregistrez aussi les paiements partiels.</p></div><button class="primary" onclick="openForm('payment')">+ Ajouter un remboursement</button></div>
+      <div class="pagehead"><div><h2>Remboursements</h2><p>Enregistrez aussi les paiements partiels.</p></div><div class="actions"><button class="soft" onclick="printLatestPayment()">🖨 Dernier reçu</button><button class="primary" onclick="openForm('payment')">+ Ajouter un remboursement</button></div></div>
       <div class="card"><div class="table-wrap" id="paymentsTable"></div></div>
     </section>
     <section id="page-purchases" class="hidden">
@@ -702,6 +702,53 @@ try {
 }
 
 function toggleMobileMore(force){const menu=document.getElementById('mobileMoreMenu');if(!menu)return;const show=typeof force==='boolean'?force:menu.classList.contains('hidden');menu.classList.toggle('hidden',!show)}
+
+/* COMPTIVA bilingual interface: FR default, EN preference stored on this device. */
+const COMPTIVA_I18N_PAIRS=[["Gestion simple de votre commerce","Simple business management"],["Ventes, crédits et stock simplement","Sales, credit and stock made simple"],["Tableau de bord","Dashboard"],["Ventes","Sales"],["Stock","Stock"],["Chiffres","Reports"],["Clients","Customers"],["Dettes","Debts"],["Remboursements","Repayments"],["Achats marchandises","Purchases"],["Dépenses","Expenses"],["Rappels","Reminders"],["Abonnement","Subscription"],["Espace Créateur","Creator space"],["Déconnexion","Log out"],["+ Nouvelle dette","+ New debt"],["Bonjour, bienvenue sur COMPTIVA","Welcome to COMPTIVA"],["Voici la situation de votre commerce.","Here is your business overview."],["Total des dettes restantes","Total outstanding debt"],["Clients débiteurs","Customers with debt"],["Dettes entièrement réglées","Debts fully paid"],["Chiffre d’affaires du jour","Today's revenue"],["Chiffre d’affaires de la semaine","This week's revenue"],["Chiffre d’affaires du mois","This month's revenue"],["Encaissé sur les ventes aujourd’hui","Collected from sales today"],["Ventes à crédit aujourd’hui","Credit sales today"],["Total restant dû","Total outstanding"],["Clients enregistrés","Registered customers"],["Dettes en cours","Outstanding debts"],["Remboursements saisis","Repayments recorded"],["Achats de marchandises ce mois","Purchases this month"],["Dépenses ce mois","Expenses this month"],["Derniers clients","Recent customers"],["Voir tout ›","View all ›"],["＋ Ajouter un client","＋ Add a customer"],["Prochaines échéances","Upcoming due dates"],["＋ Ajouter une dette","＋ Add a debt"],["Dernières dettes","Recent debts"],["Actions rapides","Quick actions"],["📦 Gérer le stock","📦 Manage stock"],["🛒 Enregistrer une vente","🛒 Record a sale"],["▥ Voir les chiffres","▥ View reports"],["＋ Enregistrer une dette","＋ Record a debt"],["↻ Enregistrer un remboursement","↻ Record a repayment"],["📦 Enregistrer un achat de marchandises","📦 Record a purchase"],["💸 Enregistrer une dépense","💸 Record an expense"],["✉ Préparer un rappel","✉ Prepare a reminder"],["Exporter CSV","Export CSV"],["Sauvegarder les données","Back up data"],["Restaurer une sauvegarde","Restore backup"],["Gestion du stock","Stock management"],["Dépenses de la boutique","Shop expenses"],["Préparer un rappel","Prepare a reminder"],["Mon abonnement Comptiva","My COMPTIVA subscription"],["Chiffres de la boutique","Business reports"],["Chaque dette est suivie séparément.","Each debt is tracked separately."],["Enregistrez aussi les paiements partiels.","Record partial payments too."],["+ Enregistrer une vente","+ Record a sale"],["+ Nouvelle dépense","+ New expense"],["+ Ajouter un remboursement","+ Add a repayment"],["+ Ajouter un produit","+ Add a product"],["+ Nouvel achat","+ New purchase"],["Ajouter un client","Add a customer"],["Enregistrer une dette","Record a debt"],["Enregistrer un remboursement","Record a repayment"],["Enregistrer une vente","Record a sale"],["Ajouter un produit au stock","Add a product to stock"],["Date","Date"],["Client","Customer"],["Téléphone","Phone"],["Solde total","Total balance"],["Action","Action"],["Dette initiale","Original debt"],["Reste dû","Remaining balance"],["Reste","Remaining"],["Échéance","Due date"],["Statut","Status"],["Payé","Paid"],["Montant payé","Amount paid"],["Mode","Method"],["Reçu","Receipt"],["Article","Item"],["Qté","Qty"],["Prix unitaire","Unit price"],["Total vente","Sale total"],["Encaissé","Collected"],["À crédit","On credit"],["Catégorie","Category"],["Description","Description"],["Montant","Amount"],["Paiement","Payment"],["Note","Note"],["Fournisseur","Supplier"],["Quantité","Quantity"],["Disponible","Available"],["Stock faible","Low stock"],["Soldé","Paid in full"],["En retard","Overdue"],["En cours","In progress"],["Aucune donnée pour le moment. Ajoutez un premier élément pour commencer.","No data yet. Add your first item to get started."],["Aucun client pour le moment.","No customers yet."],["Aucune échéance à afficher.","No due dates to display."],["Rappel","Reminder"],["+ Paiement","+ Payment"],["🖨 Relevé","🖨 Statement"],["🖨 Imprimer reçu","🖨 Print receipt"],["Dernier reçu","Latest receipt"],["Dernier relevé","Latest statement"],["Enregistrer","Save"],["Annuler","Cancel"],["← Retour","← Back"],["Rechercher un client...","Search customers..."],["Rechercher un produit...","Search products..."],["Langue du message","Message language"],["Français","French"],["Régénérer le message","Regenerate message"],["Copier le message","Copy message"],["Ouvrir WhatsApp","Open WhatsApp"],["Envoyer par SMS","Send by SMS"],["📞 Appeler","📞 Call"],["Essai gratuit","Free trial"],["Tarif mensuel","Monthly price"],["Pour une boutique","For one shop"],["Important :","Important:"],["Accès refusé.","Access denied."],["Commerçants répertoriés","Listed merchants"],["Comptes commerçants","Merchant accounts"],["Bonjour, ","Hello, "],[" vente(s) aujourd’hui"," sale(s) today"],["Vente enregistrée : ","Sale recorded: "],["Remboursement enregistré.","Repayment recorded."],["Client supprimé/inconnu","Deleted/unknown customer"],["Aucune vente à imprimer.","There are no sales to print."],["Aucune dette à imprimer.","There are no debts to print."],["Aucun remboursement à imprimer.","There are no repayments to print."]];
+const COMPTIVA_FR_TO_EN=new Map(COMPTIVA_I18N_PAIRS);
+const COMPTIVA_EN_TO_FR=new Map(COMPTIVA_I18N_PAIRS.map(([fr,en])=>[en,fr]));
+let comptivaLanguage='fr';
+function comptivaTranslateTextNode(node){
+  if(!node||!node.nodeValue)return;
+  const raw=node.nodeValue,trimmed=raw.trim();if(!trimmed)return;
+  const dict=comptivaLanguage==='en'?COMPTIVA_FR_TO_EN:COMPTIVA_EN_TO_FR;
+  let translated=dict.get(trimmed);
+  if(!translated){
+    if(comptivaLanguage==='en'&&trimmed.startsWith('Bonjour, '))translated='Hello, '+trimmed.slice(9);
+    else if(comptivaLanguage==='fr'&&trimmed.startsWith('Hello, '))translated='Bonjour, '+trimmed.slice(7);
+    else return;
+  }
+  node.nodeValue=raw.replace(trimmed,translated);
+}
+function comptivaTranslateElement(root){
+  if(!root)return;
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let node;while((node=walker.nextNode())){const parent=node.parentElement;if(parent&&!['SCRIPT','STYLE','TEXTAREA'].includes(parent.tagName))comptivaTranslateTextNode(node)}
+  const attrs=['placeholder','aria-label','title'];
+  const elements=root.querySelectorAll?root.querySelectorAll('*'):[];
+  for(const el of elements){for(const attr of attrs){const value=el.getAttribute(attr);if(!value)continue;const dict=comptivaLanguage==='en'?COMPTIVA_FR_TO_EN:COMPTIVA_EN_TO_FR;if(dict.has(value))el.setAttribute(attr,dict.get(value))}}
+  if(root.nodeType===1){for(const attr of attrs){const value=root.getAttribute&&root.getAttribute(attr);const dict=comptivaLanguage==='en'?COMPTIVA_FR_TO_EN:COMPTIVA_EN_TO_FR;if(value&&dict.has(value))root.setAttribute(attr,dict.get(value))}}
+}
+function setAppLanguage(language){
+  comptivaLanguage=language==='en'?'en':'fr';
+  try{localStorage.setItem('comptiva_language',comptivaLanguage)}catch(e){}
+  document.documentElement.lang=comptivaLanguage;
+  const selector=document.getElementById('appLanguage');if(selector)selector.value=comptivaLanguage;
+  comptivaTranslateElement(document.body);
+  if(typeof renderAll==='function')renderAll();
+  const title=document.getElementById('topTitle');if(title&&typeof navigate==='function'){const active=document.querySelector('.nav [data-page].active,.mobile-nav [data-page].active');if(active)title.textContent=active.textContent.trim()}
+}
+function printLatestSale(){const item=db.sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no sales to print.':'Aucune vente à imprimer.')}
+function printLatestDebt(){const item=db.debts.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printDebtStatement(item.id);else alert(comptivaLanguage==='en'?'There are no debts to print.':'Aucune dette à imprimer.')}
+function printLatestPayment(){const item=db.payments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printPaymentReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no repayments to print.':'Aucun remboursement à imprimer.')}
+(function initComptivaLanguage(){
+  try{comptivaLanguage=localStorage.getItem('comptiva_language')==='en'?'en':'fr'}catch(e){comptivaLanguage='fr'}
+  document.addEventListener('DOMContentLoaded',()=>setAppLanguage(comptivaLanguage),{once:true});
+  if(document.readyState!=='loading')setAppLanguage(comptivaLanguage);
+  const observer=new MutationObserver(records=>{for(const record of records){if(record.type==='characterData')comptivaTranslateTextNode(record.target);else record.addedNodes&&record.addedNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE)comptivaTranslateTextNode(node);else if(node.nodeType===Node.ELEMENT_NODE)comptivaTranslateElement(node)})}});
+  observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+})();
+
 // Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
 // COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
 const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
