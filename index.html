@@ -112,7 +112,7 @@ body{background:#f4f7fd;color:var(--text)}
 body:not(.auth-ready) .app,body:not(.auth-ready) .mobile-nav{display:none!important}
 body.auth-ready #authScreen{display:none!important}
 body:not(.auth-ready) #authScreen{display:flex!important}
-#authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px 14px;background:radial-gradient(ellipse at 50% 0%,#e7f3ff 0,#f5f9ff 55%,#e9f2ff 100%);position:relative;overflow:hidden}
+#authScreen{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 14px;background:radial-gradient(ellipse at 50% 0%,#e7f3ff 0,#f5f9ff 55%,#e9f2ff 100%);position:relative;overflow:hidden}
 #authScreen:before{content:"";position:absolute;inset:0 0 auto;height:13px;background:linear-gradient(165deg,#0753a5 0 34%,#f5bd20 34% 39%,transparent 39%)}
 #authScreen:after{content:"";position:absolute;left:-5%;right:-5%;bottom:0;height:13px;background:linear-gradient(165deg,#0b4b99 0 42%,#f5c21b 42% 48%,#07945f 48% 100%);transform:skewY(-2deg)}
 .auth-shell{width:min(100%,690px);position:relative;z-index:1}
