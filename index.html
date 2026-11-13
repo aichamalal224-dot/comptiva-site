@@ -201,7 +201,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
  .mobile-more-menu.hidden{display:none!important}
  .mobile-more-menu button{background:#f5f8fc;color:#12395b;text-align:left;padding:10px 12px;font-size:13px;border-radius:9px}
 }
-</style>
+\n.public-landing{position:relative;z-index:1;width:min(100%,1000px);margin:38px auto 28px;color:#102b4b}.public-hero{text-align:center;padding:30px 24px;background:#fff;border:1px solid #dce8f6;border-radius:22px;box-shadow:0 12px 35px #164a7a12}.public-kicker{font-size:11px;font-weight:800;letter-spacing:1.5px;color:#1267d6}.public-hero h2{font-size:clamp(25px,4vw,40px);line-height:1.12;margin:12px auto;max-width:700px}.public-hero p{max-width:690px;margin:0 auto 20px;color:#536982}.public-cta{display:inline-block;background:#1267d6;color:#fff;text-decoration:none;padding:12px 18px;border-radius:10px;font-weight:750}.public-features{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:14px 0}.public-features article,.public-price{background:#fff;border:1px solid #dce8f6;border-radius:15px;padding:18px}.public-features article p,.public-price p{font-size:13px;color:#60738a;margin:8px 0 0}.public-price{display:flex;align-items:center;justify-content:space-between;gap:16px}.public-price small{display:block;color:#8a5a13;margin-top:7px}.public-foot{text-align:center;color:#687b91;font-size:12px;margin:16px 8px 0}@media(max-width:700px){#authScreen{display:block!important;padding:26px 14px 35px}.auth-shell{margin:0 auto}.public-landing{margin:24px auto 18px}.public-features{grid-template-columns:repeat(2,minmax(0,1fr))}.public-price{display:block}.public-price .public-cta{margin-top:14px}}\n</style>
 </head>
 <body>
 <section id="authScreen" aria-label="Connexion Comptiva">
@@ -225,6 +225,12 @@ body:not(.auth-ready) #authScreen{display:flex!important}
       <p class="auth-small">Vos informations commerciales sont accessibles uniquement avec votre compte. Ne partagez jamais votre mot de passe.</p>
     </div>
   </div>
+  <section class="public-landing" aria-label="Présentation publique de COMPTIVA">
+    <div class="public-hero"><span class="public-kicker">LA GESTION DE VOTRE COMMERCE, SIMPLIFIÉE</span><h2>Votre commerce, toujours sous contrôle.</h2><p>COMPTIVA vous aide à suivre vos clients, vos ventes, les crédits, les remboursements et votre stock depuis un seul espace.</p><a class="public-cta" href="#authForm">Créer mon compte ou me connecter</a></div>
+    <div class="public-features"><article><b>👥 Clients et dettes</b><p>Retrouvez les soldes de vos clients et l’historique des paiements.</p></article><article><b>🛒 Ventes et stock</b><p>Suivez vos ventes, vos marchandises et les niveaux de stock.</p></article><article><b>✉ Rappels clients</b><p>Préparez des rappels à partager par WhatsApp ou SMS.</p></article><article><b>📊 Suivi du commerce</b><p>Consultez vos chiffres et gardez vos opérations organisées.</p></article></div>
+    <div class="public-price"><div><b>Commencez gratuitement</b><p>14 jours d’essai gratuit, puis 75 000 GNF pour 30 jours.</p><small>Le paiement Mobile Money automatique n’est pas encore connecté.</small></div><a class="public-cta" href="#authForm">Découvrir COMPTIVA</a></div>
+    <p class="public-foot">COMPTIVA · Votre espace commercial reste privé et accessible après connexion. Les données d’un commerçant ne sont pas affichées sur cette page publique.</p>
+  </section>
 </section>
 
 <div class="app">
