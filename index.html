@@ -1031,44 +1031,38 @@ function krediHandleLoginClick(){
   krediAuthMessage('Demande de connexion envoyée à Firebase…',true);
   if(krediAuthMode==='signup')krediSignUp();else krediSignIn();
 }
+let krediSignInInFlight=false;
 async function krediSignIn(){
-  if(!krediAuth){krediAuthMessage('Le service de connexion n’est pas encore prêt. Attendez quelques secondes puis réessayez.');return}
-  const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;
+  if(krediSignInInFlight)return;
+  if(!krediAuth){krediAuthMessage('Le service de connexion n’est pas encore prêt. Attendez le message de connexion sécurisée puis réessayez.');return}
+  const emailInput=document.getElementById('cloudEmail'),passwordInput=document.getElementById('cloudPassword');
+  const email=emailInput?emailInput.value.trim().toLowerCase():'',password=passwordInput?passwordInput.value:'';
   if(!email||!password){krediAuthMessage('Saisissez votre adresse e-mail et votre mot de passe.');return}
-  const b=document.getElementById('authSubmit');if(b)b.disabled=true;
-  krediAuthMessage('Connexion au compte en cours…',true);
-  let loginTimer;
+  const b=document.getElementById('authSubmit'),form=document.getElementById('authForm');
+  krediSignInInFlight=true;
+  if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
+  if(form)form.setAttribute('aria-busy','true');
+  krediAuthMessage('Connexion sécurisée en cours…',true);
   try{
-    if(window.krediAuthPersistencePromise){
-      await Promise.race([
-        Promise.resolve(window.krediAuthPersistencePromise).catch(persistenceError=>console.warn('[COMPTIVA] Persistance non confirmée ; tentative Auth maintenue.',persistenceError)),
-        new Promise(resolve=>setTimeout(resolve,1500))
-      ]);
-    }
-    const timeoutError=Object.assign(new Error('La demande de connexion n’a pas reçu de réponse à temps.'),{code:'client-timeout'});
-    const credential=await Promise.race([
-      krediAuth.signInWithEmailAndPassword(email,password),
-      new Promise((_,reject)=>{loginTimer=setTimeout(()=>reject(timeoutError),20000)})
-    ]);
-    if(credential&&credential.user){
-      krediUser=credential.user;
-      // Ouvrir directement l’espace dès que Firebase confirme les identifiants.
-      // L’écouteur onAuthStateChanged reste responsable de la synchronisation Firestore.
-      krediUseAccountStore(credential.user.uid);
-      krediShowApp(credential.user);
-      renderAll();
-      krediAuthMessage('Connexion réussie. Votre commerce est ouvert.',true);
-      krediStatus('Compte connecté. Vérification de la synchronisation en ligne…');
-    }else{
-      throw Object.assign(new Error('Firebase n’a pas retourné de compte utilisateur.'),{code:'auth/no-user'});
-    }
+    // Attendre la fin réelle du réglage de persistance avant d'envoyer
+    // les identifiants : ne pas lancer deux opérations Auth en concurrence.
+    if(window.krediAuthPersistencePromise)await window.krediAuthPersistencePromise;
+    const credential=await krediAuth.signInWithEmailAndPassword(email,password);
+    if(!credential||!credential.user)throw Object.assign(new Error('Firebase n’a pas retourné de compte utilisateur.'),{code:'auth/no-user'});
+    krediUser=credential.user;
+    krediUseAccountStore(credential.user.uid);
+    krediShowApp(credential.user);
+    renderAll();
+    krediAuthMessage('Connexion réussie. Votre commerce est ouvert.',true);
+    krediStatus('Compte connecté. Vérification de la synchronisation en ligne…');
   }catch(e){
     console.error('[COMPTIVA] Échec de connexion Firebase Auth :',e);
-    krediAuthMessage(krediFriendlyError(e));
+    krediAuthMessage(krediFriendlyError(e)+' (code : '+(e&&e.code||'inconnu')+')');
     krediStatus('Connexion non confirmée. Vos données locales sont conservées.');
   }finally{
-    if(loginTimer)clearTimeout(loginTimer);
-    if(b)b.disabled=false;
+    krediSignInInFlight=false;
+    if(b){b.disabled=false;b.removeAttribute('aria-busy')}
+    if(form)form.removeAttribute('aria-busy');
   }
 }
 async function krediSignUp(){if(!krediAuth){krediAuthMessage('Le service Firebase Auth n’est pas initialisé. Diagnostic : auth-not-initialized.');return}const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;if(!email||password.length<6){krediAuthMessage('Saisissez un e-mail valide et un mot de passe de 6 caractères minimum.');return}const b=document.getElementById('authSubmit');if(b)b.disabled=true;krediAuthMessage('Création du compte en cours…',true);try{const credential=await krediAuth.createUserWithEmailAndPassword(email,password);if(credential&&credential.user){krediUser=credential.user;krediAuthMessage('Compte créé. Ouverture de votre espace…',true)}}catch(e){console.error('[COMPTIVA] Échec de création du compte Firebase Auth :',e);krediAuthMessage(krediFriendlyError(e))}finally{if(b)b.disabled=false}}
