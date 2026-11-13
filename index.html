@@ -461,7 +461,7 @@ if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscripti
 function saveSubscription(){localStorage.setItem(SUB_STORE,JSON.stringify(subscription));renderSubscription()}
 function loadDB(){try{return JSON.parse(localStorage.getItem(STORE))||{clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}catch(e){return {clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}}
 if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];
-function saveDB(){localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediQueueCloudSave()}
+function saveDB(){try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return}renderAll();krediQueueCloudSave()}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
@@ -793,10 +793,22 @@ async function krediInitFirebase(){try{
   console.error('[COMPTIVA] Initialisation Firebase',e);
 }}
 function krediQueueCloudSave(){
-  if(!krediUser||krediApplyingCloud||!krediStore)return;
+  if(!krediUser||krediApplyingCloud)return;
   const uid=krediUser.uid;
+  // Marquer la modification avant de vérifier Firestore : si le SDK ou le réseau
+  // est indisponible, le prochain snapshot serveur doit privilégier les données locales.
   krediLocalDirty=true;
-  localStorage.setItem('comptiva_pending_'+uid,'1');
+  try{localStorage.setItem('comptiva_pending_'+uid,'1')}catch(storageError){
+    console.error('[COMPTIVA] Marqueur de synchronisation local impossible :',storageError);
+    krediCloudReady=false;
+    krediStatus('Données modifiées, mais le navigateur ne peut pas mémoriser la file de synchronisation. Gardez cette page ouverte et vérifiez le stockage.');
+    return;
+  }
+  if(!krediStore){
+    krediCloudReady=false;
+    krediStatus('Données enregistrées sur cet appareil · Firebase indisponible, synchronisation en attente.');
+    return;
+  }
   clearTimeout(krediSaveTimer);
   if(!navigator.onLine){krediStatus('Hors connexion · données conservées sur cet appareil. Envoi dès le retour d’Internet.');return}
   if(!krediServerReady){krediStatus('Données enregistrées sur cet appareil · attente de la connexion Firebase…');krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediQueueCloudSave()},2500);return}
