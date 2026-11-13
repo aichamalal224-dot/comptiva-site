@@ -17,6 +17,9 @@ section{padding:58px 0}.section-title{text-align:center;max-width:690px;margin:0
 @keyframes move{to{transform:translateX(-50%)}}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.step,.offer{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px}.num{width:38px;height:38px;border-radius:12px;background:#e7f1ff;color:var(--blue);display:grid;place-items:center;font-weight:900}.step h3{margin:14px 0 6px}.step p,.offer p{color:var(--muted);margin:0}.offers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}.offer h3{margin:0 0 8px}.offer .type{font-size:12px;color:var(--blue);font-weight:850;text-transform:uppercase;letter-spacing:.6px}.offer strong{display:block;font-size:18px;margin-top:16px;color:var(--navy)}.disclaimer{text-align:center;color:var(--muted);font-size:13px;margin-top:16px}
 .final{background:linear-gradient(120deg,#0d3b66,#1267d6);color:#fff;text-align:center;border-radius:24px;padding:42px 24px}.final h2{font-size:clamp(26px,4vw,38px);margin:0 0 10px}.final p{color:#dcecff;margin:0 auto 22px;max-width:650px}.final .btn{background:#fff;color:var(--navy)}
+.request-box{max-width:760px;margin:28px auto 0;background:#fff;color:var(--ink);text-align:left;border-radius:18px;padding:22px;border:1px solid var(--line)}
+.request-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}.field{display:grid;gap:6px}.field.full{grid-column:1/-1}.field label{font-size:13px;font-weight:750;color:var(--navy)}.field input,.field select,.field textarea{width:100%;padding:12px;border:1px solid #cad8e6;border-radius:10px;background:#fff;color:var(--ink)}.field textarea{min-height:94px;resize:vertical}.request-box button{cursor:pointer;border:0;border-radius:10px;padding:12px 17px;background:var(--blue);color:#fff;font-weight:800}.request-status{margin-top:12px;padding:12px;border-radius:10px;background:#eef6ff;color:var(--navy);font-size:14px}.request-preview{white-space:pre-wrap;background:#f5f8fc;border:1px solid var(--line);border-radius:10px;padding:12px;color:var(--ink);font-size:13px;margin-top:12px;overflow-wrap:anywhere}
+@media(max-width:600px){.request-grid{grid-template-columns:1fr}.field.full{grid-column:auto}}
 footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 @media(max-width:760px){.hero{padding:42px 0}.hero-grid{grid-template-columns:1fr;gap:25px}.visual{min-height:260px}.steps,.offers{grid-template-columns:1fr}.nav small{display:none}.slide{width:235px;min-height:190px}section{padding:44px 0}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.slides{animation:none}}
@@ -43,7 +46,39 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
 </div></div></div></section>
 <section><div class="wrap"><div class="section-title"><h2>Comment ça marche ?</h2><p>Un processus simple : vous gardez le contrôle à chaque étape.</p></div><div class="steps"><article class="step"><div class="num">1</div><h3>Présentez votre commerce</h3><p>Indiquez votre activité, vos produits, votre offre et vos coordonnées professionnelles.</p></article><article class="step"><div class="num">2</div><h3>Choisissez votre format</h3><p>Affiche simple, visuel professionnel ou vidéo publicitaire selon votre besoin.</p></article><article class="step"><div class="num">3</div><h3>Validez avant diffusion</h3><p>Vous vérifiez le contenu et le tarif. Rien n'est publié sans votre accord.</p></article></div></div></section>
 <section><div class="wrap"><div class="section-title"><h2>Choisissez votre type de publicité</h2><p>Le prix sera annoncé clairement avant la réalisation. Aucun paiement automatique.</p></div><div class="offers"><article class="offer"><div class="type">Format 1</div><h3>Affiche simple</h3><p>Une création claire pour présenter votre commerce ou une promotion.</p><strong>Tarif sur demande</strong></article><article class="offer"><div class="type">Format 2</div><h3>Image professionnelle</h3><p>Un visuel travaillé pour vos réseaux sociaux et vos annonces.</p><strong>Tarif sur demande</strong></article><article class="offer"><div class="type">Format 3</div><h3>Vidéo publicitaire</h3><p>Une courte vidéo pour faire découvrir vos produits et votre activité.</p><strong>Tarif sur demande</strong></article></div><p class="disclaimer">Aucun tarif ni délai n'est engagé avant confirmation de votre demande.</p></div></section>
-<section id="demande"><div class="wrap"><div class="final"><h2>Prêt à donner plus de visibilité à votre commerce ?</h2><p>COMPTIVA PUB est présenté ici en aperçu. Le formulaire de commande et le paiement seront activés après définition du contact de réception, des tarifs et du processus de validation.</p><a class="btn" href="./">Retourner sur COMPTIVA</a></div></div></section>
+<section id="demande"><div class="wrap"><div class="final"><h2>Prêt à donner plus de visibilité à votre commerce ?</h2><p>Préparez votre demande en quelques instants. Vous gardez le contrôle : aucune publicité n'est créée ou publiée sans votre validation.</p>
+<div class="request-box"><form id="pubRequestForm"><div class="request-grid">
+<div class="field"><label for="pubName">Nom du commerçant *</label><input id="pubName" name="pubName" required maxlength="100" placeholder="Votre nom"></div>
+<div class="field"><label for="shopName">Nom du commerce *</label><input id="shopName" name="shopName" required maxlength="120" placeholder="Nom de votre boutique"></div>
+<div class="field"><label for="pubPhone">Téléphone / WhatsApp *</label><input id="pubPhone" name="pubPhone" required maxlength="40" placeholder="+224 ..."></div>
+<div class="field"><label for="pubType">Type de publicité *</label><select id="pubType" name="pubType" required><option value="">Choisir un format</option><option>Affiche simple</option><option>Image professionnelle</option><option>Vidéo publicitaire</option></select></div>
+<div class="field full"><label for="pubOffer">Que souhaitez-vous présenter ? *</label><textarea id="pubOffer" name="pubOffer" required maxlength="1000" placeholder="Vos produits, services, promotion, prix ou message à faire connaître…"></textarea></div>
+<div class="field full"><label for="pubContact">Ville et autres précisions (facultatif)</label><input id="pubContact" name="pubContact" maxlength="180" placeholder="Ville, quartier, horaires, etc."></div>
+<div class="field full"><button type="submit">Préparer ma demande</button></div>
+</div></form><div id="pubRequestStatus" class="request-status" hidden aria-live="polite"></div><pre id="pubRequestPreview" class="request-preview" hidden></pre><button id="pubCopyRequest" type="button" hidden style="margin-top:10px">Copier ma demande</button></div>
+<a class="btn" href="./">Retourner sur COMPTIVA</a></div></div></section>
+<script>
+(function(){
+ const form=document.getElementById('pubRequestForm');
+ const status=document.getElementById('pubRequestStatus');
+ const preview=document.getElementById('pubRequestPreview');
+ const copy=document.getElementById('pubCopyRequest');
+ if(!form||!status||!preview||!copy)return;
+ let message='';
+ form.addEventListener('submit',function(e){
+  e.preventDefault();
+  if(!form.reportValidity())return;
+  const v=id=>document.getElementById(id).value.trim();
+  message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+v('pubName')+'\nCommerce : '+v('shopName')+'\nTéléphone / WhatsApp : '+v('pubPhone')+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+v('pubOffer')+'\nVille / précisions : '+(v('pubContact')||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
+  preview.textContent=message;preview.hidden=false;copy.hidden=false;status.hidden=false;
+  status.textContent='Votre demande est préparée. Copiez-la pour l’envoyer à COMPTIVA PUB. L’envoi automatique sera connecté après confirmation du numéro officiel de réception.';
+ });
+ copy.addEventListener('click',async function(){
+  try{await navigator.clipboard.writeText(message);status.textContent='Demande copiée. Vous pouvez la coller dans WhatsApp ou votre message.';}
+  catch(err){status.textContent='Sélectionnez et copiez le texte de votre demande ci-dessous.';}
+ });
+})();
+</script>
 </main>
 <footer><div class="wrap foot"><span><strong>COMPTIVA PUB</strong> · Votre commerce mérite d'être vu.</span><span>Une page indépendante — vos transactions restent inchangées.</span></div></footer>
 </body></html>
