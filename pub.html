@@ -55,7 +55,7 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
 <div class="field full"><label for="pubOffer">Que souhaitez-vous présenter ? *</label><textarea id="pubOffer" name="pubOffer" required maxlength="1000" placeholder="Vos produits, services, promotion, prix ou message à faire connaître…"></textarea></div>
 <div class="field full"><label for="pubContact">Ville et autres précisions (facultatif)</label><input id="pubContact" name="pubContact" maxlength="180" placeholder="Ville, quartier, horaires, etc."></div>
 <div class="field full"><button type="submit">Préparer ma demande</button></div>
-</div></form><div id="pubRequestStatus" class="request-status" hidden aria-live="polite"></div><pre id="pubRequestPreview" class="request-preview" hidden></pre><button id="pubCopyRequest" type="button" hidden style="margin-top:10px">Copier ma demande</button></div>
+</div></form><div id="pubRequestStatus" class="request-status" hidden aria-live="polite"></div><pre id="pubRequestPreview" class="request-preview" hidden></pre><button id="pubCopyRequest" type="button" hidden style="margin-top:10px">Copier ma demande</button> <button id="pubSendWhatsApp" type="button" hidden style="margin-top:10px;background:#079669">Envoyer par WhatsApp</button></div>
 <a class="btn" href="./">Retourner sur COMPTIVA</a></div></div></section>
 <script>
 (function(){
@@ -63,16 +63,18 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
  const status=document.getElementById('pubRequestStatus');
  const preview=document.getElementById('pubRequestPreview');
  const copy=document.getElementById('pubCopyRequest');
- if(!form||!status||!preview||!copy)return;
+ const send=document.getElementById('pubSendWhatsApp');
+ if(!form||!status||!preview||!copy||!send)return;
  let message='';
  form.addEventListener('submit',function(e){
   e.preventDefault();
   if(!form.reportValidity())return;
   const v=id=>document.getElementById(id).value.trim();
   message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+v('pubName')+'\nCommerce : '+v('shopName')+'\nTéléphone / WhatsApp : '+v('pubPhone')+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+v('pubOffer')+'\nVille / précisions : '+(v('pubContact')||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
-  preview.textContent=message;preview.hidden=false;copy.hidden=false;status.hidden=false;
+  preview.textContent=message;preview.hidden=false;copy.hidden=false;send.hidden=false;status.hidden=false;
   status.textContent='Votre demande est préparée. Copiez-la pour l’envoyer à COMPTIVA PUB. L’envoi automatique sera connecté après confirmation du numéro officiel de réception.';
  });
+ send.addEventListener('click',function(){const url='https://wa.me/33751107911?text='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer');});
  copy.addEventListener('click',async function(){
   try{await navigator.clipboard.writeText(message);status.textContent='Demande copiée. Vous pouvez la coller dans WhatsApp ou votre message.';}
   catch(err){status.textContent='Sélectionnez et copiez le texte de votre demande ci-dessous.';}
