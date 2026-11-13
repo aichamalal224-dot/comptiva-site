@@ -217,6 +217,44 @@ body:not(.auth-ready) #authScreen{display:flex!important}
   #page-dashboard .quick button{min-width:0!important;text-align:left!important;border:1px solid #e5ebf3!important;border-radius:10px!important;padding:10px!important;background:#f8fafd!important;font-size:11px!important}
   #page-dashboard .quick button span{display:block!important;font-size:9px!important;color:#748399!important;margin-top:4px!important}
 }
+
+/* COMPTIVA dashboard refresh — override legacy mobile hiding rules */
+#page-dashboard .hero-kpis{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:14px!important}
+#page-dashboard .hero-kpis .card{display:grid!important;min-width:0;min-height:112px!important;padding:17px!important;border:1px solid #e3ebf5!important;border-top:3px solid #0b9b72!important;border-radius:16px!important;background:#fff!important;box-shadow:0 5px 18px #12395b0b!important}
+#page-dashboard .detailed-stats{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;gap:12px!important}
+#page-dashboard .detailed-stats .card{display:block!important;min-width:0;padding:15px!important;border:1px solid #e5ebf5!important;border-radius:14px!important;background:#fff!important;box-shadow:0 4px 15px #12395b08!important}
+#page-dashboard .dashboard-overview{display:grid!important;grid-template-columns:minmax(0,1.15fr) minmax(280px,1fr)!important;gap:14px!important;margin:16px 0!important}
+#page-dashboard .dashboard-due-card{display:block!important}
+#page-dashboard .dashboard-lower-layout{display:grid!important;grid-template-columns:minmax(0,1.3fr) minmax(280px,1fr)!important;gap:14px!important}
+#page-dashboard .dashboard-accounting-note{display:block!important;margin:8px 2px 14px!important;line-height:1.5!important}
+#page-dashboard .quick{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+#page-dashboard .quick button{min-width:0;text-align:left!important;padding:12px!important;border:1px solid #e5ebf5!important;border-radius:11px!important;background:#f8fafd!important;color:#12395b!important}
+#page-dashboard .quick button span{display:block!important;margin-top:5px!important;color:#718198!important;font-size:11px!important;font-weight:400!important}
+@media(min-width:681px) and (max-width:1000px){
+ #page-dashboard .detailed-stats{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ #page-dashboard .dashboard-overview,#page-dashboard .dashboard-lower-layout{grid-template-columns:1fr!important}
+}
+@media(max-width:680px){
+ #page-dashboard .pagehead{padding:15px!important;margin:0 0 12px!important;border-radius:14px!important}
+ #page-dashboard .pagehead h2{font-size:18px!important}
+ #page-dashboard .pagehead p{font-size:12px!important}
+ #page-dashboard .hero-kpis{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+ #page-dashboard .hero-kpis .card{display:flex!important;min-height:92px!important;align-items:flex-start!important;justify-content:center!important;padding:11px!important;gap:5px!important}
+ #page-dashboard .hero-kpis .card:nth-child(3){display:flex!important}
+ #page-dashboard .hero-kpis .stat-label{font-size:10px!important;line-height:1.3!important}
+ #page-dashboard .hero-kpis .stat-number{font-size:17px!important;overflow-wrap:anywhere}
+ #page-dashboard .detailed-stats{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}
+ #page-dashboard .detailed-stats .card{display:block!important;padding:11px!important;min-height:83px!important}
+ #page-dashboard .detailed-stats .stat-label{font-size:10px!important;line-height:1.35!important}
+ #page-dashboard .detailed-stats .stat-number{font-size:16px!important;overflow-wrap:anywhere}
+ #page-dashboard .dashboard-overview{display:grid!important;grid-template-columns:1fr!important;gap:10px!important;margin:12px 0!important}
+ #page-dashboard .dashboard-due-card{display:block!important}
+ #page-dashboard .dashboard-lower-layout{display:grid!important;grid-template-columns:1fr!important;gap:10px!important}
+ #page-dashboard .dashboard-accounting-note{display:block!important;font-size:10px!important}
+ #page-dashboard .quick{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+ #page-dashboard .quick button{font-size:11px!important;padding:10px!important}
+ #page-dashboard .quick button span{font-size:9px!important}
+}
 </style>
 </head>
 <body>
@@ -273,7 +311,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
   
   <header class="topbar">
     <div class="welcome-title">
-      <div class="kg-mark" aria-label="Comptiva">KG</div>
+      <div class="kg-mark" aria-label="COMPTIVA">C</div>
       <div><div class="welcome-copy">Bonjour, bienvenue sur <span class="guinea-name">Comptiva</span></div><div class="welcome-tagline">Votre commerce, toujours sous contrôle.</div><small id="topTitle">Tableau de bord</small><small id="cloudSyncStatus" role="status">Connexion en cours…</small></div>
     </div>
     <div class="top-actions"><button class="soft hidden" id="creatorTopButton" onclick="navigate('creator')">🛡️ Espace Créateur</button><button class="primary" onclick="openForm('debt')">+ Nouvelle dette</button><button class="logout-btn" onclick="krediSignOut()">Déconnexion</button></div>
