@@ -738,9 +738,9 @@ function setAppLanguage(language){
   if(typeof renderAll==='function')renderAll();
   const title=document.getElementById('topTitle');if(title&&typeof navigate==='function'){const active=document.querySelector('.nav [data-page].active,.mobile-nav [data-page].active');if(active)title.textContent=active.textContent.trim()}
 }
-function printLatestSale(){const item=db.sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no sales to print.':'Aucune vente à imprimer.')}
-function printLatestDebt(){const item=db.debts.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printDebtStatement(item.id);else alert(comptivaLanguage==='en'?'There are no debts to print.':'Aucune dette à imprimer.')}
-function printLatestPayment(){const item=db.payments.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printPaymentReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no repayments to print.':'Aucun remboursement à imprimer.')}
+function printLatestSale(){const item=db.sales.slice().reverse().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no sales to print.':'Aucune vente à imprimer.')}
+function printLatestDebt(){const item=db.debts.slice().reverse().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printDebtStatement(item.id);else alert(comptivaLanguage==='en'?'There are no debts to print.':'Aucune dette à imprimer.')}
+function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b)=>(b.date||'').localeCompare(a.date||''))[0];if(item)printPaymentReceipt(item.id);else alert(comptivaLanguage==='en'?'There are no repayments to print.':'Aucun remboursement à imprimer.')}
 (function initComptivaLanguage(){
   try{comptivaLanguage=localStorage.getItem('comptiva_language')==='en'?'en':'fr'}catch(e){comptivaLanguage='fr'}
   document.addEventListener('DOMContentLoaded',()=>setAppLanguage(comptivaLanguage),{once:true});
