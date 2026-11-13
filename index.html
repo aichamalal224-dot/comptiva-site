@@ -277,7 +277,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
         <div class="auth-field"><span class="field-icon">✉</span><input id="cloudEmail" type="email" autocomplete="username" placeholder="Adresse e-mail" aria-label="Adresse e-mail" required></div>
         <div class="auth-field"><span class="field-icon">🔒</span><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required><button class="toggle-pass" type="button" onclick="krediTogglePassword()" aria-label="Afficher ou masquer le mot de passe">Afficher</button></div>
         <button class="auth-forgot" type="button" onclick="krediForgotPassword()">Mot de passe oublié ?</button>
-        <button class="auth-primary" id="authSubmit" type="submit">↪ &nbsp; Se connecter</button>
+        <button class="auth-primary" id="authSubmit" type="button" onclick="krediHandleLoginClick()">↪ &nbsp; Se connecter</button>
       </form>
       <div class="auth-divider">Ou</div>
       <button class="auth-create" id="authCreate" type="button" onclick="krediSetAuthMode('signup')">＋ &nbsp; Première visite ? Créer un compte</button>
@@ -1022,6 +1022,14 @@ async function krediTestAuthNetwork(){
   }
 }
 
+function krediHandleLoginClick(){
+  const email=document.getElementById('cloudEmail');
+  const password=document.getElementById('cloudPassword');
+  if(!email||!password){krediAuthMessage('Formulaire de connexion indisponible. Rechargez la page.');return}
+  if(!email.value.trim()||!password.value){krediAuthMessage('Saisissez votre adresse e-mail et votre mot de passe.');return}
+  krediAuthMessage('Demande de connexion envoyée à Firebase…',true);
+  if(krediAuthMode==='signup')krediSignUp();else krediSignIn();
+}
 async function krediSignIn(){
   if(!krediAuth){krediAuthMessage('Le service de connexion n’est pas encore prêt. Attendez quelques secondes puis réessayez.');return}
   const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;
