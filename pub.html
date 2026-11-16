@@ -52,6 +52,8 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
 <div class="field"><label for="shopName">Nom du commerce *</label><input id="shopName" name="shopName" required maxlength="120" placeholder="Nom de votre boutique"></div>
 <div class="field"><label for="pubPhone">Téléphone / WhatsApp *</label><input id="pubPhone" name="pubPhone" required maxlength="40" placeholder="+224 ..."></div>
 <div class="field"><label for="pubType">Type de publicité *</label><select id="pubType" name="pubType" required><option value="">Choisir un format</option><option>Affiche simple</option><option>Image professionnelle</option><option>Vidéo publicitaire</option></select></div>
+<div class="field full" id="videoChoiceField" hidden><label for="videoChoice">Pour votre vidéo, que souhaitez-vous ? *</label><select id="videoChoice" name="videoChoice"><option value="">Choisir une option</option><option value="existing">J'ai déjà une vidéo</option><option value="create">Je souhaite que COMPTIVA crée ma vidéo (devis préalable)</option></select></div>
+<div class="field full" id="videoLinkField" hidden><label for="videoLink">Lien de partage de votre vidéo (facultatif)</label><input id="videoLink" name="videoLink" type="url" maxlength="500" placeholder="Lien Google Drive, YouTube ou autre"><small style="color:#64748b">Vérifiez que le lien permet de consulter la vidéo. Vous pourrez aussi nous l'envoyer par WhatsApp.</small></div>
 <div class="field full"><label for="pubOffer">Que souhaitez-vous présenter ? *</label><textarea id="pubOffer" name="pubOffer" required maxlength="1000" placeholder="Vos produits, services, promotion, prix ou message à faire connaître…"></textarea></div>
 <div class="field full"><label for="pubContact">Ville et autres précisions (facultatif)</label><input id="pubContact" name="pubContact" maxlength="180" placeholder="Ville, quartier, horaires, etc."></div>
 <div class="field full"><button type="submit">Préparer ma demande</button></div>
@@ -65,7 +67,22 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
  const preview=document.getElementById('pubRequestPreview');
  const copy=document.getElementById('pubCopyRequest');
  const send=document.getElementById('pubSendWhatsApp');
+ const typeSelect=document.getElementById('pubType');
+ const videoChoiceField=document.getElementById('videoChoiceField');
+ const videoChoice=document.getElementById('videoChoice');
+ const videoLinkField=document.getElementById('videoLinkField');
+ const videoLink=document.getElementById('videoLink');
  if(!form||!status||!preview||!copy||!send)return;
+ function updateVideoFields(){
+  const isVideo=typeSelect.value==='Vidéo publicitaire';
+  videoChoiceField.hidden=!isVideo;
+  videoChoice.required=isVideo;
+  if(!isVideo){videoChoice.value='';videoLink.value='';videoLinkField.hidden=true;}
+  else videoLinkField.hidden=videoChoice.value!=='existing';
+ }
+ typeSelect.addEventListener('change',updateVideoFields);
+ videoChoice.addEventListener('change',function(){videoLinkField.hidden=videoChoice.value!=='existing';});
+ updateVideoFields();
  let message='';
  let submitting=false;
  form.addEventListener('submit',async function(e){
@@ -78,10 +95,11 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
    businessName:v('shopName'),
    phone:v('pubPhone'),
    format:formats[v('pubType')]||'',
-   description:v('pubOffer'),
+   description:v('pubOffer')+
+    (v('pubType')==='Vidéo publicitaire'?'\\n\\nOption vidéo : '+(v('videoChoice')==='existing'?'Le commerçant possède déjà sa vidéo.':'Le commerçant demande à COMPTIVA de créer la vidéo (devis à confirmer).')+(v('videoLink')?'\\nLien vidéo : '+v('videoLink'):''):''),
    city:v('pubContact')
   };
-  message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+requestData.merchantName+'\nCommerce : '+requestData.businessName+'\nTéléphone / WhatsApp : '+requestData.phone+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+requestData.description+'\nVille / précisions : '+(requestData.city||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
+  message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+requestData.merchantName+'\nCommerce : '+requestData.businessName+'\nTéléphone / WhatsApp : '+requestData.phone+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+v('pubOffer')+(v('pubType')==='Vidéo publicitaire'?'\nOption vidéo : '+(v('videoChoice')==='existing'?'J’ai déjà une vidéo.':'Je souhaite que COMPTIVA crée ma vidéo (devis préalable).')+(v('videoLink')?'\nLien vidéo : '+v('videoLink'):''):'')+'\nVille / précisions : '+(requestData.city||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
   preview.textContent=message;
   preview.hidden=false;copy.hidden=false;send.hidden=false;status.hidden=false;
   submitting=true;
