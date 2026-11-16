@@ -155,19 +155,38 @@ export default {
       let body;
       try { body = await request.json(); } catch (_) { return json({ error: "Scénario invalide." }, 400, origin); }
       const script = clean(body.script, 12000);
-      const spoken = [...script.matchAll(/Voix\\s*:\\s*[«"]([\\s\\S]*?)[»"]/g)].map(match => match[1].trim()).filter(Boolean);
-      const narration = spoken.join(" ");
-      if (!narration || narration.length > 7000) return json({ error: "Le scénario doit contenir des phrases de voix (Voix : « … »), dans une limite de 7 000 caractères." }, 400, origin);
+      const scenePattern = /SCÈNE\s+\d+\s*[—-]\s*([^\n]+)\nVisuel\s*:\s*([^\n]+)\nVoix\s*:\s*[«"]([^»"]+)[»"]/g;
+      const scenes = [...script.matchAll(scenePattern)].map(match => ({
+        title: clean(match[1], 100),
+        visual: clean(match[2], 220),
+        narration: clean(match[3], 1200)
+      })).filter(scene => scene.narration);
+      if (!scenes.length) {
+        const spoken = [...script.matchAll(/Voix\s*:\s*[«"]([^»"]+)[»"]/g)].map(match => match[1].trim()).filter(Boolean);
+        if (spoken.length) scenes.push({ title: "Présentation COMPTIVA", visual: "Votre commerce, toujours sous contrôle.", narration: spoken.join(" ") });
+      }
+      if (!scenes.length || scenes.reduce((sum, scene) => sum + scene.narration.length, 0) > 7000) {
+        return json({ error: "Le scénario doit contenir des scènes avec une phrase « Visuel » et une phrase « Voix », dans une limite totale de 7 000 caractères." }, 400, origin);
+      }
       const voiceId = clean(env.CREATOMATE_VOICE_ID || "XrExE9yKIg1WjnnlVkGX", 100);
-      const renderScript = {
-        output_format: "mp4", width: 1280, height: 720, fill_color: "#0b2e59",
+      const provider = "elevenlabs model_id=eleven_multilingual_v2 voice_id=" + voiceId + " stability=0.75";
+      const elements = scenes.map((scene, index) => ({
+        type: "composition",
+        name: "Scene-" + (index + 1),
+        track: 1,
+        time: null,
+        width: 1280,
+        height: 720,
+        fill_color: index % 2 ? "#123d70" : "#0b2e59",
         elements: [
-          { type: "text", name: "Brand", text: "COMPTIVA", x: "50%", y: "30%", width: "88%", height: "18%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "800", font_size: "12 vmin", fill_color: "#ffffff" },
-          { type: "text", name: "Tagline", text: "Votre commerce, toujours sous contrôle.", x: "50%", y: "47%", width: "88%", height: "12%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "600", font_size: "4.5 vmin", fill_color: "#cfe3ff" },
-          { type: "audio", name: "Narration", track: 2, time: 0, source: narration, provider: "elevenlabs model_id=eleven_multilingual_v2 voice_id=" + voiceId + " stability=0.75" },
-          { type: "text", name: "Sous-titres", track: 3, time: 0, width: "90%", height: "34%", x: "50%", y: "78%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "600", font_size: "4 vmin", fill_color: "#ffffff", background_color: "rgba(0,0,0,0.45)", background_x_padding: "8%", background_y_padding: "5%", transcript_source: "Narration", transcript_effect: "highlight", transcript_split: "line", transcript_maximum_length: 80, transcript_color: "#9fd0ff" }
+          { type: "text", name: "Brand-" + (index + 1), track: 1, time: 0, text: "COMPTIVA", x: "50%", y: "13%", width: "88%", height: "12%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "800", font_size: "5 vmin", fill_color: "#9fd0ff" },
+          { type: "text", name: "Scene-Title-" + (index + 1), track: 1, time: 0, text: scene.title, x: "50%", y: "35%", width: "88%", height: "20%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "800", font_size: "7 vmin", fill_color: "#ffffff" },
+          { type: "text", name: "Scene-Visual-" + (index + 1), track: 1, time: 0, text: scene.visual, x: "50%", y: "57%", width: "84%", height: "18%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "500", font_size: "3.5 vmin", fill_color: "#d9eaff" },
+          { type: "audio", name: "Narration-" + (index + 1), track: 2, time: 0, source: scene.narration, provider },
+          { type: "text", name: "Subtitles-" + (index + 1), track: 3, time: 0, width: "90%", height: "18%", x: "50%", y: "88%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "600", font_size: "3.2 vmin", fill_color: "#ffffff", background_color: "rgba(0,0,0,0.45)", background_x_padding: "8%", background_y_padding: "5%", transcript_source: "Narration-" + (index + 1), transcript_effect: "highlight", transcript_split: "line", transcript_maximum_length: 80, transcript_color: "#9fd0ff" }
         ]
-      };
+      }));
+      const renderScript = { output_format: "mp4", width: 1280, height: 720, fill_color: "#0b2e59", elements };
       try {
         const renderResponse = await fetch("https://api.creatomate.com/v2/renders", { method: "POST", headers: { "Authorization": "Bearer " + env.CREATOMATE_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify(renderScript) });
         const renderData = await renderResponse.json().catch(() => ({}));
