@@ -809,13 +809,36 @@ async function loadCreatorPublicAds(){
   const statuses={new:'Nouvelle',in_progress:'En cours',done:'Terminée',refused:'Refusée'};
   list.innerHTML=requests.map(item=>{
    const options=Object.keys(statuses).map(key=>'<option value="'+key+'"'+(item.status===key?' selected':'')+'>'+statuses[key]+'</option>').join('');
-   return '<article class="card" data-ad-id="'+esc(item.id)+'" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>'+esc(item.business_name||'Commerce')+'</strong><span>'+esc(statuses[item.status]||item.status||'Nouvelle')+'</span></div><p><b>Commerçant :</b> '+esc(item.merchant_name||'—')+'<br><b>Téléphone :</b> '+esc(item.phone||'—')+'<br><b>Format :</b> '+esc(labels[item.format]||item.format||'—')+'<br><b>Ville :</b> '+esc(item.city||'—')+'<br><b>Reçue le :</b> '+esc(item.created_at||'—')+'</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(item.description||'')+'</p><label>Statut<select data-ad-status style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+options+'</select></label><label>Note Créateur<textarea data-ad-note rows="2" maxlength="500" style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+esc(item.admin_note||'')+'</textarea></label><button class="primary" type="button" onclick="updateCreatorAdRequest(this)">Enregistrer le suivi</button></article>';
+   const videoAction=item.format==='video'?'<div style="margin:12px 0;padding:12px;border:1px solid #cbdcf5;border-radius:12px;background:#f5f9ff"><b>🎬 Préparation de la vidéo</b><p style="margin:5px 0 10px;font-size:13px;color:var(--muted)">Ce bouton prépare un scénario et un découpage de la vidéo. Il ne produit pas encore un fichier vidéo final.</p><button class="green" type="button" onclick="createCreatorVideoDraft(this)">Créer la vidéo COMPTIVA · préparer le scénario</button><div data-video-draft class="hidden" style="margin-top:12px"><label><b>Scénario proposé (modifiable)</b><textarea data-video-script rows="15" style="display:block;width:100%;padding:10px;margin-top:6px;border:1px solid var(--line);border-radius:8px;white-space:pre-wrap"></textarea></label><button class="soft" type="button" style="margin-top:8px" onclick="copyCreatorVideoScript(this)">Copier le scénario</button></div></div>':'';
+   return '<article class="card" data-ad-id="'+esc(item.id)+'" data-ad-format="'+esc(item.format||'')+'" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>'+esc(item.business_name||'Commerce')+'</strong><span>'+esc(statuses[item.status]||item.status||'Nouvelle')+'</span></div><p><b>Commerçant :</b> '+esc(item.merchant_name||'—')+'<br><b>Téléphone :</b> '+esc(item.phone||'—')+'<br><b>Format :</b> '+esc(labels[item.format]||item.format||'—')+'<br><b>Ville :</b> '+esc(item.city||'—')+'<br><b>Reçue le :</b> '+esc(item.created_at||'—')+'</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(item.description||'')+'</p>'+videoAction+'<label>Statut<select data-ad-status style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+options+'</select></label><label>Note Créateur<textarea data-ad-note rows="2" maxlength="500" style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+esc(item.admin_note||'')+'</textarea></label><button class="primary" type="button" onclick="updateCreatorAdRequest(this)">Enregistrer le suivi</button></article>';
   }).join('');
  }catch(error){
   console.error('[COMPTIVA Créateur] Chargement demandes PUB',error);
   status.textContent='Impossible de charger les demandes : '+(error.message||'erreur inconnue');
   list.innerHTML='<div class="empty">Vérifiez que le Worker est déployé et que vous êtes connecté avec le compte Créateur autorisé.</div>';
  }
+}
+function createCreatorVideoDraft(button){
+ if(!krediIsCreator()){alert('Accès réservé au compte Créateur.');return}
+ const card=button&&button.closest('[data-ad-id]');
+ if(!card||card.getAttribute('data-ad-format')!=='video')return;
+ const scriptField=card.querySelector('[data-video-script]');
+ const panel=card.querySelector('[data-video-draft]');
+ if(!scriptField||!panel)return;
+ const business=card.querySelector('strong')?.textContent||'votre commerce';
+ const merchant=card.querySelector('p')?.textContent||'';
+ const isComptiva=/\bCOMPTIVA\b/i.test(card.querySelector('p[style*="white-space"]')?.textContent||'')||/présentation de comptiva|utiliser l'application/i.test(card.textContent||'');
+ const title=isComptiva?'Tutoriel COMPTIVA — Votre commerce, toujours sous contrôle.':'Vidéo de présentation — '+business;
+ scriptField.value=title+'\nDurée indicative : 60 à 90 secondes\n\nSCÈNE 1 — INTRODUCTION (0–8 s)\nVisuel : logo COMPTIVA puis écran d’accueil de l’application.\nVoix : « Découvrez COMPTIVA, votre commerce, toujours sous contrôle. »\nTexte écran : « Gérez votre commerce simplement. »\n\nSCÈNE 2 — CONNEXION (8–18 s)\nVisuel : démonstration de la connexion au compte commerçant, sans afficher d’identifiants.\nVoix : « Connectez-vous à votre espace sécurisé pour retrouver les informations de votre commerce. »\n\nSCÈNE 3 — VENTES (18–32 s)\nVisuel : ouvrir la rubrique Ventes et montrer l’enregistrement d’une vente de démonstration.\nVoix : « Enregistrez vos ventes et gardez une trace de votre activité. »\n\nSCÈNE 4 — CLIENTS ET DETTES (32–45 s)\nVisuel : ouvrir Clients puis Dettes et présenter un exemple fictif.\nVoix : « Retrouvez vos clients et suivez les paiements à recevoir. »\n\nSCÈNE 5 — REMBOURSEMENTS (45–55 s)\nVisuel : montrer l’enregistrement d’un remboursement de démonstration.\nVoix : « Enregistrez les remboursements pour mettre à jour le suivi des dettes. »\n\nSCÈNE 6 — STOCK (55–68 s)\nVisuel : ouvrir la gestion du stock et présenter un produit de démonstration.\nVoix : « Suivez vos produits et consultez les quantités disponibles. »\n\nSCÈNE 7 — TABLEAU DE BORD ET CONCLUSION (68–85 s)\nVisuel : revenir au tableau de bord. Afficher le nom COMPTIVA et le slogan.\nVoix : « Avec COMPTIVA, gardez une meilleure visibilité sur votre commerce. Essayez COMPTIVA dès aujourd’hui. »\n\nCONSIGNES DE PRODUCTION\n- Utiliser uniquement des captures de la version réellement disponible de COMPTIVA.\n- Employer des données fictives de démonstration ; masquer e-mails, téléphones, UID et toute donnée personnelle.\n- Ne pas montrer de fonction non disponible ou non testée.\n- Faire valider le montage final par le Créateur puis par le commerçant avant toute publication.\n\nDemande reçue : '+(card.querySelector('p[style*="white-space"]')?.textContent||'')+'\nCommerçant : '+merchant;
+ panel.classList.remove('hidden');
+ button.textContent='Scénario vidéo préparé';
+}
+async function copyCreatorVideoScript(button){
+ const card=button&&button.closest('[data-ad-id]');
+ const field=card&&card.querySelector('[data-video-script]');
+ if(!field||!field.value)return;
+ try{await navigator.clipboard.writeText(field.value);button.textContent='Scénario copié';}
+ catch(error){field.focus();field.select();button.textContent='Sélectionnez puis copiez le texte';}
 }
 async function updateCreatorAdRequest(button){
  const card=button&&button.closest('[data-ad-id]');
