@@ -448,10 +448,11 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
       <div class="notice" style="margin-top:14px"><b>Protection de tes données :</b> l’expiration de l’abonnement ne supprime jamais les ventes, les dettes, les remboursements ou le stock. Dans cette démonstration, les données restent toutefois enregistrées uniquement dans le navigateur de cet appareil. Pour un vrai service multi-appareils, il faudra une base de données sécurisée sur un serveur et des sauvegardes.</div>
     </section>
     <section id="page-creator" class="hidden">
-      <div class="pagehead"><div><h2>🛡️ Espace Créateur COMPTIVA</h2><p>Vue réservée au compte propriétaire de la plateforme.</p></div><button class="soft" onclick="loadCreatorDirectory()">↻ Actualiser</button></div>
+      <div class="pagehead"><div><h2>🛡️ Espace Créateur COMPTIVA</h2><p>Vue réservée au compte propriétaire de la plateforme.</p></div><button class="soft" onclick="loadCreatorDirectory();loadCreatorPublicAds()">↻ Actualiser</button></div>
       <div class="notice">Accès réservé au compte Créateur autorisé. Cette première version affiche uniquement les comptes présents dans le répertoire des commerçants. Les abonnements et paiements ne sont pas encore centralisés ni automatisés.</div>
       <div class="stats"><div class="card"><div class="stat-label">Commerçants répertoriés</div><div class="stat-number" id="creatorMerchantCount">—</div></div><div class="card"><div class="stat-label">État du répertoire</div><div class="stat-number" id="creatorDirectoryStatus">À charger</div></div></div>
       <div class="card"><h3>Comptes commerçants</h3><div id="creatorMerchantList" class="table-wrap"><div class="empty">Chargement du répertoire sécurisé…</div></div></div>
+      <div class="card" style="margin-top:16px"><div class="pagehead"><div><h3>Demandes COMPTIVA PUB</h3><p>Demandes enregistrées dans Cloudflare D1. Seul le compte Créateur peut les consulter et modifier leur statut.</p></div><button class="soft" type="button" onclick="loadCreatorPublicAds()">↻ Actualiser les demandes</button></div><div id="creatorPublicAdsStatus" class="notice">Chargement des demandes…</div><div id="creatorPublicAdsList"><div class="empty">Aucune demande chargée.</div></div></div>
     </section>
     <section id="page-form" class="hidden">
       <div class="pagehead"><div><h2 id="formTitle">Ajouter</h2><p id="formDesc">Saisissez les informations.</p></div><button class="soft" onclick="navigate('dashboard')">← Retour</button></div>
@@ -787,6 +788,67 @@ function krediIsCreator(){return !!(krediUser&&krediUser.uid===KREDI_CREATOR_UID
 function krediShowApp(user){document.body.classList.add('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.setAttribute('aria-hidden','true');const allowed=!!(user&&user.uid===KREDI_CREATOR_UID);['creatorNav','creatorTopButton'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('hidden',!allowed)});const legacy=document.getElementById('legacyAdminDemo');if(legacy)legacy.classList.add('hidden');if(typeof navigate==='function')navigate('dashboard');const who=document.getElementById('topTitle');if(who)who.textContent='Tableau de bord';const subtitle=document.querySelector('.topbar .welcome-tagline');if(subtitle)subtitle.textContent='Votre commerce, toujours sous contrôle. · '+(user.email||'Compte connecté');}
 function krediShowLogin(){document.body.classList.remove('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.removeAttribute('aria-hidden');krediSetAuthMode('signin');}
 async function loadCreatorDirectory(){const list=document.getElementById('creatorMerchantList');if(!list)return;if(!krediIsCreator()){list.innerHTML='<div class="empty">Accès refusé.</div>';return}if(!krediStore){list.innerHTML='<div class="empty">Firestore n’est pas encore disponible. Réessayez lorsque la synchronisation est prête.</div>';const st=document.getElementById('creatorDirectoryStatus');if(st)st.textContent='Hors ligne';return}list.innerHTML='<div class="empty">Lecture sécurisée du répertoire…</div>';try{const snap=await krediStore.collection('merchantDirectory').get();if(!krediIsCreator())return;const rows=[];snap.forEach(doc=>{const d=doc.data()||{};const created=d.updatedAt&&typeof d.updatedAt.toDate==='function'?d.updatedAt.toDate().toLocaleDateString('fr-FR'):(d.updatedAt?String(d.updatedAt):'—');rows.push('<tr><td>'+esc(d.displayName||'—')+'</td><td>'+esc(d.email||'—')+'</td><td>'+esc(doc.id)+'</td><td>'+esc(created)+'</td></tr>')});const count=document.getElementById('creatorMerchantCount'),status=document.getElementById('creatorDirectoryStatus');if(count)count.textContent=String(rows.length);if(status)status.textContent='Connecté';list.innerHTML=rows.length?'<table><thead><tr><th>Commerçant</th><th>E-mail</th><th>UID</th><th>Dernière activité</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant trouvé dans merchantDirectory.</div>'}catch(e){console.error('[COMPTIVA Créateur] Lecture merchantDirectory refusée ou indisponible',e);const status=document.getElementById('creatorDirectoryStatus');if(status)status.textContent='Erreur';list.innerHTML='<div class="notice">Impossible de lire le répertoire des commerçants. Vérifiez que les règles Firestore autorisent la lecture de merchantDirectory uniquement pour le compte Créateur. Code : '+esc(e.code||'erreur')+'</div>'}}
+const COMPTIVA_PUBLIC_API='https://comptiva-public-api.aichamalal224.workers.dev';
+async function loadCreatorPublicAds(){
+ const list=document.getElementById('creatorPublicAdsList');
+ const status=document.getElementById('creatorPublicAdsStatus');
+ if(!list||!status)return;
+ if(!krediIsCreator()||!krediUser){status.textContent='Accès réservé au compte Créateur.';list.innerHTML='';return}
+ status.textContent='Lecture sécurisée des demandes…';
+ list.innerHTML='<div class="empty">Chargement…</div>';
+ try{
+  const token=await krediUser.getIdToken();
+  const response=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/public-ads',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||('HTTP '+response.status));
+  if(!krediIsCreator())return;
+  const requests=Array.isArray(result.requests)?result.requests:[];
+  status.textContent=requests.length+' demande(s) enregistrée(s).';
+  if(!requests.length){list.innerHTML='<div class="empty">Aucune demande publicitaire pour le moment.</div>';return}
+  const labels={poster:'Affiche simple',image:'Image professionnelle',video:'Vidéo publicitaire'};
+  const statuses={new:'Nouvelle',in_progress:'En cours',done:'Terminée',refused:'Refusée'};
+  list.innerHTML=requests.map(item=>{
+   const options=Object.keys(statuses).map(key=>'<option value="'+key+'"'+(item.status===key?' selected':'')+'>'+statuses[key]+'</option>').join('');
+   return '<article class="card" data-ad-id="'+esc(item.id)+'" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>'+esc(item.business_name||'Commerce')+'</strong><span>'+esc(statuses[item.status]||item.status||'Nouvelle')+'</span></div><p><b>Commerçant :</b> '+esc(item.merchant_name||'—')+'<br><b>Téléphone :</b> '+esc(item.phone||'—')+'<br><b>Format :</b> '+esc(labels[item.format]||item.format||'—')+'<br><b>Ville :</b> '+esc(item.city||'—')+'<br><b>Reçue le :</b> '+esc(item.created_at||'—')+'</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(item.description||'')+'</p><label>Statut<select data-ad-status style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+options+'</select></label><label>Note Créateur<textarea data-ad-note rows="2" maxlength="500" style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+esc(item.admin_note||'')+'</textarea></label><button class="primary" type="button" onclick="updateCreatorAdRequest(this)">Enregistrer le suivi</button></article>';
+  }).join('');
+ }catch(error){
+  console.error('[COMPTIVA Créateur] Chargement demandes PUB',error);
+  status.textContent='Impossible de charger les demandes : '+(error.message||'erreur inconnue');
+  list.innerHTML='<div class="empty">Vérifiez que le Worker est déployé et que vous êtes connecté avec le compte Créateur autorisé.</div>';
+ }
+}
+async function updateCreatorAdRequest(button){
+ const card=button&&button.closest('[data-ad-id]');
+ if(!card||!krediIsCreator()||!krediUser)return;
+ const id=card.getAttribute('data-ad-id');
+ const statusField=card.querySelector('[data-ad-status]');
+ const noteField=card.querySelector('[data-ad-note]');
+ if(!id||!statusField||!noteField)return;
+ button.disabled=true;
+ const original=button.textContent;
+ button.textContent='Enregistrement…';
+ try{
+  const token=await krediUser.getIdToken();
+  const response=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/public-ads/'+encodeURIComponent(id),{
+   method:'PUT',
+   headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},
+   body:JSON.stringify({status:statusField.value,adminNote:noteField.value})
+  });
+  const result=await response.json().catch(()=>({}));
+  if(!response.ok||!result.ok)throw new Error(result.error||('HTTP '+response.status));
+  button.textContent='Suivi enregistré';
+  const summary=document.getElementById('creatorPublicAdsStatus');
+  if(summary)summary.textContent='Modification enregistrée. Les demandes sont à jour.';
+ }catch(error){
+  console.error('[COMPTIVA Créateur] Modification demande PUB',error);
+  button.textContent='Erreur — réessayer';
+  const summary=document.getElementById('creatorPublicAdsStatus');
+  if(summary)summary.textContent='Modification impossible : '+(error.message||'erreur inconnue');
+ }finally{
+  button.disabled=false;
+  if(button.textContent==='Enregistrement…')button.textContent=original;
+ }
+}
 function krediTrackMerchant(user){if(!user||!user.uid||user.uid===KREDI_CREATOR_UID||!krediStore)return;const name=user.displayName||(user.email?user.email.split('@')[0]:'Commerçant');krediStore.collection('merchantDirectory').doc(user.uid).set({uid:user.uid,email:user.email||'',displayName:name,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(e=>console.warn('[COMPTIVA] Inscription au répertoire commerçant non confirmée :',e));}
 function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comptiva_subscription_v1_'+uid;db=loadDB();if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];subscription=loadSubscription();if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings)subscription.paymentSettings={number:'',name:''};}
 function krediMergeDatabases(localData,remoteData,preferLocal){
@@ -885,7 +947,7 @@ async function krediInitFirebase(){try{
       krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
       return;
     }
-    if(krediIsCreator())loadCreatorDirectory();else krediTrackMerchant(user);
+    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else krediTrackMerchant(user);
     krediStatus('Compte connecté. Vérification des données en ligne…');
     const activeUid=user.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
