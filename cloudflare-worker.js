@@ -163,7 +163,7 @@ export default {
       const paymentStatus = clean(body.paymentStatus, 20) || "pending";
       const startDate = clean(body.startDate, 10);
       const endDate = clean(body.endDate, 10);
-      const validDate = value => !value || /^\\d{4}-\\d{2}-\\d{2}$/.test(value);
+      const validDate = value => !value || /^\d{4}-\d{2}-\d{2}$/.test(value);
       if (!["new", "in_progress", "done", "refused"].includes(status)) {
         return json({ error: "Statut non autorisé." }, 400, origin);
       }
