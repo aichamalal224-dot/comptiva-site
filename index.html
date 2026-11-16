@@ -514,16 +514,23 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
   window.__comptivaFirebaseSdkReady=(async function(){
     await loadOne('firebase-app-compat',function(){return !!(window.firebase&&firebase.initializeApp&&firebase.apps)});
     await loadOne('firebase-auth-compat',function(){return !!(window.firebase&&typeof firebase.auth==='function')});
-    try{
-      await loadOne('firebase-firestore-compat',function(){return !!(window.firebase&&typeof firebase.firestore==='function')});
-      window.krediFirestoreSdkLoadError=null;
-    }catch(e){window.krediFirestoreSdkLoadError=e.message;console.warn('[COMPTIVA] Firestore SDK non chargé : la connexion Auth reste disponible.',e)}
     window.krediSdkLoadError=null;
     return true;
   })().catch(function(e){
     window.krediSdkLoadError=e&&e.message?e.message:String(e);
     console.error('[COMPTIVA] Firebase App/Auth non chargés.',e);
     throw e;
+  });
+  // Firestore charge en parallèle et ne bloque jamais le démarrage de la connexion.
+  window.__comptivaFirestoreSdkReady=window.__comptivaFirebaseSdkReady.then(function(){
+    return loadOne('firebase-firestore-compat',function(){return !!(window.firebase&&typeof firebase.firestore==='function')});
+  }).then(function(){
+    window.krediFirestoreSdkLoadError=null;
+    return true;
+  }).catch(function(e){
+    window.krediFirestoreSdkLoadError=e&&e.message?e.message:String(e);
+    console.warn('[COMPTIVA] Firestore SDK non chargé : Auth reste disponible.',e);
+    return false;
   });
 })();
 </script>
@@ -1000,7 +1007,11 @@ async function krediInitFirebase(){try{
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
     if(!user){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
     krediUseAccountStore(user.uid);krediShowApp(user);renderAll();
-    // Firestore est initialisé seulement après confirmation Auth.
+    // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
+    if(window.__comptivaFirestoreSdkReady){
+      const firestoreReady=await window.__comptivaFirestoreSdkReady;
+      if(!firestoreReady){krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
+    }
     if(!krediStore && firebase.firestore){
       try{
         krediStore=firebase.firestore();
