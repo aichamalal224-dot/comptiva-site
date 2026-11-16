@@ -59,6 +59,7 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
 <a class="btn" href="./">Retourner sur COMPTIVA</a></div></div></section>
 <script>
 (function(){
+ const API_URL='https://comptiva-public-api.aichamalal224.workers.dev/api/public-ads';
  const form=document.getElementById('pubRequestForm');
  const status=document.getElementById('pubRequestStatus');
  const preview=document.getElementById('pubRequestPreview');
@@ -66,21 +67,50 @@ footer{padding:25px 0;color:var(--muted);font-size:13px}.foot{display:flex;justi
  const send=document.getElementById('pubSendWhatsApp');
  if(!form||!status||!preview||!copy||!send)return;
  let message='';
- form.addEventListener('submit',function(e){
+ let submitting=false;
+ form.addEventListener('submit',async function(e){
   e.preventDefault();
-  if(!form.reportValidity())return;
+  if(submitting||!form.reportValidity())return;
   const v=id=>document.getElementById(id).value.trim();
-  message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+v('pubName')+'\nCommerce : '+v('shopName')+'\nTéléphone / WhatsApp : '+v('pubPhone')+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+v('pubOffer')+'\nVille / précisions : '+(v('pubContact')||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
-  preview.textContent=message;preview.hidden=false;copy.hidden=false;send.hidden=false;status.hidden=false;
-  status.textContent='Votre demande est préparée. Copiez-la pour l’envoyer à COMPTIVA PUB. L’envoi automatique sera connecté après confirmation du numéro officiel de réception.';
+  const formats={'Affiche simple':'poster','Image professionnelle':'image','Vidéo publicitaire':'video'};
+  const requestData={
+   merchantName:v('pubName'),
+   businessName:v('shopName'),
+   phone:v('pubPhone'),
+   format:formats[v('pubType')]||'',
+   description:v('pubOffer'),
+   city:v('pubContact')
+  };
+  message='DEMANDE DE PUBLICITÉ — COMPTIVA PUB\n\nCommerçant : '+requestData.merchantName+'\nCommerce : '+requestData.businessName+'\nTéléphone / WhatsApp : '+requestData.phone+'\nFormat souhaité : '+v('pubType')+'\nPrésentation : '+requestData.description+'\nVille / précisions : '+(requestData.city||'Non précisé')+'\n\nMerci de me contacter pour confirmer le tarif et les étapes. Je souhaite valider la publicité avant toute diffusion.';
+  preview.textContent=message;
+  preview.hidden=false;copy.hidden=false;send.hidden=false;status.hidden=false;
+  submitting=true;
+  const submitButton=form.querySelector('button[type="submit"]');
+  if(submitButton)submitButton.disabled=true;
+  status.textContent='Enregistrement sécurisé de votre demande en cours…';
+  try{
+   const response=await fetch(API_URL,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(requestData)
+   });
+   const result=await response.json().catch(()=>({}));
+   if(!response.ok||!result.ok)throw new Error(result.error||('Erreur HTTP '+response.status));
+   status.textContent='Votre demande a bien été enregistrée chez COMPTIVA PUB. Référence : '+result.id+'. Vous pouvez aussi envoyer le récapitulatif par WhatsApp.';
+  }catch(error){
+   console.error('[COMPTIVA PUB] Enregistrement impossible :',error);
+   status.textContent='La demande n’a pas pu être enregistrée automatiquement ('+(error.message||'erreur réseau')+'). Votre récapitulatif reste disponible : vous pouvez l’envoyer par WhatsApp.';
+  }finally{
+   submitting=false;
+   if(submitButton)submitButton.disabled=false;
+  }
  });
  send.addEventListener('click',function(){const url='https://wa.me/33751107911?text='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer');});
  copy.addEventListener('click',async function(){
   try{await navigator.clipboard.writeText(message);status.textContent='Demande copiée. Vous pouvez la coller dans WhatsApp ou votre message.';}
   catch(err){status.textContent='Sélectionnez et copiez le texte de votre demande ci-dessous.';}
  });
-})();
-</script>
+})();</script>
 </main>
 <footer><div class="wrap foot"><span><strong>COMPTIVA PUB</strong> · Votre commerce mérite d'être vu.</span><span>Une page indépendante — vos transactions restent inchangées.</span></div></footer>
 </body></html>
