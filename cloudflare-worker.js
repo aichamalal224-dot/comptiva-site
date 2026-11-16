@@ -148,7 +148,7 @@ export default {
       }
     }
 
-    const videoMatch = url.pathname.match(/^\\/api\\/admin\\/public-ads\\/([a-f0-9-]{36})\\/video$/i);
+    const videoMatch = url.pathname.match(/^\/api\\/admin\\/public-ads\\/([a-f0-9-]{36})\\/video$/i);
     if (videoMatch && request.method === "POST") {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
@@ -176,7 +176,7 @@ export default {
       } catch (_) { return json({ error: "Impossible de joindre Creatomate. Réessayez plus tard." }, 502, origin); }
     }
 
-    const renderMatch = url.pathname.match(/^\\/api\\/admin\\/video-renders\\/([a-f0-9-]{36})$/i);
+    const renderMatch = url.pathname.match(/^\/api\\/admin\\/video-renders\\/([a-f0-9-]{36})$/i);
     if (renderMatch && request.method === "GET") {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
