@@ -275,7 +275,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     <div class="auth-card">
       <form id="authForm" onsubmit="event.preventDefault(); event.stopPropagation(); if(this.reportValidity()){if(krediAuthMode==='signup')krediSignUp();else krediSignIn();} return false;">
         <div class="auth-field"><span class="field-icon">✉</span><input id="cloudEmail" type="email" autocomplete="username" placeholder="Adresse e-mail" aria-label="Adresse e-mail" required></div>
-        <div class="auth-field"><span class="field-icon">🔒</span><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required><button class="toggle-pass" type="button" aria-label="Afficher ou masquer le mot de passe" aria-controls="cloudPassword" aria-pressed="false" onclick="event.preventDefault();event.stopPropagation();const p=document.getElementById('cloudPassword');if(p){const show=p.type==='password';p.type=show?'text':'password';this.textContent=show?'Masquer':'Afficher';this.setAttribute('aria-pressed',show?'true':'false');}">Afficher</button></div>
+        <div class="auth-field"><span class="field-icon">🔒</span><input id="cloudPassword" type="password" autocomplete="current-password" placeholder="Mot de passe" aria-label="Mot de passe" required><button class="toggle-pass" type="button" aria-label="Afficher ou masquer le mot de passe" aria-controls="cloudPassword" aria-pressed="false" >Afficher</button></div>
         <button class="auth-forgot" type="button" onclick="krediForgotPassword()">Mot de passe oublié ?</button>
         <button class="auth-primary" id="authSubmit" type="button" onclick="event.preventDefault();if(this.form&&this.form.reportValidity()){if(typeof window.krediHandleLoginClick==='function'){window.krediHandleLoginClick()}else{const m=document.getElementById('authMessage');if(m)m.textContent='Le module de connexion COMPTIVA ne s’est pas chargé. Rechargez la page et réessayez.';}}">↪ &nbsp; Se connecter</button>
       </form>
@@ -766,7 +766,27 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
   try{comptivaLanguage=localStorage.getItem('comptiva_language')==='en'?'en':'fr'}catch(e){comptivaLanguage='fr'}
   document.addEventListener('DOMContentLoaded',()=>setAppLanguage(comptivaLanguage),{once:true});
   if(document.readyState!=='loading')setAppLanguage(comptivaLanguage);
-  const observer=new MutationObserver(records=>{for(const record of records){if(record.type==='characterData')comptivaTranslateTextNode(record.target);else record.addedNodes&&record.addedNodes.forEach(node=>{if(node.nodeType===Node.TEXT_NODE)comptivaTranslateTextNode(node);else if(node.nodeType===Node.ELEMENT_NODE)comptivaTranslateElement(node)})}});
+  // Traduction dynamique optimisée : traiter uniquement les nœuds modifiés,
+  // sans reparcourir plusieurs fois tout le sous-arbre lors des rendus mobiles.
+  let translationFramePending=false;
+  const pendingTranslationRoots=new Set();
+  const observer=new MutationObserver(records=>{
+    for(const record of records){
+      if(record.type==='characterData')comptivaTranslateTextNode(record.target);
+      else if(record.addedNodes)record.addedNodes.forEach(node=>{
+        if(node.nodeType===Node.TEXT_NODE)comptivaTranslateTextNode(node);
+        else if(node.nodeType===Node.ELEMENT_NODE)pendingTranslationRoots.add(node);
+      });
+    }
+    if(translationFramePending||!pendingTranslationRoots.size)return;
+    translationFramePending=true;
+    requestAnimationFrame(()=>{
+      translationFramePending=false;
+      const roots=Array.from(pendingTranslationRoots);
+      pendingTranslationRoots.clear();
+      roots.forEach(node=>{if(node.isConnected)comptivaTranslateElement(node)});
+    });
+  });
   observer.observe(document.body,{subtree:true,childList:true,characterData:true});
 })();
 
@@ -781,6 +801,11 @@ function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-em
 function krediDiagnosticError(e,phase){const code=(e&&e.code)||'code_absent';const message=(e&&e.message)||String(e||'Erreur sans message');const status=e&&(e.status||e.customData&&e.customData.httpStatus);const name=e&&e.name||'Erreur';return 'DIAGNOSTIC '+phase+' | '+name+' | code='+code+(status?' | HTTP='+status:'')+' | message='+message;}
 function krediShowDiagnostic(e,phase){const detail=krediDiagnosticError(e,phase);krediStatus(detail+' · données locales conservées.');console.error('[COMPTIVA Firebase]',detail,e);}
 window.krediTogglePassword=function(){const p=document.getElementById('cloudPassword'),b=document.querySelector('.toggle-pass');if(!p||!b)return false;const show=p.type==='password';p.type=show?'text':'password';b.textContent=show?'Masquer':'Afficher';b.setAttribute('aria-pressed',show?'true':'false');return show};
+const krediPasswordToggleButton=document.querySelector('.toggle-pass');
+if(krediPasswordToggleButton&&!krediPasswordToggleButton.dataset.comptivaBound){
+  krediPasswordToggleButton.dataset.comptivaBound='1';
+  krediPasswordToggleButton.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();window.krediTogglePassword()});
+}
 let krediAuthMode='signin';
 function krediSetAuthMode(mode){krediAuthMode=mode;const h=document.getElementById('authHeading'),sub=document.getElementById('authSubtitle'),submit=document.getElementById('authSubmit'),create=document.getElementById('authCreate'),form=document.getElementById('authForm');if(!h||!sub||!submit||!create||!form)return;submit.type='button';submit.onclick=krediHandleLoginClick;form.onsubmit=function(event){event.preventDefault();event.stopPropagation();krediHandleLoginClick();return false};if(mode==='signup'){h.textContent='Créer votre compte COMPTIVA';sub.textContent='Commencez à gérer votre commerce simplement.';submit.textContent='Créer mon compte';create.textContent='J’ai déjà un compte · Se connecter';create.onclick=()=>krediSetAuthMode('signin')}else{h.textContent='Bienvenue sur COMPTIVA';sub.textContent='Connectez-vous pour accéder à votre commerce.';submit.textContent='↪  Se connecter';create.textContent='＋  Première visite ? Créer un compte';create.onclick=()=>krediSetAuthMode('signup')}krediAuthMessage('')}
 const KREDI_CREATOR_UID='ELopCSbMMrSTDEMCzNhchqonGci2';
