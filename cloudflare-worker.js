@@ -64,6 +64,22 @@ async function verifyCreator(request) {
   }
 }
 
+async function ensureCampaignTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS public_ad_campaigns (
+      request_id TEXT PRIMARY KEY,
+      duration_days INTEGER,
+      agreed_price_gnf INTEGER,
+      quote_status TEXT NOT NULL DEFAULT 'draft',
+      payment_status TEXT NOT NULL DEFAULT 'pending',
+      start_date TEXT,
+      end_date TEXT,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(request_id) REFERENCES public_ad_requests(id) ON DELETE CASCADE
+    )
+  `).run();
+}
+
 function clean(value, max) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
@@ -122,8 +138,9 @@ export default {
     if (url.pathname === "/api/admin/public-ads" && request.method === "GET") {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       try {
+        await ensureCampaignTable(env);
         const result = await env.DB.prepare(
-          "SELECT id, merchant_name, business_name, phone, format, description, city, status, admin_note, created_at, updated_at FROM public_ad_requests ORDER BY created_at DESC LIMIT 200"
+          "SELECT r.id, r.merchant_name, r.business_name, r.phone, r.format, r.description, r.city, r.status, r.admin_note, r.created_at, r.updated_at, c.duration_days, c.agreed_price_gnf, c.quote_status, c.payment_status, c.start_date, c.end_date FROM public_ad_requests r LEFT JOIN public_ad_campaigns c ON c.request_id = r.id ORDER BY r.created_at DESC LIMIT 200"
         ).all();
         return json({ ok: true, requests: result.results || [] }, 200, origin);
       } catch (_) {
@@ -140,14 +157,32 @@ export default {
       }
       const status = clean(body.status, 20);
       const adminNote = clean(body.adminNote, 500);
+      const durationDays = body.durationDays === null || body.durationDays === "" ? null : Number(body.durationDays);
+      const agreedPrice = body.agreedPriceGnf === null || body.agreedPriceGnf === "" ? null : Number(body.agreedPriceGnf);
+      const quoteStatus = clean(body.quoteStatus, 20) || "draft";
+      const paymentStatus = clean(body.paymentStatus, 20) || "pending";
+      const startDate = clean(body.startDate, 10);
+      const endDate = clean(body.endDate, 10);
+      const validDate = value => !value || /^\\d{4}-\\d{2}-\\d{2}$/.test(value);
       if (!["new", "in_progress", "done", "refused"].includes(status)) {
         return json({ error: "Statut non autorisé." }, 400, origin);
       }
+      if ((durationDays !== null && (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365)) ||
+          (agreedPrice !== null && (!Number.isSafeInteger(agreedPrice) || agreedPrice < 0)) ||
+          !["draft", "sent", "accepted", "refused"].includes(quoteStatus) ||
+          !["pending", "received"].includes(paymentStatus) ||
+          !validDate(startDate) || !validDate(endDate)) {
+        return json({ error: "Informations de campagne invalides." }, 400, origin);
+      }
       try {
+        await ensureCampaignTable(env);
         const result = await env.DB.prepare(
           "UPDATE public_ad_requests SET status = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         ).bind(status, adminNote || null, match[1]).run();
         if (!result.meta || result.meta.changes < 1) return json({ error: "Demande introuvable." }, 404, origin);
+        await env.DB.prepare(
+          "INSERT INTO public_ad_campaigns (request_id, duration_days, agreed_price_gnf, quote_status, payment_status, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(request_id) DO UPDATE SET duration_days=excluded.duration_days, agreed_price_gnf=excluded.agreed_price_gnf, quote_status=excluded.quote_status, payment_status=excluded.payment_status, start_date=excluded.start_date, end_date=excluded.end_date, updated_at=CURRENT_TIMESTAMP"
+        ).bind(match[1], durationDays, agreedPrice, quoteStatus, paymentStatus, startDate || null, endDate || null).run();
         return json({ ok: true }, 200, origin);
       } catch (_) {
         return json({ error: "Modification impossible." }, 500, origin);
