@@ -148,6 +148,46 @@ export default {
       }
     }
 
+    const videoMatch = url.pathname.match(/^\\/api\\/admin\\/public-ads\\/([a-f0-9-]{36})\\/video$/i);
+    if (videoMatch && request.method === "POST") {
+      if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
+      if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
+      let body;
+      try { body = await request.json(); } catch (_) { return json({ error: "Scénario invalide." }, 400, origin); }
+      const script = clean(body.script, 12000);
+      const spoken = [...script.matchAll(/Voix\\s*:\\s*[«"]([\\s\\S]*?)[»"]/g)].map(match => match[1].trim()).filter(Boolean);
+      const narration = spoken.join(" ");
+      if (!narration || narration.length > 7000) return json({ error: "Le scénario doit contenir des phrases de voix (Voix : « … »), dans une limite de 7 000 caractères." }, 400, origin);
+      const voiceId = clean(env.CREATOMATE_VOICE_ID || "XrExE9yKIg1WjnnlVkGX", 100);
+      const renderScript = {
+        output_format: "mp4", width: 1280, height: 720, fill_color: "#0b2e59",
+        elements: [
+          { type: "text", name: "Brand", text: "COMPTIVA", x: "50%", y: "30%", width: "88%", height: "18%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "800", font_size: "12 vmin", fill_color: "#ffffff" },
+          { type: "text", name: "Tagline", text: "Votre commerce, toujours sous contrôle.", x: "50%", y: "47%", width: "88%", height: "12%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "600", font_size: "4.5 vmin", fill_color: "#cfe3ff" },
+          { type: "audio", name: "Narration", track: 2, time: 0, source: narration, provider: "elevenlabs model_id=eleven_multilingual_v2 voice_id=" + voiceId + " stability=0.75" },
+          { type: "text", name: "Sous-titres", track: 3, time: 0, width: "90%", height: "34%", x: "50%", y: "78%", x_alignment: "50%", y_alignment: "50%", font_family: "Montserrat", font_weight: "600", font_size: "4 vmin", fill_color: "#ffffff", background_color: "rgba(0,0,0,0.45)", background_x_padding: "8%", background_y_padding: "5%", transcript_source: "Narration", transcript_effect: "highlight", transcript_split: "line", transcript_maximum_length: 80, transcript_color: "#9fd0ff" }
+        ]
+      };
+      try {
+        const renderResponse = await fetch("https://api.creatomate.com/v2/renders", { method: "POST", headers: { "Authorization": "Bearer " + env.CREATOMATE_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify(renderScript) });
+        const renderData = await renderResponse.json().catch(() => ({}));
+        if (!renderResponse.ok) return json({ error: clean(renderData.hint || renderData.message || renderData.error || "Creatomate a refusé la demande (HTTP " + renderResponse.status + ").", 500) }, 502, origin);
+        return json({ ok: true, render: { id: renderData.id, status: renderData.status, url: renderData.url || null } }, 202, origin);
+      } catch (_) { return json({ error: "Impossible de joindre Creatomate. Réessayez plus tard." }, 502, origin); }
+    }
+
+    const renderMatch = url.pathname.match(/^\\/api\\/admin\\/video-renders\\/([a-f0-9-]{36})$/i);
+    if (renderMatch && request.method === "GET") {
+      if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
+      if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
+      try {
+        const renderResponse = await fetch("https://api.creatomate.com/v2/renders/" + renderMatch[1], { headers: { "Authorization": "Bearer " + env.CREATOMATE_API_KEY } });
+        const renderData = await renderResponse.json().catch(() => ({}));
+        if (!renderResponse.ok) return json({ error: clean(renderData.hint || renderData.message || "Lecture du rendu impossible.", 500) }, 502, origin);
+        return json({ ok: true, render: { id: renderData.id, status: renderData.status, url: renderData.url || null } }, 200, origin);
+      } catch (_) { return json({ error: "Impossible de vérifier le rendu Creatomate." }, 502, origin); }
+    }
+
     const match = url.pathname.match(/^\/api\/admin\/public-ads\/([a-f0-9-]{36})$/i);
     if (match && request.method === "PUT") {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
