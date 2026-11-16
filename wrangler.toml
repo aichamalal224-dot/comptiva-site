@@ -1,0 +1,9 @@
+name = "comptiva-public-api"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-11-16"
+workers_dev = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "comptiva-ads"
+database_id = "212f29f7-5169-4a5c-ac8a-f82528fb7305"
