@@ -51,10 +51,10 @@ body{background:#f4f7fb}
 .nimba-mark{width:46px;height:42px;flex:0 0 46px;border-radius:13px;background:linear-gradient(145deg,#e5f8ef,#fff4d2);display:grid;place-items:center;border:1px solid #dce9df}
 .nimba-mark svg{width:35px;height:30px}
 .welcome-copy{font-weight:800;letter-spacing:-.45px;font-size:clamp(18px,2vw,24px);line-height:1.2}
-.welcome-copy .guinea-name{color:#009460}
+.welcome-copy .guinea-name{color:inherit}
 .welcome-tagline{font-size:12px;color:var(--muted);margin-top:5px}
 #page-dashboard .pagehead{position:relative;overflow:hidden;background:linear-gradient(120deg,#fff 0%,#f4fbf7 65%,#fff9e6 100%);color:var(--text);border:1px solid #e2eadf;box-shadow:0 8px 22px #12395b0b}
-#page-dashboard .pagehead:before{content:"";position:absolute;left:0;top:0;bottom:0;width:6px;background:linear-gradient(to bottom,#ce1126 0 33.33%,#fcd116 33.33% 66.66%,#009460 66.66% 100%)}
+#page-dashboard .pagehead:before{display:none}
 #page-dashboard .pagehead h2{color:#12395b}
 #page-dashboard .pagehead p{color:#607286}
 @media(max-width:680px){.app{padding-bottom:122px}.welcome-title{gap:9px}.nimba-mark{width:40px;height:38px;flex-basis:40px}.welcome-copy{font-size:18px}.welcome-tagline{font-size:11px}.topbar{border-top:0}.topbar small{display:block;font-size:12px}.stats{grid-template-columns:1fr!important}.stats .card{min-height:0!important;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;column-gap:12px;row-gap:4px}.stats .stat-icon{grid-column:2;grid-row:1/3;float:none}.stats .stat-label{grid-column:1;max-width:100%!important}.stats .stat-number{grid-column:1;font-size:21px!important;margin-top:0!important;overflow-wrap:anywhere}.notice.sync-note{line-height:1.5}}
@@ -121,12 +121,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
 .auth-logo:before{content:"";position:absolute;top:2px;left:18px;width:50px;height:28px;background:linear-gradient(90deg,#1769d2 0 30%,#1488c8 30% 65%,#07945f 65%);clip-path:polygon(0 100%,0 55%,30% 55%,30% 25%,65% 25%,65% 0,100% 0,100% 100%)}
 .auth-brand-name{font-size:clamp(30px,7vw,48px);font-weight:950;line-height:1;letter-spacing:-1.5px}
 .auth-brand-tag{font-size:clamp(12px,2.7vw,17px);font-weight:750;font-style:italic;margin-top:7px}
-/* Drapeau officiel de la Guinée : bandes verticales rouge, jaune, vert */
-.auth-flag{display:flex!important;flex-direction:row!important;width:72px;height:44px;border-radius:5px;overflow:hidden;margin-left:10px;flex:0 0 72px;box-shadow:0 2px 8px #102a430f}
-.auth-flag i{display:block!important;flex:1 1 0!important;width:33.333%!important;height:100%!important;background-image:none!important;opacity:1!important}
-.auth-flag i:nth-child(1){background:#CE1126!important}
-.auth-flag i:nth-child(2){background:#FCD116!important}
-.auth-flag i:nth-child(3){background:#009460!important}
+/* Drapeau retiré pour garder une identité visuelle sobre. */
 .auth-welcome{background:linear-gradient(110deg,#0752a5,#0b62b8);border-radius:24px;padding:24px 16px;color:white;text-align:center;box-shadow:0 8px 24px #0b4d9b24;margin-bottom:20px}
 .auth-welcome h1{font-size:clamp(25px,6vw,38px);margin:0 0 7px;font-weight:850}.auth-welcome p{font-size:clamp(14px,3.5vw,20px);font-style:italic;margin:0;color:#eef6ff}
 .auth-card{background:#fff;border:1px solid #d7e5fa;border-radius:24px;padding:24px;box-shadow:0 8px 26px #0b4d9b14}
@@ -138,7 +133,7 @@ body:not(.auth-ready) #authScreen{display:flex!important}
 .auth-message{min-height:22px;margin:12px 0 0;font-size:13px;text-align:center;color:#a12a32}.auth-message.ok{color:#08764e}.auth-small{text-align:center;font-size:12px;color:#65758c;margin-top:14px;line-height:1.5}
 .auth-mode{font-size:12px;color:#dcecff;margin-top:12px;min-height:18px}
 .top-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.top-actions .logout-btn{background:#eaf2ff;color:#082f68}
-@media(max-width:520px){#authScreen{padding:24px 12px 30px}.auth-brand{gap:10px;margin-bottom:18px}.auth-logo{width:62px;height:60px;font-size:30px}.auth-logo:before{width:38px;height:22px;left:11px}.auth-brand-name{font-size:30px}.auth-brand-tag{font-size:11px}.auth-flag{width:42px;height:28px;margin-left:0}.auth-welcome{padding:19px 12px;border-radius:19px}.auth-card{padding:17px;border-radius:20px}.auth-field input{height:57px;font-size:16px}.auth-primary{height:58px;font-size:18px}.auth-create{font-size:16px}}
+@media(max-width:520px){#authScreen{padding:24px 12px 30px}.auth-brand{gap:10px;margin-bottom:18px}.auth-logo{width:62px;height:60px;font-size:30px}.auth-logo:before{width:38px;height:22px;left:11px}.auth-brand-name{font-size:30px}.auth-brand-tag{font-size:11px}.auth-welcome{padding:19px 12px;border-radius:19px}.auth-card{padding:17px;border-radius:20px}.auth-field input{height:57px;font-size:16px}.auth-primary{height:58px;font-size:18px}.auth-create{font-size:16px}}
 
 
 /* COMPTIVA — tableau de bord après connexion, décliné comme le modèle fourni */
@@ -274,7 +269,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     <div class="auth-brand">
       <div class="auth-logo">KG</div>
       <div><div class="auth-brand-name">COMPTIVA</div><div class="auth-brand-tag">Votre commerce, toujours sous contrôle.</div></div>
-      <div class="auth-flag" aria-label="Drapeau de la Guinée"><i></i><i></i><i></i></div>
+      
     </div>
     <div class="auth-welcome"><h1 id="authHeading">Bienvenue sur COMPTIVA</h1><p id="authSubtitle">Connectez-vous pour accéder à votre commerce.</p></div>
     <div class="auth-card">
