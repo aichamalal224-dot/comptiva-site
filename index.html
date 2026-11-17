@@ -121,7 +121,12 @@ body:not(.auth-ready) #authScreen{display:flex!important}
 .auth-logo:before{content:"";position:absolute;top:2px;left:18px;width:50px;height:28px;background:linear-gradient(90deg,#1769d2 0 30%,#1488c8 30% 65%,#07945f 65%);clip-path:polygon(0 100%,0 55%,30% 55%,30% 25%,65% 25%,65% 0,100% 0,100% 100%)}
 .auth-brand-name{font-size:clamp(30px,7vw,48px);font-weight:950;line-height:1;letter-spacing:-1.5px}
 .auth-brand-tag{font-size:clamp(12px,2.7vw,17px);font-weight:750;font-style:italic;margin-top:7px}
-.auth-flag{display:flex;width:62px;height:38px;border-radius:5px;overflow:hidden;margin-left:10px;flex:0 0 auto}.auth-flag i{flex:1}.auth-flag i:nth-child(1){background:#ce1126}.auth-flag i:nth-child(2){background:#fcd116}.auth-flag i:nth-child(3){background:#009460}
+/* Drapeau officiel de la Guinée : bandes verticales rouge, jaune, vert */
+.auth-flag{display:flex!important;flex-direction:row!important;width:72px;height:44px;border-radius:5px;overflow:hidden;margin-left:10px;flex:0 0 72px;box-shadow:0 2px 8px #102a430f}
+.auth-flag i{display:block!important;flex:1 1 0!important;width:33.333%!important;height:100%!important;background-image:none!important;opacity:1!important}
+.auth-flag i:nth-child(1){background:#CE1126!important}
+.auth-flag i:nth-child(2){background:#FCD116!important}
+.auth-flag i:nth-child(3){background:#009460!important}
 .auth-welcome{background:linear-gradient(110deg,#0752a5,#0b62b8);border-radius:24px;padding:24px 16px;color:white;text-align:center;box-shadow:0 8px 24px #0b4d9b24;margin-bottom:20px}
 .auth-welcome h1{font-size:clamp(25px,6vw,38px);margin:0 0 7px;font-weight:850}.auth-welcome p{font-size:clamp(14px,3.5vw,20px);font-style:italic;margin:0;color:#eef6ff}
 .auth-card{background:#fff;border:1px solid #d7e5fa;border-radius:24px;padding:24px;box-shadow:0 8px 26px #0b4d9b14}
