@@ -775,9 +775,11 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
   let translationFramePending=false;
   const pendingTranslationRoots=new Set();
   const observer=new MutationObserver(records=>{
+    // En français, aucune traduction dynamique n'est nécessaire : ne pas
+    // parcourir le DOM à chaque mise à jour des tableaux et des indicateurs.
+    if(comptivaLanguage!=='en')return;
     for(const record of records){
-      if(record.type==='characterData')comptivaTranslateTextNode(record.target);
-      else if(record.addedNodes)record.addedNodes.forEach(node=>{
+      if(record.addedNodes)record.addedNodes.forEach(node=>{
         if(node.nodeType===Node.TEXT_NODE)comptivaTranslateTextNode(node);
         else if(node.nodeType===Node.ELEMENT_NODE)pendingTranslationRoots.add(node);
       });
@@ -791,7 +793,9 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
       roots.forEach(node=>{if(node.isConnected)comptivaTranslateElement(node)});
     });
   });
-  observer.observe(document.body,{subtree:true,childList:true,characterData:true});
+  // Les changements de texte seuls sont ignorés : les nouveaux blocs HTML
+  // restent traduits, sans observer en continu chaque compteur et message.
+  observer.observe(document.body,{subtree:true,childList:true});
 })();
 
 // Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
