@@ -1201,11 +1201,11 @@ async function krediSignIn(){
       })
     ]).finally(()=>clearTimeout(authRequestTimer));
     if(!credential||!credential.user)throw Object.assign(new Error('Firebase n’a pas retourné de compte utilisateur.'),{code:'auth/no-user'});
+    // L'écouteur onAuthStateChanged est l'unique responsable de l'ouverture
+    // du tableau de bord et du chargement des données. Ne pas initialiser ici
+    // une deuxième fois l'interface : cela provoquait deux renderAll concurrents.
     krediUser=credential.user;
-    krediUseAccountStore(credential.user.uid);
-    krediShowApp(credential.user);
-    renderAll();
-    krediAuthMessage('Connexion réussie. Votre commerce est ouvert.',true);
+    krediAuthMessage('Connexion réussie. Ouverture de votre commerce…',true);
     krediStatus('Compte connecté. Vérification de la synchronisation en ligne…');
   }catch(e){
     console.error('[COMPTIVA] Échec de connexion Firebase Auth :',e);
