@@ -994,11 +994,19 @@ async function krediInitFirebase(){try{
   krediAuth.onAuthStateChanged(async user=>{
     krediAuthStateReceived=true;
     clearTimeout(krediAuthWaitTimer);
-    krediUser=user||null;krediCloudReady=false;krediServerReady=false;
-    krediLocalDirty=!!(user&&localStorage.getItem('comptiva_pending_'+user.uid)==='1');
+    // Firebase peut encore livrer son état initial "déconnecté" pendant
+    // qu'une demande de connexion est en cours. Ne pas renvoyer l'utilisateur
+    // à l'accueil dans ce cas ; vérifier aussi l'état courant de Firebase.
+    const activeUser=user||krediAuth.currentUser||null;
+    if(!activeUser&&krediSignInInFlight){
+      krediStatus('Connexion en cours… vérification de la session Firebase.');
+      return;
+    }
+    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;
+    krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1');
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
-    if(!user){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
-    krediUseAccountStore(user.uid);krediShowApp(user);renderAll();
+    if(!activeUser){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
+    krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
       const firestoreReady=await window.__comptivaFirestoreSdkReady;
