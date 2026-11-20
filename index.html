@@ -1026,9 +1026,9 @@ async function krediInitFirebase(){try{
       krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
       return;
     }
-    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else krediTrackMerchant(user);
+    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else krediTrackMerchant(activeUser);
     krediStatus('Compte connecté. Vérification des données en ligne…');
-    const activeUid=user.uid;
+    const activeUid=activeUser.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
     let serverProbeFinished=false;
     const serverProbeTimer=setTimeout(()=>{
