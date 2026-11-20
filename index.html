@@ -73,6 +73,13 @@ body{background:#f4f7fb}
 body{background:#f4f7fd;color:var(--text)}
 .sidebar{background:#082f68}
 .topbar{background:#082f68;color:#fff;border:0;padding:20px 28px;min-height:104px}
+/* Drapeau guinéen : rappel discret en haut à droite */
+.topbar{position:relative;padding-right:42px}
+.topbar:after{content:"";position:absolute;right:0;top:0;bottom:0;width:9px;background:linear-gradient(to bottom,#ce1126 0 33.333%,#fcd116 33.333% 66.666%,#009460 66.666% 100%);border-radius:0 0 0 8px;pointer-events:none}
+.auth-brand{position:relative}
+.auth-brand:after{content:"";position:absolute;right:-28px;top:-8px;width:34px;height:23px;border-radius:3px;background:linear-gradient(to bottom,#ce1126 0 33.333%,#fcd116 33.333% 66.666%,#009460 66.666% 100%);box-shadow:0 1px 4px #082f6826}
+@media(max-width:680px){.auth-brand:after{right:0;top:-12px;width:29px;height:19px}.topbar{padding-right:28px}}
+
 .topbar h1,.topbar small{color:#fff}.topbar small{opacity:.82}
 .welcome-title{gap:14px}.kg-mark{width:54px;height:54px;flex:0 0 54px;border-radius:50%;background:#fff;color:#082f68;display:grid;place-items:center;font-size:20px;font-weight:900;letter-spacing:-1px}
 .welcome-copy{font-size:clamp(20px,2.3vw,28px);font-weight:850;color:#fff}.welcome-copy .guinea-name{color:#fff}.welcome-tagline{color:#dce8ff;font-size:14px}.top-actions .primary{background:#fff;color:#082f68}
