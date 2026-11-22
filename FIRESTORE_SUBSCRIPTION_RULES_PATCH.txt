@@ -1,0 +1,46 @@
+À APPLIQUER DANS FIREBASE CONSOLE → FIRESTORE DATABASE → RULES
+
+Remplacer uniquement le bloc existant :
+match /merchantSubscriptions/{merchantUid} { ... }
+
+par le bloc ci-dessous. Conserver tous les autres blocs existants (/users, /merchantDirectory et les autres collections) sans modification.
+
+match /merchantSubscriptions/{merchantUid} {
+  // Le Créateur garde l'administration complète des abonnements.
+  allow read, write: if isCreator();
+
+  // Un commerçant peut consulter uniquement sa propre fiche.
+  allow get: if signedIn() &&
+    (request.auth.uid == merchantUid || isCreator());
+
+  // Création unique de la fiche d'essai par le commerçant lui-même.
+  // Aucun droit merchant update/delete : impossible de prolonger ou réinitialiser
+  // l'essai depuis le navigateur après la création.
+  allow create: if signedIn() &&
+    request.auth.uid == merchantUid &&
+    request.resource.data.keys().hasOnly([
+      'uid', 'status', 'trialStart', 'trialEnd',
+      'createdAt', 'updatedAt'
+    ]) &&
+    request.resource.data.keys().hasAll([
+      'uid', 'status', 'trialStart', 'trialEnd',
+      'createdAt', 'updatedAt'
+    ]) &&
+    request.resource.data.uid == merchantUid &&
+    request.resource.data.status == 'trial' &&
+    request.resource.data.trialStart == request.time &&
+    request.resource.data.createdAt == request.time &&
+    request.resource.data.updatedAt == request.time &&
+    request.resource.data.trialEnd > request.time &&
+    request.resource.data.trialEnd <= request.time + duration.value(14, 'd');
+
+  // Modification et suppression réservées au Créateur.
+  allow update, delete: if isCreator();
+}
+
+IMPORTANT
+- Les fonctions signedIn() et isCreator() doivent déjà exister dans vos règles.
+- isCreator() doit vérifier l'UID propriétaire déjà utilisé par COMPTIVA.
+- Publier les règles après avoir remplacé ce seul bloc.
+- Ne pas ajouter de règle générale allow read, write: if true.
+- Cette règle ne connecte pas encore les paiements Mobile Money : elle enregistre uniquement l'essai gratuit et permet au Créateur de consulter l'état des fiches.
