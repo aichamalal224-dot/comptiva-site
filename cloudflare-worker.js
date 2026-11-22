@@ -173,7 +173,7 @@ export default {
         const ad = await env.DB.prepare("SELECT id FROM public_ad_requests WHERE id = ?").bind(videoMatch[1]).first();
         if (!ad) return json({ error: "Demande publicitaire introuvable." }, 404, origin);
         const previous = await env.DB.prepare("SELECT render_id, status, render_url FROM public_ad_video_renders WHERE request_id = ?").bind(videoMatch[1]).first();
-        if (previous && previous.render_id && ["planned", "processing", "queued", "running", "succeeded"].includes(String(previous.status || "").toLowerCase())) {
+        if (previous && previous.render_id && ["planned", "processing", "queued", "running"].includes(String(previous.status || "").toLowerCase())) {
           return json({ ok: true, reused: true, render: { id: previous.render_id, status: previous.status, url: previous.render_url || null } }, 200, origin);
         }
       } catch (_) {
