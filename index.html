@@ -444,7 +444,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
       </div>
       <div class="card" style="margin-bottom:14px"><h3>Informations sur l’abonnement</h3><p>Bienvenue sur <b>COMPTIVA</b>. Gérez vos ventes, vos clients, les crédits, les remboursements et votre stock au même endroit.</p><p><b>Tarif : 75 000 GNF pour 30 jours, après 14 jours d’essai.</b></p><div class="notice"><b>Coordonnées de paiement non configurées.</b><br>Le numéro Orange Money du bénéficiaire doit être confirmé et renseigné par le Créateur. Le paiement MTN Mobile Money n’est pas encore disponible.</div><p>Ne transférez aucun argent vers un numéro communiqué en dehors d’une page de paiement officielle. N’indiquez jamais votre code PIN ni un code SMS.</p><button class="soft" onclick="copyMerchantMessage()">Copier les informations sur l’abonnement</button></div>
       <div class="layout">
-        <div class="card"><h3>1. Essai gratuit</h3><p>Tu peux démarrer l’essai de démonstration. La date de fin sera enregistrée sur cet appareil.</p><button class="primary" onclick="startTrial()">Démarrer les 14 jours gratuits</button></div>
+        <div class="card"><h3>1. Essai gratuit</h3><p>Les dates de début et de fin seront enregistrées dans Firebase et associées à ton compte.</p><button class="primary" id="startTrialButton" onclick="startTrial()">Démarrer les 14 jours gratuits</button></div>
         <div class="card"><h3>2. Moyens de paiement</h3><div class="notice" style="margin-top:10px"><b>Orange Money :</b> coordonnées en attente de configuration officielle.<br><b>MTN Mobile Money :</b> pas encore disponible.<br><b>Montant prévu :</b> 75 000 GNF pour 30 jours.</div><p class="footer">Aucun transfert ne doit être effectué tant que les coordonnées officielles ne sont pas affichées ici.</p></div>
         <div class="card"><h3>3. Envoyer la demande de vérification</h3><div class="field"><label for="manualBusiness">Nom de la boutique / entreprise</label><input id="manualBusiness" maxlength="80" placeholder="Ex. Boutique Aminata" required></div><div class="field"><label for="manualPhone">Téléphone du commerçant (facultatif)</label><input id="manualPhone" maxlength="30" placeholder="Ex. +224..."></div><div class="field"><label for="manualReference">Référence de la transaction</label><input id="manualReference" maxlength="80" placeholder="Référence Orange Money"></div><div class="field"><label for="manualMethod">Moyen utilisé</label><select id="manualMethod"><option>Orange Money</option><option>MTN MoMo</option><option>Virement</option><option>Autre</option></select></div><button class="green" onclick="submitManualPayment()">Envoyer pour vérification</button><p class="footer">N’indique jamais ton code PIN ni un code SMS. La demande ne confirme pas que l’argent a été reçu.</p></div>
       </div>
@@ -454,9 +454,9 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     </section>
     <section id="page-creator" class="hidden">
       <div class="pagehead"><div><h2>🛡️ Espace Créateur COMPTIVA</h2><p>Vue réservée au compte propriétaire de la plateforme.</p></div><button class="soft" onclick="loadCreatorDirectory();loadCreatorPublicAds()">↻ Actualiser</button></div>
-      <div class="notice">Accès réservé au compte Créateur autorisé. Cette première version affiche uniquement les comptes présents dans le répertoire des commerçants. Les abonnements et paiements ne sont pas encore centralisés ni automatisés.</div>
-      <div class="stats"><div class="card"><div class="stat-label">Commerçants répertoriés</div><div class="stat-number" id="creatorMerchantCount">—</div></div><div class="card"><div class="stat-label">État du répertoire</div><div class="stat-number" id="creatorDirectoryStatus">À charger</div></div></div>
-      <div class="card"><h3>Comptes commerçants</h3><div id="creatorMerchantList" class="table-wrap"><div class="empty">Chargement du répertoire sécurisé…</div></div></div>
+      <div class="notice">Accès réservé au compte Créateur autorisé. Le répertoire des commerçants et l’état des essais/abonnements sont consultés séparément. Les paiements Mobile Money ne sont pas encore connectés.</div>
+      <div class="stats"><div class="card"><div class="stat-label">Commerçants répertoriés</div><div class="stat-number" id="creatorMerchantCount">—</div></div><div class="card"><div class="stat-label">Abonnements en attente</div><div class="stat-number" id="creatorPendingSubscriptionCount">—</div></div><div class="card"><div class="stat-label">État du répertoire</div><div class="stat-number" id="creatorDirectoryStatus">À charger</div></div></div>
+      <div class="card"><h3>Comptes commerçants</h3><div id="creatorMerchantList" class="table-wrap"><div class="empty">Chargement du répertoire sécurisé…</div></div></div><div class="card" style="margin-top:16px"><h3>Suivi des essais et abonnements</h3><p>Un commerçant sans fiche d’abonnement est compté comme « En attente ».</p><div id="creatorSubscriptionList" class="table-wrap"><div class="empty">Chargement des abonnements…</div></div></div>
       <div class="card" style="margin-top:16px"><div class="pagehead"><div><h3>Demandes COMPTIVA PUB</h3><p>Demandes enregistrées dans Cloudflare D1. Le Créateur peut modifier le statut et ajouter une note. La publication et les paiements ne sont pas encore automatisés.</p></div><button class="soft" type="button" onclick="loadCreatorPublicAds()">↻ Actualiser les demandes</button></div><div id="creatorPublicAdsStatus" class="notice">Chargement des demandes…</div><div id="creatorPublicAdsList"><div class="empty">Aucune demande chargée.</div></div></div>
     </section>
     <section id="page-form" class="hidden">
@@ -718,7 +718,48 @@ body{background:#f4f7fd;color:var(--text)}
 .mobile-tools button{font-weight:700}
 @media(min-width:681px){.mobile-tools{display:none}}
 </style></head><body><h1>Comptiva</h1><p class="center">Reçu de vente</p><div class="line"></div><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(s.date))}</p><p><b>Client :</b> ${esc(client)}</p><div class="line"></div><div class="item"><span>${esc(s.product)} × ${esc(String(s.quantity))}</span><span>${money(s.total)}</span></div><p class="small">Prix unitaire : ${money(s.unitPrice)}</p><div class="line"></div><div class="item total"><span>Total</span><span>${money(s.total)}</span></div><div class="item"><span>Mode de paiement</span><span>${esc(s.method||'Espèces')}</span></div><div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div><div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div><div class="line"></div><p class="center">Merci pour votre achat !</p><p class="center small">Reçu généré avec Comptiva</p><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\/script></body></html>`);w.document.close()}
-function startTrial(){if(subscription.trialStart){flash('L’essai a déjà été démarré sur cet appareil.');renderSubscription();return}let now=new Date();subscription.trialStart=now.toISOString();let end=new Date(now);end.setDate(end.getDate()+14);subscription.trialEnd=end.toISOString();saveSubscription();flash('Essai de démonstration démarré pour 14 jours.')}
+function krediApplyCloudTrial(data){
+ if(!data||typeof data!=='object'){delete subscription.trialStart;delete subscription.trialEnd;saveSubscription();return}
+ const start=data.trialStart&&typeof data.trialStart.toDate==='function'?data.trialStart.toDate().toISOString():(data.trialStart||null);
+ const end=data.trialEnd&&typeof data.trialEnd.toDate==='function'?data.trialEnd.toDate().toISOString():(data.trialEnd||null);
+ subscription.trialStart=start;subscription.trialEnd=end;subscription.cloudStatus=data.status||'trial';saveSubscription();
+}
+async function krediLoadMerchantSubscription(){
+ if(!krediUser||krediIsCreator()||!krediStore)return;
+ try{
+  const snap=await krediStore.collection('merchantSubscriptions').doc(krediUser.uid).get({source:'server'});
+  if(!krediUser||!snap)return;
+  krediApplyCloudTrial(snap.exists?snap.data():null);
+ }catch(error){console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);krediStatus('Compte connecté. Lecture de l’abonnement impossible pour le moment : '+(error.code||'erreur Firebase'))}
+}
+async function startTrial(){
+ const button=document.getElementById('startTrialButton');
+ if(!krediUser||krediIsCreator()){flash('Connecte-toi avec un compte commerçant pour démarrer l’essai.');return}
+ if(!krediStore||!navigator.onLine){flash('Connexion Firebase nécessaire pour démarrer et enregistrer les 14 jours. Aucun essai local ne sera créé.');return}
+ if(button){button.disabled=true;button.textContent='Enregistrement dans Firebase…'}
+ try{
+  const ref=krediStore.collection('merchantSubscriptions').doc(krediUser.uid);
+  const existing=await ref.get({source:'server'});
+  if(existing.exists){krediApplyCloudTrial(existing.data());flash('Une fiche d’abonnement existe déjà. La période d’essai ne peut pas être redémarrée.');return}
+  const now=new Date(),end=new Date(now.getTime()+14*24*60*60*1000);
+  await ref.set({
+   uid:krediUser.uid,status:'trial',
+   trialStart:firebase.firestore.FieldValue.serverTimestamp(),
+   trialEnd:firebase.firestore.Timestamp.fromDate(end),
+   createdAt:firebase.firestore.FieldValue.serverTimestamp(),
+   updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+  });
+  const saved=await ref.get({source:'server'});
+  if(!saved.exists)throw new Error('La fiche d’essai n’a pas été confirmée par Firebase.');
+  krediApplyCloudTrial(saved.data());
+  flash('Essai gratuit de 14 jours enregistré dans Firebase.');
+ }catch(error){
+  console.error('[COMPTIVA] Création de l’essai Firebase refusée ou impossible',error);
+  flash('Impossible d’enregistrer l’essai dans Firebase ('+(error.code||error.message||'erreur')+'). Vérifie les règles Firestore.');
+ }finally{
+  if(button){button.disabled=false;button.textContent='Démarrer les 14 jours gratuits'}
+ }
+}
 function copyMerchantMessage(){const msg='Bienvenue sur COMPTIVA, votre application de gestion commerciale.\n\nAbonnement : 75 000 GNF pour 30 jours, après 14 jours d’essai gratuit.\n\nLes coordonnées officielles Orange Money ne sont pas encore configurées. MTN Mobile Money n’est pas encore disponible. Aucun paiement ne doit être envoyé tant que les coordonnées officielles ne sont pas affichées dans COMPTIVA.\n\nLa demande de paiement enregistrée dans cette version est une démonstration locale : elle ne confirme pas la réception d’argent et n’active pas un abonnement. Ne communiquez jamais votre code PIN ni un code SMS.';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>alert('Informations copiées.')).catch(()=>alert(msg));}else{alert(msg)}}
 function showPaymentInfo(){alert('Démonstration uniquement : aucun paiement réel n’est activé. La prochaine étape technique sera de choisir un prestataire Mobile Money, vérifier ses frais et intégrer son API de paiement et ses confirmations serveur.')}
 function submitManualPayment(){let business=document.getElementById('manualBusiness').value.trim(),phone=document.getElementById('manualPhone').value.trim(),ref=document.getElementById('manualReference').value.trim(),method=document.getElementById('manualMethod').value;if(!business||!ref){alert('Indique le nom de la boutique et la référence de transaction.');return}if(subscription.requests.some(x=>x.reference.toLowerCase()===ref.toLowerCase())){alert('Cette référence existe déjà dans cet appareil. Vérifie-la avant de renvoyer.');return}subscription.requests.unshift({id:id('PAY'),business,phone,reference:ref,method,date:new Date().toISOString(),status:'En attente de vérification',amount:75000});saveSubscription();document.getElementById('manualBusiness').value='';document.getElementById('manualPhone').value='';document.getElementById('manualReference').value='';flash('Demande enregistrée localement. Le paiement reste en attente de vérification.')} 
@@ -842,7 +883,43 @@ const KREDI_CREATOR_UID='ELopCSbMMrSTDEMCzNhchqonGci2';
 function krediIsCreator(){return !!(krediUser&&krediUser.uid===KREDI_CREATOR_UID)}
 function krediShowApp(user){document.body.classList.add('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.setAttribute('aria-hidden','true');const allowed=!!(user&&user.uid===KREDI_CREATOR_UID);['creatorNav','creatorTopButton'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('hidden',!allowed)});const legacy=document.getElementById('legacyAdminDemo');if(legacy)legacy.classList.add('hidden');if(typeof navigate==='function')navigate('dashboard');const who=document.getElementById('topTitle');if(who)who.textContent='Tableau de bord';const subtitle=document.querySelector('.topbar .welcome-tagline');if(subtitle)subtitle.textContent='Votre commerce, toujours sous contrôle. · '+(user.email||'Compte connecté');}
 function krediShowLogin(){document.body.classList.remove('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.removeAttribute('aria-hidden');krediSetAuthMode('signin');}
-async function loadCreatorDirectory(){const list=document.getElementById('creatorMerchantList');if(!list)return;if(!krediIsCreator()){list.innerHTML='<div class="empty">Accès refusé.</div>';return}if(!krediStore){list.innerHTML='<div class="empty">Firestore n’est pas encore disponible. Réessayez lorsque la synchronisation est prête.</div>';const st=document.getElementById('creatorDirectoryStatus');if(st)st.textContent='Hors ligne';return}list.innerHTML='<div class="empty">Lecture sécurisée du répertoire…</div>';try{const snap=await krediStore.collection('merchantDirectory').get();if(!krediIsCreator())return;const rows=[];snap.forEach(doc=>{const d=doc.data()||{};const created=d.updatedAt&&typeof d.updatedAt.toDate==='function'?d.updatedAt.toDate().toLocaleDateString('fr-FR'):(d.updatedAt?String(d.updatedAt):'—');rows.push('<tr><td>'+esc(d.displayName||'—')+'</td><td>'+esc(d.email||'—')+'</td><td>'+esc(doc.id)+'</td><td>'+esc(created)+'</td></tr>')});const count=document.getElementById('creatorMerchantCount'),status=document.getElementById('creatorDirectoryStatus');if(count)count.textContent=String(rows.length);if(status)status.textContent='Connecté';list.innerHTML=rows.length?'<table><thead><tr><th>Commerçant</th><th>E-mail</th><th>UID</th><th>Dernière activité</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant trouvé dans merchantDirectory.</div>'}catch(e){console.error('[COMPTIVA Créateur] Lecture merchantDirectory refusée ou indisponible',e);const status=document.getElementById('creatorDirectoryStatus');if(status)status.textContent='Erreur';list.innerHTML='<div class="notice">Impossible de lire le répertoire des commerçants. Vérifiez que les règles Firestore autorisent la lecture de merchantDirectory uniquement pour le compte Créateur. Code : '+esc(e.code||'erreur')+'</div>'}}
+async function loadCreatorDirectory(){
+ const list=document.getElementById('creatorMerchantList'),subList=document.getElementById('creatorSubscriptionList');
+ if(!list)return;
+ if(!krediIsCreator()){list.innerHTML='<div class="empty">Accès refusé.</div>';if(subList)subList.innerHTML='';return}
+ if(!krediStore){list.innerHTML='<div class="empty">Firestore n’est pas encore disponible. Réessayez lorsque la synchronisation est prête.</div>';if(subList)subList.innerHTML='<div class="empty">Firestore indisponible.</div>';const st=document.getElementById('creatorDirectoryStatus');if(st)st.textContent='Hors ligne';return}
+ list.innerHTML='<div class="empty">Lecture sécurisée du répertoire…</div>';if(subList)subList.innerHTML='<div class="empty">Lecture des abonnements…</div>';
+ try{
+  const snap=await krediStore.collection('merchantDirectory').get();
+  if(!krediIsCreator())return;
+  const merchants=[];snap.forEach(doc=>merchants.push({uid:doc.id,data:doc.data()||{}}));
+  const rows=merchants.map(({uid,data:d})=>{const created=d.updatedAt&&typeof d.updatedAt.toDate==='function'?d.updatedAt.toDate().toLocaleDateString('fr-FR'):(d.updatedAt?String(d.updatedAt):'—');return '<tr><td>'+esc(d.displayName||'—')+'</td><td>'+esc(d.email||'—')+'</td><td>'+esc(uid)+'</td><td>'+esc(created)+'</td></tr>'});
+  const count=document.getElementById('creatorMerchantCount'),status=document.getElementById('creatorDirectoryStatus');if(count)count.textContent=String(rows.length);if(status)status.textContent='Connecté';
+  list.innerHTML=rows.length?'<table><thead><tr><th>Commerçant</th><th>E-mail</th><th>UID</th><th>Dernière activité</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant trouvé dans merchantDirectory.</div>';
+  const subscriptionDocs=await Promise.all(merchants.map(async merchant=>{try{const doc=await krediStore.collection('merchantSubscriptions').doc(merchant.uid).get();return {merchant,exists:doc.exists,data:doc.exists?(doc.data()||{}):{}}}catch(error){return {merchant,error}}}));
+  if(!krediIsCreator())return;
+  const pending=subscriptionDocs.filter(x=>x.error||!x.exists||!['active','paid'].includes(String(x.data.status||'').toLowerCase()));
+  const pendingCount=document.getElementById('creatorPendingSubscriptionCount');if(pendingCount)pendingCount.textContent=String(pending.length);
+  if(subList){
+   const subRows=subscriptionDocs.map(x=>{
+    const d=x.merchant.data||{},sub=x.data||{};
+    let state='En attente',end='—';
+    if(x.error)state='Lecture impossible';
+    else if(!x.exists)state='En attente · aucune fiche';
+    else if(['active','paid'].includes(String(sub.status||'').toLowerCase())){state='Actif';if(sub.paidUntil&&sub.paidUntil.toDate)end=sub.paidUntil.toDate().toLocaleDateString('fr-FR')}
+    else if(sub.status==='trial'){const dt=sub.trialEnd&&sub.trialEnd.toDate?sub.trialEnd.toDate():new Date(sub.trialEnd||0);if(dt instanceof Date&&!isNaN(dt)&&dt>new Date()){state='Essai gratuit';end=dt.toLocaleDateString('fr-FR')}else state='Essai terminé';}
+    else state=String(sub.status||'En attente');
+    return '<tr><td>'+esc(d.displayName||d.email||x.merchant.uid)+'</td><td>'+esc(state)+'</td><td>'+esc(end)+'</td></tr>';
+   });
+   subList.innerHTML=subRows.length?'<table><thead><tr><th>Commerçant</th><th>État</th><th>Échéance</th></tr></thead><tbody>'+subRows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant répertorié.</div>';
+  }
+ }catch(e){
+  console.error('[COMPTIVA Créateur] Lecture du répertoire ou des abonnements refusée',e);
+  const status=document.getElementById('creatorDirectoryStatus');if(status)status.textContent='Erreur';
+  list.innerHTML='<div class="notice">Impossible de lire le répertoire des commerçants. Code : '+esc(e.code||'erreur')+'</div>';
+  if(subList)subList.innerHTML='<div class="notice">Impossible de lire les abonnements. Vérifiez les règles Firestore merchantSubscriptions. Code : '+esc(e.code||'erreur')+'</div>';
+ }
+}
 const COMPTIVA_PUBLIC_API='https://comptiva-public-api.aichamalal224.workers.dev';
 async function loadCreatorPublicAds(){
  const list=document.getElementById('creatorPublicAdsList');
@@ -1100,7 +1177,7 @@ async function krediInitFirebase(){try{
       krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
       return;
     }
-    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else krediTrackMerchant(activeUser);
+    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);krediLoadMerchantSubscription();}
     krediStatus('Compte connecté. Vérification des données en ligne…');
     const activeUid=activeUser.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
