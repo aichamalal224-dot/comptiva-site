@@ -865,7 +865,27 @@ async function loadCreatorPublicAds(){
   list.innerHTML=requests.map(item=>{
    const options=Object.keys(statuses).map(key=>'<option value="'+key+'"'+(item.status===key?' selected':'')+'>'+statuses[key]+'</option>').join('');
    const videoScript=(()=>{const business=String(item.business_name||'Votre commerce').replace(/[\r\n«»"]/g,' ').trim().slice(0,90)||'Votre commerce';const city=String(item.city||'Guinée').replace(/[\r\n«»"]/g,' ').trim().slice(0,70)||'Guinée';const detail=String(item.description||'').replace(/[\r\n«»"]/g,' ').replace(/\s+/g,' ').trim().slice(0,220)||'Des produits et services de qualité pour vous';const phone=String(item.phone||'').replace(/[\r\n«»"]/g,' ').trim().slice(0,40);return 'SCÈNE 1 — '+business+'\nVisuel : Présentation de '+business+' à '+city+'\nVoix : « Bienvenue chez '+business+', votre commerce de proximité à '+city+'. »\n\nSCÈNE 2 — Nos produits et services\nVisuel : '+detail+'\nVoix : « Découvrez nos produits et services : '+detail+'. Nous sommes heureux de vous accueillir. »\n\nSCÈNE 3 — Contactez-nous\nVisuel : '+business+' — '+city+(phone?' — '+phone:'')+'\nVoix : « Retrouvez '+business+' à '+city+'. '+(phone?'Contactez-nous au '+phone+'. ':'')+'À très bientôt ! »';})();
-   const videoAction=item.format==='video'?'<div style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><b>Créer la vidéo publicitaire MP4</b><textarea data-ad-video-script rows="9" style="display:block;width:100%;box-sizing:border-box;padding:10px;margin:8px 0;border:1px solid var(--line);border-radius:8px;font-size:13px">'+esc(videoScript)+'</textarea><button class="primary" type="button" onclick="generateCreatorAdVideo(this)">Générer la vidéo MP4 avec voix</button><p data-ad-video-status class="footer" aria-live="polite">Vérifiez le texte avant de lancer. La génération peut consommer les crédits du compte Creatomate et du service de voix.</p></div>':'';
+    const videoAction=(()=>{
+     if(item.format!=='video')return '';
+     const renderId=String(item.video_render_id||'');
+     const renderStatus=String(item.video_render_status||'').toLowerCase();
+     const renderUrl=String(item.video_render_url||'');
+     let actionButton='';
+     let initialStatus='Vérifiez le texte avant de lancer. La génération peut consommer les crédits du compte Creatomate et du service de voix.';
+     let savedLink='';
+     if(renderId&&renderStatus==='succeeded'&&renderUrl){
+      savedLink='<p><b>Vidéo prête :</b> <a href="'+esc(renderUrl)+'" target="_blank" rel="noopener">Ouvrir / télécharger le MP4</a></p>';
+      actionButton='<button class="primary" type="button" onclick="generateCreatorAdVideo(this)">Générer une nouvelle version</button>';
+      initialStatus='Dernier rendu terminé et enregistré.';
+     }else if(renderId&&['planned','processing','queued','running'].includes(renderStatus)){
+      actionButton='<button class="primary" type="button" data-render-id="'+esc(renderId)+'" onclick="checkCreatorAdVideo(this)">Reprendre la vérification</button>';
+      initialStatus='Rendu enregistré · statut : '+esc(renderStatus)+'. Aucune nouvelle génération ne sera lancée.';
+     }else{
+      if(renderId&&renderStatus==='failed')initialStatus='Le dernier rendu a échoué : '+esc(item.video_render_error||'erreur signalée par Creatomate')+'. Vous pouvez vérifier le scénario avant de relancer.';
+      actionButton='<button class="primary" type="button" onclick="generateCreatorAdVideo(this)">Générer la vidéo MP4 avec voix</button>';
+     }
+     return '<div style="margin-top:12px;padding:12px;border:1px solid var(--line);border-radius:10px"><b>Créer la vidéo publicitaire MP4</b>'+savedLink+'<textarea data-ad-video-script rows="9" style="display:block;width:100%;box-sizing:border-box;padding:10px;margin:8px 0;border:1px solid var(--line);border-radius:8px;font-size:13px">'+esc(videoScript)+'</textarea>'+actionButton+'<p data-ad-video-status class="footer" aria-live="polite">'+initialStatus+'</p></div>';
+    })();
    return '<article class="card" data-ad-id="'+esc(item.id)+'" data-ad-format="'+esc(item.format||'')+'" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>'+esc(item.business_name||'Commerce')+'</strong><span>'+esc(statuses[item.status]||item.status||'Nouvelle')+'</span></div><p><b>Commerçant :</b> '+esc(item.merchant_name||'—')+'<br><b>Téléphone :</b> '+esc(item.phone||'—')+'<br><b>Format :</b> '+esc(labels[item.format]||item.format||'—')+'<br><b>Ville :</b> '+esc(item.city||'—')+'<br><b>Reçue le :</b> '+esc(item.created_at||'—')+'</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(item.description||'')+'</p>'+videoAction+'<label>Statut<select data-ad-status style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+options+'</select></label><label>Note Créateur<textarea data-ad-note rows="2" maxlength="500" style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+esc(item.admin_note||'')+'</textarea></label><button class="primary" type="button" onclick="updateCreatorAdRequest(this)">Enregistrer le statut et la note</button></article>';
   }).join('');
  }catch(error){
@@ -874,12 +894,49 @@ async function loadCreatorPublicAds(){
   list.innerHTML='<div class="empty">Vérifiez que le Worker est déployé et que vous êtes connecté avec le compte Créateur autorisé.</div>';
  }
 }
+
+async function pollCreatorAdVideo(card,renderId,button,status,maxAttempts){
+ for(let attempt=0;attempt<(maxAttempts||40);attempt++){
+  if(attempt>0)await new Promise(resolve=>setTimeout(resolve,3000));
+  const checkToken=await krediUser.getIdToken();
+  const check=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/video-renders/'+encodeURIComponent(renderId),{headers:{Authorization:'Bearer '+checkToken},cache:'no-store'});
+  const data=await check.json().catch(()=>({}));
+  if(!check.ok||!data.ok||!data.render)throw new Error(data.error||('Vérification du rendu impossible (HTTP '+check.status+').'));
+  const render=data.render;card.setAttribute('data-render-id',renderId);
+  if(render.status==='succeeded'&&render.url){
+   status.innerHTML='Vidéo prête : <a href="'+esc(render.url)+'" target="_blank" rel="noopener">Ouvrir / télécharger le MP4</a>';
+   button.textContent='Générer une nouvelle version';button.removeAttribute('data-render-id');
+   button.onclick=function(){generateCreatorAdVideo(button)};return true;
+  }
+  if(render.status==='failed'){
+   status.textContent='Le rendu a échoué : '+(render.error_message||'erreur signalée par Creatomate')+'. Vérifiez le scénario avant une nouvelle tentative.';
+   button.textContent='Générer une nouvelle version';button.removeAttribute('data-render-id');
+   button.onclick=function(){generateCreatorAdVideo(button)};return true;
+  }
+  status.textContent='Création en cours… statut : '+String(render.status||'en attente')+'. Le suivi est enregistré.';
+  button.textContent='Vérification en cours…';
+ }
+ status.textContent='La création continue peut-être. Le rendu est enregistré : vous pourrez reprendre sa vérification plus tard sans relancer la génération.';
+ button.disabled=false;button.textContent='Reprendre la vérification';
+ button.setAttribute('data-render-id',renderId);button.onclick=function(){checkCreatorAdVideo(button)};return false;
+}
+async function checkCreatorAdVideo(button){
+ const card=button&&button.closest('[data-ad-id]');
+ if(!card||!krediIsCreator()||!krediUser)return;
+ const renderId=button.getAttribute('data-render-id')||card.getAttribute('data-render-id');
+ const status=card.querySelector('[data-ad-video-status]');
+ if(!renderId||!status)return;
+ button.disabled=true;button.textContent='Vérification…';status.textContent='Reprise du suivi du rendu enregistré…';
+ try{await pollCreatorAdVideo(card,renderId,button,status,40)}
+ catch(error){
+  status.textContent='Vérification impossible : '+(error.message||'erreur inconnue')+'. Le rendu reste enregistré ; réessayez la vérification, sans relancer la génération.';
+  button.textContent='Réessayer la vérification';button.setAttribute('data-render-id',renderId);button.onclick=function(){checkCreatorAdVideo(button)};
+ }finally{button.disabled=false}
+}
 async function generateCreatorAdVideo(button){
  const card=button&&button.closest('[data-ad-id]');
  if(!card||!krediIsCreator()||!krediUser)return;
- const id=card.getAttribute('data-ad-id');
- const scriptField=card.querySelector('[data-ad-video-script]');
- const status=card.querySelector('[data-ad-video-status]');
+ const id=card.getAttribute('data-ad-id'),scriptField=card.querySelector('[data-ad-video-script]'),status=card.querySelector('[data-ad-video-status]');
  if(!id||!scriptField||!status)return;
  const script=scriptField.value.trim();
  if(!script){status.textContent='Ajoutez le scénario de la vidéo avant de lancer la génération.';return}
@@ -890,20 +947,14 @@ async function generateCreatorAdVideo(button){
   const response=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/public-ads/'+encodeURIComponent(id)+'/video',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({script})});
   const result=await response.json().catch(()=>({}));
   if(!response.ok||!result.ok||!result.render||!result.render.id)throw new Error(result.error||('HTTP '+response.status));
-  const renderId=result.render.id;status.textContent='Vidéo en cours de création…';button.textContent='Vidéo en cours…';
-  for(let attempt=0;attempt<40;attempt++){
-   await new Promise(resolve=>setTimeout(resolve,3000));
-   const checkToken=await krediUser.getIdToken();
-   const check=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/video-renders/'+encodeURIComponent(renderId),{headers:{Authorization:'Bearer '+checkToken},cache:'no-store'});
-   const data=await check.json().catch(()=>({}));
-   if(!check.ok||!data.ok||!data.render)throw new Error(data.error||('Vérification du rendu impossible (HTTP '+check.status+').'));
-   if(data.render.status==='succeeded'&&data.render.url){status.innerHTML='Vidéo prête : <a href="'+esc(data.render.url)+'" target="_blank" rel="noopener">Ouvrir / télécharger le MP4</a>';button.textContent='Générer une nouvelle version';return}
-   if(data.render.status==='failed')throw new Error(data.render.error_message||'Creatomate indique que le rendu a échoué.');
-   status.textContent='Création en cours… statut : '+String(data.render.status||'en attente')+'.';
-  }
-  status.textContent='La création prend plus de temps que prévu. La demande est lancée ; réessayez de vérifier son état dans quelques instants.';button.textContent='Vérification à relancer';
- }catch(error){console.error('[COMPTIVA Créateur] Génération vidéo',error);status.textContent='Génération impossible : '+(error.message||'erreur inconnue');button.textContent='Réessayer la génération'}
- finally{button.disabled=false}
+  const renderId=result.render.id;card.setAttribute('data-render-id',renderId);
+  status.textContent=result.persistenceWarning?'Attention : la vidéo a été lancée, mais D1 n’a pas confirmé l’enregistrement du suivi. Conservez cet identifiant : '+renderId:(result.reused?'Un rendu existant a été retrouvé. Vérification en cours…':'Vidéo lancée et identifiant enregistré. Vérification en cours…');
+  button.setAttribute('data-render-id',renderId);button.textContent='Vérification en cours…';button.onclick=function(){checkCreatorAdVideo(button)};
+  await pollCreatorAdVideo(card,renderId,button,status,40);
+ }catch(error){
+  console.error('[COMPTIVA Créateur] Génération vidéo',error);status.textContent='Génération impossible : '+(error.message||'erreur inconnue');
+  button.textContent='Réessayer la génération';button.onclick=function(){generateCreatorAdVideo(button)};
+ }finally{button.disabled=false}
 }
 async function updateCreatorAdRequest(button){
  const card=button&&button.closest('[data-ad-id]');
