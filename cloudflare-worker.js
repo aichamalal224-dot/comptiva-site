@@ -258,8 +258,9 @@ export default {
       }
       const status = clean(body.status, 20);
       const adminNote = clean(body.adminNote, 500);
-      const durationDays = body.durationDays === null || body.durationDays === "" ? null : Number(body.durationDays);
-      const agreedPrice = body.agreedPriceGnf === null || body.agreedPriceGnf === "" ? null : Number(body.agreedPriceGnf);
+      const hasCampaignFields = ["durationDays", "agreedPriceGnf", "quoteStatus", "paymentStatus", "startDate", "endDate"].some(key => Object.prototype.hasOwnProperty.call(body, key));
+      const durationDays = body.durationDays == null || body.durationDays === "" ? null : Number(body.durationDays);
+      const agreedPrice = body.agreedPriceGnf == null || body.agreedPriceGnf === "" ? null : Number(body.agreedPriceGnf);
       const quoteStatus = clean(body.quoteStatus, 20) || "draft";
       const paymentStatus = clean(body.paymentStatus, 20) || "pending";
       const startDate = clean(body.startDate, 10);
@@ -268,25 +269,32 @@ export default {
       if (!["new", "in_progress", "done", "refused"].includes(status)) {
         return json({ error: "Statut non autorisé." }, 400, origin);
       }
-      if ((durationDays !== null && (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365)) ||
+      if (hasCampaignFields &&
+          ((durationDays !== null && (!Number.isInteger(durationDays) || durationDays < 1 || durationDays > 365)) ||
           (agreedPrice !== null && (!Number.isSafeInteger(agreedPrice) || agreedPrice < 0)) ||
           !["draft", "sent", "accepted", "refused"].includes(quoteStatus) ||
           !["pending", "received"].includes(paymentStatus) ||
-          !validDate(startDate) || !validDate(endDate)) {
+          !validDate(startDate) || !validDate(endDate))) {
         return json({ error: "Informations de campagne invalides." }, 400, origin);
       }
       try {
-        await ensureCampaignTable(env);
         const result = await env.DB.prepare(
           "UPDATE public_ad_requests SET status = ?, admin_note = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?"
         ).bind(status, adminNote || null, match[1]).run();
         if (!result.meta || result.meta.changes < 1) return json({ error: "Demande introuvable." }, 404, origin);
-        await env.DB.prepare(
-          "INSERT INTO public_ad_campaigns (request_id, duration_days, agreed_price_gnf, quote_status, payment_status, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(request_id) DO UPDATE SET duration_days=excluded.duration_days, agreed_price_gnf=excluded.agreed_price_gnf, quote_status=excluded.quote_status, payment_status=excluded.payment_status, start_date=excluded.start_date, end_date=excluded.end_date, updated_at=CURRENT_TIMESTAMP"
-        ).bind(match[1], durationDays, agreedPrice, quoteStatus, paymentStatus, startDate || null, endDate || null).run();
-        return json({ ok: true }, 200, origin);
+        if (hasCampaignFields) {
+          try {
+            await ensureCampaignTable(env);
+            await env.DB.prepare(
+              "INSERT INTO public_ad_campaigns (request_id, duration_days, agreed_price_gnf, quote_status, payment_status, start_date, end_date, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP) ON CONFLICT(request_id) DO UPDATE SET duration_days=excluded.duration_days, agreed_price_gnf=excluded.agreed_price_gnf, quote_status=excluded.quote_status, payment_status=excluded.payment_status, start_date=excluded.start_date, end_date=excluded.end_date, updated_at=CURRENT_TIMESTAMP"
+            ).bind(match[1], durationDays, agreedPrice, quoteStatus, paymentStatus, startDate || null, endDate || null).run();
+          } catch (_) {
+            return json({ ok: true, saved: true, campaignWarning: true, message: "Le statut et la note sont enregistrés, mais les informations de campagne n'ont pas été mises à jour." }, 200, origin);
+          }
+        }
+        return json({ ok: true, saved: true }, 200, origin);
       } catch (_) {
-        return json({ error: "Modification impossible." }, 500, origin);
+        return json({ error: "Le statut et la note n'ont pas pu être enregistrés." }, 500, origin);
       }
     }
 
