@@ -80,6 +80,21 @@ async function ensureCampaignTable(env) {
   `).run();
 }
 
+async function ensureVideoRenderTable(env) {
+  await env.DB.prepare(`
+    CREATE TABLE IF NOT EXISTS public_ad_video_renders (
+      request_id TEXT PRIMARY KEY,
+      render_id TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'planned',
+      render_url TEXT,
+      error_message TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(request_id) REFERENCES public_ad_requests(id) ON DELETE CASCADE
+    )
+  `).run();
+}
+
 function clean(value, max) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
@@ -139,8 +154,9 @@ export default {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       try {
         await ensureCampaignTable(env);
+        await ensureVideoRenderTable(env);
         const result = await env.DB.prepare(
-          "SELECT r.id, r.merchant_name, r.business_name, r.phone, r.format, r.description, r.city, r.status, r.admin_note, r.created_at, r.updated_at, c.duration_days, c.agreed_price_gnf, c.quote_status, c.payment_status, c.start_date, c.end_date FROM public_ad_requests r LEFT JOIN public_ad_campaigns c ON c.request_id = r.id ORDER BY r.created_at DESC LIMIT 200"
+          "SELECT r.id, r.merchant_name, r.business_name, r.phone, r.format, r.description, r.city, r.status, r.admin_note, r.created_at, r.updated_at, c.duration_days, c.agreed_price_gnf, c.quote_status, c.payment_status, c.start_date, c.end_date, v.render_id AS video_render_id, v.status AS video_render_status, v.render_url AS video_render_url, v.error_message AS video_render_error, v.updated_at AS video_render_updated_at FROM public_ad_requests r LEFT JOIN public_ad_campaigns c ON c.request_id = r.id LEFT JOIN public_ad_video_renders v ON v.request_id = r.id ORDER BY r.created_at DESC LIMIT 200"
         ).all();
         return json({ ok: true, requests: result.results || [] }, 200, origin);
       } catch (_) {
@@ -152,6 +168,17 @@ export default {
     if (videoMatch && request.method === "POST") {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
+      try {
+        await ensureVideoRenderTable(env);
+        const ad = await env.DB.prepare("SELECT id FROM public_ad_requests WHERE id = ?").bind(videoMatch[1]).first();
+        if (!ad) return json({ error: "Demande publicitaire introuvable." }, 404, origin);
+        const previous = await env.DB.prepare("SELECT render_id, status, render_url FROM public_ad_video_renders WHERE request_id = ?").bind(videoMatch[1]).first();
+        if (previous && previous.render_id && ["planned", "processing", "queued", "running", "succeeded"].includes(String(previous.status || "").toLowerCase())) {
+          return json({ ok: true, reused: true, render: { id: previous.render_id, status: previous.status, url: previous.render_url || null } }, 200, origin);
+        }
+      } catch (_) {
+        return json({ error: "Le stockage du suivi vidéo est indisponible. Aucune nouvelle vidéo n'a été lancée." }, 503, origin);
+      }
       let body;
       try { body = await request.json(); } catch (_) { return json({ error: "Scénario invalide." }, 400, origin); }
       const script = clean(body.script, 12000);
@@ -191,7 +218,16 @@ export default {
         const renderResponse = await fetch("https://api.creatomate.com/v2/renders", { method: "POST", headers: { "Authorization": "Bearer " + env.CREATOMATE_API_KEY, "Content-Type": "application/json" }, body: JSON.stringify(renderScript) });
         const renderData = await renderResponse.json().catch(() => ({}));
         if (!renderResponse.ok) return json({ error: clean(renderData.hint || renderData.message || renderData.error || "Creatomate a refusé la demande (HTTP " + renderResponse.status + ").", 500) }, 502, origin);
-        return json({ ok: true, render: { id: renderData.id, status: renderData.status, url: renderData.url || null } }, 202, origin);
+        if (!renderData.id) return json({ error: "Creatomate n'a pas retourné d'identifiant de rendu." }, 502, origin);
+        const renderStatus = clean(renderData.status || "planned", 40).toLowerCase();
+        const renderUrl = typeof renderData.url === "string" ? renderData.url : null;
+        try {
+          await env.DB.prepare("INSERT INTO public_ad_video_renders (request_id, render_id, status, render_url, error_message, created_at, updated_at) VALUES (?, ?, ?, ?, NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) ON CONFLICT(request_id) DO UPDATE SET render_id=excluded.render_id, status=excluded.status, render_url=excluded.render_url, error_message=NULL, created_at=CURRENT_TIMESTAMP, updated_at=CURRENT_TIMESTAMP")
+            .bind(videoMatch[1], renderData.id, renderStatus, renderUrl).run();
+        } catch (_) {
+          return json({ ok: true, persistenceWarning: true, message: "Le rendu a été lancé, mais son suivi n'a pas pu être enregistré dans D1.", render: { id: renderData.id, status: renderStatus, url: renderUrl } }, 202, origin);
+        }
+        return json({ ok: true, render: { id: renderData.id, status: renderStatus, url: renderUrl } }, 202, origin);
       } catch (_) { return json({ error: "Impossible de joindre Creatomate. Réessayez plus tard." }, 502, origin); }
     }
 
@@ -200,11 +236,17 @@ export default {
       if (!(await verifyCreator(request))) return json({ error: "Accès Créateur refusé." }, 401, origin);
       if (!env.CREATOMATE_API_KEY) return json({ error: "La clé Creatomate n'est pas encore installée dans les secrets Cloudflare." }, 503, origin);
       try {
+        await ensureVideoRenderTable(env);
         const renderResponse = await fetch("https://api.creatomate.com/v2/renders/" + renderMatch[1], { headers: { "Authorization": "Bearer " + env.CREATOMATE_API_KEY } });
         const renderData = await renderResponse.json().catch(() => ({}));
         if (!renderResponse.ok) return json({ error: clean(renderData.hint || renderData.message || "Lecture du rendu impossible.", 500) }, 502, origin);
-        return json({ ok: true, render: { id: renderData.id, status: renderData.status, url: renderData.url || null } }, 200, origin);
-      } catch (_) { return json({ error: "Impossible de vérifier le rendu Creatomate." }, 502, origin); }
+        const renderStatus = clean(renderData.status || "unknown", 40).toLowerCase();
+        const renderUrl = typeof renderData.url === "string" ? renderData.url : null;
+        const renderError = clean(renderData.error_message || renderData.error || "", 500) || null;
+        await env.DB.prepare("UPDATE public_ad_video_renders SET status = ?, render_url = ?, error_message = ?, updated_at = CURRENT_TIMESTAMP WHERE render_id = ?")
+          .bind(renderStatus, renderUrl, renderError, renderMatch[1]).run();
+        return json({ ok: true, render: { id: renderData.id, status: renderStatus, url: renderUrl, error_message: renderError } }, 200, origin);
+      } catch (_) { return json({ error: "Impossible de vérifier ou d'enregistrer le rendu Creatomate." }, 502, origin); }
     }
 
     const match = url.pathname.match(/^\/api\/admin\/public-ads\/([a-f0-9-]{36})$/i);
