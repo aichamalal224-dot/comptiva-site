@@ -975,9 +975,11 @@ async function updateCreatorAdRequest(button){
   });
   const result=await response.json().catch(()=>({}));
   if(!response.ok||!result.ok)throw new Error(result.error||('HTTP '+response.status));
-  button.textContent='Statut et note enregistrés';
+  button.textContent='Déjà enregistré';
   const summary=document.getElementById('creatorPublicAdsStatus');
-  if(summary)summary.textContent='Modification enregistrée. Le statut et la note Créateur sont à jour.';
+  if(summary)summary.textContent=result.campaignWarning
+   ?'Statut et note enregistrés. Les informations de campagne restent à vérifier.'
+   :'Déjà enregistré : le statut et la note Créateur sont à jour.';
  }catch(error){
   console.error('[COMPTIVA Créateur] Modification demande PUB',error);
   button.textContent='Erreur — réessayer';
