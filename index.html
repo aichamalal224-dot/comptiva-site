@@ -627,7 +627,7 @@ function printPaymentReceipt(paymentId){
  const ordered=db.payments.filter(x=>x.debtId===debt.id).slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
  const paymentIndex=ordered.indexOf(payment);const paidThrough=ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+Number(x.amount||0),0);
  const remaining=Math.max(0,Number(debt.amount||0)-paidThrough);
- const receiptNo=String(payment.id).slice(-8).toUpperCase();
+ const customer=db.clients.find(x=>x.id===debt.clientId);const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const receiptNo=String(payment.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
  w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reçu de remboursement ${esc(receiptNo)}</title>
@@ -638,7 +638,7 @@ function printPaymentReceipt(paymentId){
  .item{display:flex;justify-content:space-between;gap:12px;margin:9px 0}.item span:last-child{text-align:right}.total{font-weight:800;font-size:16px}.small{font-size:11px;color:#53657b}
  @media print{body{padding:0;max-width:none}@page{margin:6mm}}</style></head><body>
  ${receiptMerchantHeader()}<h2>REÇU DE REMBOURSEMENT DE CRÉDIT</h2>
- <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p><p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
+ <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
  <div class="line"></div><div class="item total"><span>Montant remboursé</span><span>${money(payment.amount)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(payment.method||'—')}</span></div>
  <div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${money(paidThrough)}</b></div>
@@ -706,7 +706,7 @@ function printReceipt(saleId){
  const sale=db.sales.find(x=>x.id===saleId);
  if(!sale){alert('Vente introuvable.');return}
  const paid=paidOfSale(sale),credit=creditOfSale(sale);
- const client=sale.clientId?clientName(sale.clientId):'—';
+ const customer=sale.clientId?db.clients.find(x=>x.id===sale.clientId):null;const client=customer?customer.name:'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart||0)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart||0)+'</span></div>':'';
  const receiptNo=String(sale.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
@@ -722,13 +722,13 @@ function printReceipt(saleId){
  </style></head><body>
  ${receiptMerchantHeader()}
  <h2>REÇU DE VENTE</h2>
- <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(sale.date))}</p><p><b>Client :</b> ${esc(client)}</p></div>
+ <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(sale.date))}</p><p><b>Client :</b> ${esc(client)}</p>${customerContact}</div>
  <div class="line"></div>
  <div class="item"><span>${esc(sale.product)} × ${esc(String(sale.quantity))}</span><span>${money(sale.total)}</span></div>
  <div class="item small"><span>Prix unitaire</span><span>${money(sale.unitPrice)}</span></div>
  <div class="line"></div>
  <div class="item total"><span>Total</span><span>${money(sale.total)}</span></div>
- <div class="item"><span>Mode de paiement</span><span>${esc(sale.method||(sale.saleType==='credit'?'Crédit client':'Espèces'))}</span></div>
+ <div class="item"><span>Mode de paiement</span><span>${esc(sale.method||(sale.saleType==='credit'?'Crédit client':'Espèces'))}</span></div>${paymentBreakdown}
  <div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div>
  <div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div>
  <div class="line"></div><p class="thanks">Merci pour votre achat !</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
