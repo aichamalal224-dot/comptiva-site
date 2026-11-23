@@ -812,7 +812,7 @@ async function startTrial(){
   console.error('[COMPTIVA] Création de l’essai Firebase refusée ou impossible',error);
   flash('Impossible d’enregistrer l’essai dans Firebase ('+(error.code||error.message||'erreur')+'). Vérifie les règles Firestore.');
  }finally{
-  if(krediUser&&krediUser.uid===accountUid&&button){button.disabled=false;button.textContent='Démarrer les 14 jours gratuits'}
+  if(button){button.disabled=false;button.textContent='Démarrer les 14 jours gratuits'}
  }
 }
 function copyMerchantMessage(){const msg='Bienvenue sur COMPTIVA, votre application de gestion commerciale.\n\nAbonnement : 75 000 GNF pour 30 jours, après 14 jours d’essai gratuit.\n\nLes coordonnées officielles Orange Money ne sont pas encore configurées. MTN Mobile Money n’est pas encore disponible. Aucun paiement ne doit être envoyé tant que les coordonnées officielles ne sont pas affichées dans COMPTIVA.\n\nLa demande de paiement enregistrée dans cette version est une démonstration locale : elle ne confirme pas la réception d’argent et n’active pas un abonnement. Ne communiquez jamais votre code PIN ni un code SMS.';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>alert('Informations copiées.')).catch(()=>alert(msg));}else{alert(msg)}}
