@@ -1200,7 +1200,7 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
-    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;
+    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;clearTimeout(window.krediSubscriptionExpiryTimer);
     krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1');
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
     if(!activeUser){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
