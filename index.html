@@ -951,7 +951,7 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
 // COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
 const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
 let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false,krediNeedsSubscriptionRecheck=typeof navigator!=='undefined'&&!navigator.onLine;
-const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[]});
+const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[],businessProfile:{}});
 function krediStatus(t){['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t});const loginStatus=document.getElementById('authRuntimeStatus');if(loginStatus&&!document.body.classList.contains('auth-ready')){loginStatus.textContent=t||'';loginStatus.hidden=!t}}
 function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
 function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-email':'Adresse e-mail invalide.','auth/user-not-found':'Aucun compte ne correspond à cet e-mail.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'E-mail ou mot de passe incorrect.','auth/email-already-in-use':'Cette adresse e-mail possède déjà un compte.','auth/weak-password':'Choisissez un mot de passe d’au moins 6 caractères.','auth/too-many-requests':'Trop de tentatives. Réessayez plus tard.','auth/network-request-failed':'Connexion Internet indisponible. Vérifiez votre réseau.','auth/unauthorized-domain':'Cette adresse du site doit être autorisée dans Firebase Authentication.','auth/operation-not-allowed':'La connexion par e-mail/mot de passe n’est pas activée dans Firebase.','auth/request-timeout':'Firebase Auth ne répond pas après 20 secondes. Vérifiez la connexion Internet ou un éventuel blocage de identitytoolkit.googleapis.com, puis rechargez COMPTIVA.','client-timeout':'La connexion prend plus de temps que prévu. Vérifiez votre connexion Internet puis réessayez. Vos données locales sont conservées.','permission-denied':'Accès Firestore refusé. Vérifiez les règles et le compte connecté.','unavailable':'Firestore indique que le service est indisponible.'};return (map[c]||((e&&e.message)||'Une erreur inconnue est survenue.'))+(c?' [code: '+c+']':'')}
@@ -1153,6 +1153,12 @@ function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comp
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
+    if(key==='businessProfile'){
+      const localProfile=localData&&localData.businessProfile&&typeof localData.businessProfile==='object'&&!Array.isArray(localData.businessProfile)?localData.businessProfile:{};
+      const remoteProfile=remoteData&&remoteData.businessProfile&&typeof remoteData.businessProfile==='object'&&!Array.isArray(remoteData.businessProfile)?remoteData.businessProfile:{};
+      out.businessProfile=preferLocal?{...remoteProfile,...localProfile}:{...localProfile,...remoteProfile};
+      continue;
+    }
     const localRows=Array.isArray(localData&&localData[key])?localData[key]:[];
     const remoteRows=Array.isArray(remoteData&&remoteData[key])?remoteData[key]:[];
     const first=preferLocal?remoteRows:localRows;
