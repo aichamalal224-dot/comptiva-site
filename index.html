@@ -437,6 +437,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     </section>
     <section id="page-subscription" class="hidden">
       <div class="pagehead"><div><h2>Mon abonnement Comptiva</h2><p>Essai gratuit de 14 jours, puis 75 000 GNF par mois.</p></div></div>
+      <div id="subscriptionNotice" class="notice hidden" role="status" aria-live="polite"></div>
       <div class="notice"><b>Important :</b> cette page est une démonstration. Aucun paiement réel n’est effectué ici. Les paiements Mobile Money devront être reliés à un prestataire et confirmés par son serveur avant activation.</div>
       <div class="stats">
         <div class="card"><div class="stat-label">Tarif mensuel</div><div class="stat-number">75 000 GNF</div><div class="stat-label">Pour une boutique</div></div>
@@ -544,12 +545,19 @@ let STORE='comptiva_guest_v1';
 let db=loadDB(), currentForm='';
 let SUB_STORE='comptiva_guest_subscription_v1';
 let subscription=loadSubscription();
+let krediSubscriptionAccess='checking';
+let krediSubscriptionEndMillis=0;
+function krediCanUseMerchantApp(){return !krediUser||krediIsCreator()||krediSubscriptionAccess==='active'}
+function krediSubscriptionDateMillis(value){if(value&&typeof value.toDate==='function')return value.toDate().getTime();const date=value?new Date(value):null;return date&&!isNaN(date.getTime())?date.getTime():0}
+function krediSetSubscriptionNotice(message){const el=document.getElementById('subscriptionNotice');if(el){el.textContent=message;el.classList.remove('hidden')}}
+function krediShowSubscriptionMessage(message){krediSetSubscriptionNotice(message);flash(message,7000)}
+function krediScheduleSubscriptionExpiry(endMillis){clearTimeout(window.krediSubscriptionExpiryTimer);if(!endMillis||endMillis<=Date.now())return;const check=()=>{if(!krediUser||krediIsCreator())return;const remaining=endMillis-Date.now();if(remaining>0){window.krediSubscriptionExpiryTimer=setTimeout(check,Math.min(remaining+1000,12*60*60*1000));return}krediSubscriptionAccess='locked';krediShowSubscriptionMessage('Votre période d’accès COMPTIVA est terminée. Renouvelez votre abonnement de 30 jours à 75 000 GNF pour retrouver l’accès. Vos données sont conservées.');navigate('subscription')};window.krediSubscriptionExpiryTimer=setTimeout(check,Math.min(endMillis-Date.now()+1000,12*60*60*1000))}
 function loadSubscription(){try{return JSON.parse(localStorage.getItem(SUB_STORE))||{trialStart:null,trialEnd:null,requests:[],paymentSettings:{number:'',name:''},paidUntil:null}}catch(e){return {trialStart:null,trialEnd:null,requests:[],paymentSettings:{number:'',name:''},paidUntil:null}}}
 if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings)subscription.paymentSettings={number:'',name:''};
 function saveSubscription(){localStorage.setItem(SUB_STORE,JSON.stringify(subscription));renderSubscription()}
 function loadDB(){try{return JSON.parse(localStorage.getItem(STORE))||{clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}catch(e){return {clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[]}}}
 if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];
-function saveDB(){try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return}renderAll();krediQueueCloudSave()}
+function saveDB(){if(krediUser&&!krediIsCreator()&&!krediCanUseMerchantApp()){flash('Accès suspendu : vérifiez ou renouvelez votre abonnement avant de modifier les données.');return}try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return}renderAll();krediQueueCloudSave()}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
@@ -559,7 +567,7 @@ function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId).reduce(
 function balance(d){return Math.max(0,Number(d.amount||0)-paidFor(d.id))}
 function status(d){let b=balance(d);if(b<=0)return '<span class="pill paid">Soldé</span>';if(d.due && d.due<new Date().toISOString().slice(0,10))return '<span class="pill overdue">En retard</span>';return '<span class="pill pending">En cours</span>'}
 function flash(msg,duration=3200){let el=document.getElementById('flash');if(!el)return;el.textContent=msg;el.classList.remove('hidden');clearTimeout(window.comptivaFlashTimer);window.comptivaFlashTimer=setTimeout(()=>el.classList.add('hidden'),duration)}
-function navigate(page){if(page==='creator'&&!krediIsCreator()){flash('Accès réservé au compte Créateur.');return}document.querySelectorAll('[id^="page-"]').forEach(x=>x.classList.add('hidden'));let p=document.getElementById('page-'+page);if(p)p.classList.remove('hidden');let titles={dashboard:'Tableau de bord',sales:'Ventes',reports:'Chiffres de la boutique',clients:'Clients',debts:'Dettes',payments:'Remboursements',purchases:'Achats de marchandises',expenses:'Dépenses',stock:'Gestion du stock',reminders:'Rappels',subscription:'Abonnement',form:document.getElementById('formTitle').textContent};document.getElementById('topTitle').textContent=titles[page]||'Comptiva';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='clients')renderClients();if(page==='debts')renderDebts();if(page==='payments')renderPayments();if(page==='reminders')renderReminderOptions();if(page==='reports')renderReports();if(page==='sales')renderSales();if(page==='stock')renderStock();if(page==='purchases')renderPurchases();if(page==='expenses')renderExpenses();if(page==='subscription')renderSubscription();if(page==='creator')loadCreatorDirectory();window.scrollTo(0,0)}
+function navigate(page){if(page==='creator'&&!krediIsCreator()){flash('Accès réservé au compte Créateur.');return}if(krediUser&&!krediIsCreator()&&page!=='subscription'&&!krediCanUseMerchantApp()){page='subscription';flash(krediSubscriptionAccess==='checking'?'Vérification de votre abonnement en cours…':'Votre abonnement est terminé ou doit être vérifié. Consultez la page Abonnement.')}document.querySelectorAll('[id^="page-"]').forEach(x=>x.classList.add('hidden'));let p=document.getElementById('page-'+page);if(p)p.classList.remove('hidden');let titles={dashboard:'Tableau de bord',sales:'Ventes',reports:'Chiffres de la boutique',clients:'Clients',debts:'Dettes',payments:'Remboursements',purchases:'Achats de marchandises',expenses:'Dépenses',stock:'Gestion du stock',reminders:'Rappels',subscription:'Abonnement',form:document.getElementById('formTitle').textContent};document.getElementById('topTitle').textContent=titles[page]||'Comptiva';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='clients')renderClients();if(page==='debts')renderDebts();if(page==='payments')renderPayments();if(page==='reminders')renderReminderOptions();if(page==='reports')renderReports();if(page==='sales')renderSales();if(page==='stock')renderStock();if(page==='purchases')renderPurchases();if(page==='expenses')renderExpenses();if(page==='subscription')renderSubscription();if(page==='creator')loadCreatorDirectory();window.scrollTo(0,0)}
 document.querySelectorAll('[data-page]').forEach(b=>b.addEventListener('click',()=>navigate(b.dataset.page)));
 function table(headers,rows){if(!rows.length)return '<div class="empty">Aucune donnée pour le moment. Ajoutez un premier élément pour commencer.</div>';return '<table><thead><tr>'+headers.map(h=>'<th>'+h+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table>'}
 function renderAll(){
@@ -719,18 +727,50 @@ body{background:#f4f7fd;color:var(--text)}
 @media(min-width:681px){.mobile-tools{display:none}}
 </style></head><body><h1>Comptiva</h1><p class="center">Reçu de vente</p><div class="line"></div><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(s.date))}</p><p><b>Client :</b> ${esc(client)}</p><div class="line"></div><div class="item"><span>${esc(s.product)} × ${esc(String(s.quantity))}</span><span>${money(s.total)}</span></div><p class="small">Prix unitaire : ${money(s.unitPrice)}</p><div class="line"></div><div class="item total"><span>Total</span><span>${money(s.total)}</span></div><div class="item"><span>Mode de paiement</span><span>${esc(s.method||'Espèces')}</span></div><div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div><div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div><div class="line"></div><p class="center">Merci pour votre achat !</p><p class="center small">Reçu généré avec Comptiva</p><script>window.onload=function(){setTimeout(function(){window.print()},250)};<\/script></body></html>`);w.document.close()}
 function krediApplyCloudTrial(data){
- if(!data||typeof data!=='object'){delete subscription.trialStart;delete subscription.trialEnd;saveSubscription();return}
+ if(!data||typeof data!=='object'){subscription.trialStart=null;subscription.trialEnd=null;subscription.cloudStatus='missing';subscription.paidUntil=null;saveSubscription();return}
  const start=data.trialStart&&typeof data.trialStart.toDate==='function'?data.trialStart.toDate().toISOString():(data.trialStart||null);
  const end=data.trialEnd&&typeof data.trialEnd.toDate==='function'?data.trialEnd.toDate().toISOString():(data.trialEnd||null);
- subscription.trialStart=start;subscription.trialEnd=end;subscription.cloudStatus=data.status||'trial';saveSubscription();
+ const paid=data.paidUntil&&typeof data.paidUntil.toDate==='function'?data.paidUntil.toDate().toISOString():(data.paidUntil||null);
+ subscription.trialStart=start;subscription.trialEnd=end;subscription.paidUntil=paid;subscription.cloudStatus=data.status||'trial';saveSubscription();
 }
 async function krediLoadMerchantSubscription(){
- if(!krediUser||krediIsCreator()||!krediStore)return;
+ if(!krediUser||krediIsCreator())return true;
+ krediSubscriptionAccess='checking';
+ if(!krediStore){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription');return false}
  try{
   const snap=await krediStore.collection('merchantSubscriptions').doc(krediUser.uid).get({source:'server'});
-  if(!krediUser||!snap)return;
-  krediApplyCloudTrial(snap.exists?snap.data():null);
- }catch(error){console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);krediStatus('Compte connecté. Lecture de l’abonnement impossible pour le moment : '+(error.code||'erreur Firebase'))}
+  if(!krediUser||!snap)return false;
+  const data=snap.exists?(snap.data()||{}):null;
+  krediApplyCloudTrial(data);
+  const now=Date.now(),status=String(data&&data.status||'').toLowerCase();
+  const paidUntil=krediSubscriptionDateMillis(data&&data.paidUntil);
+  const trialEnd=krediSubscriptionDateMillis(data&&data.trialEnd);
+  const activePaid=['active','paid'].includes(status)&&paidUntil>now;
+  const activeTrial=status==='trial'&&trialEnd>now;
+  krediSubscriptionEndMillis=activePaid?paidUntil:(activeTrial?trialEnd:0);
+  krediSubscriptionAccess=(activePaid||activeTrial)?'active':'locked';
+  if(krediSubscriptionAccess==='active'){
+   krediScheduleSubscriptionExpiry(krediSubscriptionEndMillis);
+   const remaining=krediSubscriptionEndMillis-now;
+   const reminderKey='comptiva_sub_reminder_'+krediUser.uid+'_'+krediSubscriptionEndMillis;
+   if(remaining<=3*24*60*60*1000&&remaining>0&&localStorage.getItem(reminderKey)!=='1'){
+    localStorage.setItem(reminderKey,'1');
+    krediShowSubscriptionMessage(activeTrial?'Votre essai gratuit COMPTIVA se termine dans moins de 3 jours. Préparez votre abonnement de 30 jours à 75 000 GNF.':'Petit rappel COMPTIVA : votre abonnement arrive à expiration dans moins de 3 jours. Renouvelez pour continuer sans interruption. Tarif : 75 000 GNF pour 30 jours.');
+   }
+   if(document.querySelector('[id^="page-"]:not(.hidden)')?.id==='page-subscription')navigate('dashboard');
+  }else{
+   const expiredKey='comptiva_sub_expired_'+krediUser.uid+'_'+(trialEnd||paidUntil||'none');
+   if(localStorage.getItem(expiredKey)!=='1')localStorage.setItem(expiredKey,'1');
+   krediShowSubscriptionMessage(status==='trial'?'Votre essai gratuit COMPTIVA de 14 jours est terminé. Pour continuer, prenez un abonnement de 30 jours à 75 000 GNF. Vos données sont conservées.':'Votre abonnement COMPTIVA est expiré ou non activé. Renouvelez votre abonnement de 30 jours à 75 000 GNF pour retrouver l’accès. Vos données sont conservées.');
+   navigate('subscription');
+  }
+  return krediSubscriptionAccess==='active';
+ }catch(error){
+  krediSubscriptionAccess='unknown';
+  console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);
+  krediShowSubscriptionMessage('Vérification de l’abonnement impossible pour le moment. Par sécurité, les fonctions commerciales restent bloquées jusqu’à confirmation de Firebase. Vos données ne sont pas supprimées.');
+  navigate('subscription');return false;
+ }
 }
 function showTrialSuccess(message){
  const box=document.getElementById('trialSuccessMessage');
@@ -757,6 +797,7 @@ async function startTrial(){
   const saved=await ref.get({source:'server'});
   if(!saved.exists)throw new Error('La fiche d’essai n’a pas été confirmée par Firebase.');
   krediApplyCloudTrial(saved.data());
+  krediSubscriptionAccess='active';krediSubscriptionEndMillis=krediSubscriptionDateMillis(saved.data().trialEnd);krediScheduleSubscriptionExpiry(krediSubscriptionEndMillis);
   renderSubscription();
   showTrialSuccess('Essai gratuit de 14 jours enregistré avec succès dans Firebase.');
  }catch(error){
@@ -1183,7 +1224,7 @@ async function krediInitFirebase(){try{
       krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
       return;
     }
-    if(krediIsCreator()){loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);krediLoadMerchantSubscription();}
+    if(krediIsCreator()){krediSubscriptionAccess='active';loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);await krediLoadMerchantSubscription();}
     krediStatus('Compte connecté. Vérification des données en ligne…');
     const activeUid=activeUser.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
@@ -1217,6 +1258,7 @@ async function krediInitFirebase(){try{
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
       krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
       if(!snap.exists||mergedText!==remoteText){
+        if(!krediIsCreator()&&!krediCanUseMerchantApp()){krediStatus('Données conservées en lecture seule : abonnement non actif. Renouvelez depuis la page Abonnement.');return}
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
         try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid)return;krediLastWrite=mergedText;krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
@@ -1240,6 +1282,7 @@ async function krediInitFirebase(){try{
 }}
 function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud)return;
+  if(!krediIsCreator()&&!krediCanUseMerchantApp()){krediStatus('Abonnement non actif : aucune modification commerciale ne sera synchronisée. Vos données existantes sont conservées.');return}
   const uid=krediUser.uid;
   // Marquer la modification avant de vérifier Firestore : si le SDK ou le réseau
   // est indisponible, le prochain snapshot serveur doit privilégier les données locales.
