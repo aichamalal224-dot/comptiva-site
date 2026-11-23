@@ -1208,6 +1208,9 @@ async function krediInitFirebase(){try{
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
       const firestoreReady=await window.__comptivaFirestoreSdkReady;
+      // Si le compte a changé pendant le chargement asynchrone de Firestore,
+      // abandonner cette ancienne initialisation avant d'ouvrir un écouteur.
+      if(!krediUser||krediUser.uid!==activeUser.uid)return;
       if(!firestoreReady){if(!krediIsCreator()){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
     }
     if(!krediStore && firebase.firestore){
@@ -1226,6 +1229,8 @@ async function krediInitFirebase(){try{
       return;
     }
     if(krediIsCreator()){krediSubscriptionAccess='active';loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);await krediLoadMerchantSubscription();}
+    // Ne pas poursuivre le chargement cloud si une autre session a pris la place.
+    if(!krediUser||krediUser.uid!==activeUser.uid)return;
     krediStatus('Compte connecté. Vérification des données en ligne…');
     const activeUid=activeUser.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
