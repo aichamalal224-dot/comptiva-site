@@ -735,11 +735,13 @@ function krediApplyCloudTrial(data){
 }
 async function krediLoadMerchantSubscription(){
  if(!krediUser||krediIsCreator())return true;
+ const accountUid=krediUser.uid,store=krediStore;
  krediSubscriptionAccess='checking';
- if(!krediStore){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription');return false}
+ if(!store){if(krediUser&&krediUser.uid===accountUid){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription')}return false}
  try{
-  const snap=await krediStore.collection('merchantSubscriptions').doc(krediUser.uid).get({source:'server'});
-  if(!krediUser||!snap)return false;
+  const snap=await store.collection('merchantSubscriptions').doc(accountUid).get({source:'server'});
+  // Une réponse tardive ne doit jamais appliquer l’abonnement d’un ancien compte au compte actuel.
+  if(!krediUser||krediUser.uid!==accountUid||!snap)return false;
   const data=snap.exists?(snap.data()||{}):null;
   krediApplyCloudTrial(data);
   const now=Date.now(),status=String(data&&data.status||'').toLowerCase();
@@ -752,20 +754,21 @@ async function krediLoadMerchantSubscription(){
   if(krediSubscriptionAccess==='active'){
    krediScheduleSubscriptionExpiry(krediSubscriptionEndMillis);
    const remaining=krediSubscriptionEndMillis-now;
-   const reminderKey='comptiva_sub_reminder_'+krediUser.uid+'_'+krediSubscriptionEndMillis;
+   const reminderKey='comptiva_sub_reminder_'+accountUid+'_'+krediSubscriptionEndMillis;
    if(remaining<=3*24*60*60*1000&&remaining>0&&localStorage.getItem(reminderKey)!=='1'){
     localStorage.setItem(reminderKey,'1');
     krediShowSubscriptionMessage(activeTrial?'Votre essai gratuit COMPTIVA se termine dans moins de 3 jours. Préparez votre abonnement de 30 jours à 75 000 GNF.':'Petit rappel COMPTIVA : votre abonnement arrive à expiration dans moins de 3 jours. Renouvelez pour continuer sans interruption. Tarif : 75 000 GNF pour 30 jours.');
    }
    if(document.querySelector('[id^="page-"]:not(.hidden)')?.id==='page-subscription')navigate('dashboard');
   }else{
-   const expiredKey='comptiva_sub_expired_'+krediUser.uid+'_'+(trialEnd||paidUntil||'none');
+   const expiredKey='comptiva_sub_expired_'+accountUid+'_'+(trialEnd||paidUntil||'none');
    if(localStorage.getItem(expiredKey)!=='1')localStorage.setItem(expiredKey,'1');
    krediShowSubscriptionMessage(status==='trial'?'Votre essai gratuit COMPTIVA de 14 jours est terminé. Pour continuer, prenez un abonnement de 30 jours à 75 000 GNF. Vos données sont conservées.':'Votre abonnement COMPTIVA est expiré ou non activé. Renouvelez votre abonnement de 30 jours à 75 000 GNF pour retrouver l’accès. Vos données sont conservées.');
    navigate('subscription');
   }
   return krediSubscriptionAccess==='active';
  }catch(error){
+  if(!krediUser||krediUser.uid!==accountUid)return false;
   krediSubscriptionAccess='unknown';
   console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);
   krediShowSubscriptionMessage('Vérification de l’abonnement impossible pour le moment. Par sécurité, les fonctions commerciales restent bloquées jusqu’à confirmation de Firebase. Vos données ne sont pas supprimées.');
@@ -780,31 +783,36 @@ function showTrialSuccess(message){
 async function startTrial(){
  const button=document.getElementById('startTrialButton');
  if(!krediUser||krediIsCreator()){flash('Connecte-toi avec un compte commerçant pour démarrer l’essai.');return}
- if(!krediStore||!navigator.onLine){flash('Connexion Firebase nécessaire pour démarrer et enregistrer les 14 jours. Aucun essai local ne sera créé.');return}
+ const accountUid=krediUser.uid,store=krediStore;
+ if(!store||!navigator.onLine){flash('Connexion Firebase nécessaire pour démarrer et enregistrer les 14 jours. Aucun essai local ne sera créé.');return}
  if(button){button.disabled=true;button.textContent='Enregistrement dans Firebase…'}
  try{
-  const ref=krediStore.collection('merchantSubscriptions').doc(krediUser.uid);
+  const ref=store.collection('merchantSubscriptions').doc(accountUid);
   const existing=await ref.get({source:'server'});
+  if(!krediUser||krediUser.uid!==accountUid)return;
   if(existing.exists){krediApplyCloudTrial(existing.data());renderSubscription();const data=existing.data()||{};if(data.status==='trial'&&data.trialEnd){showTrialSuccess('Ton essai gratuit est déjà enregistré dans Firebase. Les dates sont conservées.')}else{flash('Une fiche d’abonnement existe déjà. La période d’essai ne peut pas être redémarrée.',6000)}return}
   const now=new Date(),end=new Date(now.getTime()+14*24*60*60*1000);
   await ref.set({
-   uid:krediUser.uid,status:'trial',
+   uid:accountUid,status:'trial',
    trialStart:firebase.firestore.FieldValue.serverTimestamp(),
    trialEnd:firebase.firestore.Timestamp.fromDate(end),
    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   });
+  if(!krediUser||krediUser.uid!==accountUid)return;
   const saved=await ref.get({source:'server'});
+  if(!krediUser||krediUser.uid!==accountUid)return;
   if(!saved.exists)throw new Error('La fiche d’essai n’a pas été confirmée par Firebase.');
   krediApplyCloudTrial(saved.data());
   krediSubscriptionAccess='active';krediSubscriptionEndMillis=krediSubscriptionDateMillis(saved.data().trialEnd);krediScheduleSubscriptionExpiry(krediSubscriptionEndMillis);
   renderSubscription();
   showTrialSuccess('Essai gratuit de 14 jours enregistré avec succès dans Firebase.');
  }catch(error){
+  if(!krediUser||krediUser.uid!==accountUid)return;
   console.error('[COMPTIVA] Création de l’essai Firebase refusée ou impossible',error);
   flash('Impossible d’enregistrer l’essai dans Firebase ('+(error.code||error.message||'erreur')+'). Vérifie les règles Firestore.');
  }finally{
-  if(button){button.disabled=false;button.textContent='Démarrer les 14 jours gratuits'}
+  if(krediUser&&krediUser.uid===accountUid&&button){button.disabled=false;button.textContent='Démarrer les 14 jours gratuits'}
  }
 }
 function copyMerchantMessage(){const msg='Bienvenue sur COMPTIVA, votre application de gestion commerciale.\n\nAbonnement : 75 000 GNF pour 30 jours, après 14 jours d’essai gratuit.\n\nLes coordonnées officielles Orange Money ne sont pas encore configurées. MTN Mobile Money n’est pas encore disponible. Aucun paiement ne doit être envoyé tant que les coordonnées officielles ne sont pas affichées dans COMPTIVA.\n\nLa demande de paiement enregistrée dans cette version est une démonstration locale : elle ne confirme pas la réception d’argent et n’active pas un abonnement. Ne communiquez jamais votre code PIN ni un code SMS.';if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(msg).then(()=>alert('Informations copiées.')).catch(()=>alert(msg));}else{alert(msg)}}
