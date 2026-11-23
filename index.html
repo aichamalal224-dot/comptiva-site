@@ -817,6 +817,9 @@ async function startTrial(){
   if(!krediUser||krediUser.uid!==accountUid)return;
   if(!saved.exists)throw new Error('La fiche d’essai n’a pas été confirmée par Firebase.');
   krediApplyCloudTrial(saved.data());
+  // Cette lecture serveur confirme également le cache hors ligne pour ce compte.
+  subscription.lastServerVerifiedAt=Date.now();saveSubscription();
+  krediNeedsSubscriptionRecheck=false;
   krediSubscriptionAccess='active';krediSubscriptionEndMillis=krediSubscriptionDateMillis(saved.data().trialEnd);krediScheduleSubscriptionExpiry(krediSubscriptionEndMillis);
   renderSubscription();
   showTrialSuccess('Essai gratuit de 14 jours enregistré avec succès dans Firebase.');
