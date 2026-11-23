@@ -1286,7 +1286,22 @@ async function krediInitFirebase(){try{
       const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
-      krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
+      // Persister le snapshot avant de remplacer la base en mémoire. Toujours
+      // libérer le verrou, même si le navigateur refuse l'écriture locale.
+      try{
+        localStorage.setItem(STORE,mergedText);
+        krediApplyingCloud=true;
+        db=merged;
+        renderAll();
+      }catch(storageError){
+        krediCloudReady=false;
+        krediLocalDirty=true;
+        console.error('[COMPTIVA] Snapshot Firebase non enregistré localement :',storageError);
+        krediStatus('Firebase a envoyé des données, mais le navigateur refuse leur enregistrement local. Les données locales précédentes sont conservées ; libérez de l’espace avant de réessayer.');
+        return;
+      }finally{
+        krediApplyingCloud=false;
+      }
       if(!snap.exists||mergedText!==remoteText){
         if(!krediIsCreator()&&(krediNeedsSubscriptionRecheck||!krediCanUseMerchantApp())){krediStatus('Données locales conservées : vérification obligatoire de l’abonnement avant toute synchronisation cloud.');return}
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
