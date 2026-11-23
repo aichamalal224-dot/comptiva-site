@@ -1488,7 +1488,34 @@ async function krediSignIn(){
     if(form)form.removeAttribute('aria-busy');
   }
 }
-async function krediSignUp(){if(!krediAuth){krediAuthMessage('Le service Firebase Auth n’est pas initialisé. Diagnostic : auth-not-initialized.');return}const email=document.getElementById('cloudEmail').value.trim(),password=document.getElementById('cloudPassword').value;if(!email||password.length<6){krediAuthMessage('Saisissez un e-mail valide et un mot de passe de 6 caractères minimum.');return}const b=document.getElementById('authSubmit');if(b)b.disabled=true;krediAuthMessage('Création du compte en cours…',true);try{const credential=await krediAuth.createUserWithEmailAndPassword(email,password);if(credential&&credential.user){krediUser=credential.user;krediAuthMessage('Compte créé. Ouverture de votre espace…',true)}}catch(e){console.error('[COMPTIVA] Échec de création du compte Firebase Auth :',e);krediAuthMessage(krediFriendlyError(e))}finally{if(b)b.disabled=false}}
+let krediSignUpInFlight=false;
+async function krediSignUp(){
+  if(krediSignUpInFlight)return;
+  if(!krediAuth){krediAuthMessage('Le service Firebase Auth n’est pas initialisé. Diagnostic : auth-not-initialized.');return}
+  const emailInput=document.getElementById('cloudEmail'),passwordInput=document.getElementById('cloudPassword');
+  const email=emailInput?emailInput.value.trim().toLowerCase():'',password=passwordInput?passwordInput.value:'';
+  if(!email||!password||password.length<6){krediAuthMessage('Saisissez un e-mail valide et un mot de passe de 6 caractères minimum.');return}
+  const b=document.getElementById('authSubmit'),form=document.getElementById('authForm');
+  krediSignUpInFlight=true;
+  if(b){b.disabled=true;b.setAttribute('aria-busy','true')}
+  if(form)form.setAttribute('aria-busy','true');
+  krediAuthMessage('Création sécurisée du compte en cours…',true);
+  try{
+    if(window.krediAuthPersistencePromise)await window.krediAuthPersistencePromise;
+    const credential=await krediAuth.createUserWithEmailAndPassword(email,password);
+    if(!credential||!credential.user)throw Object.assign(new Error('Firebase n’a pas confirmé la création du compte.'),{code:'auth/no-user'});
+    krediAuthMessage('Compte créé. Ouverture de votre espace…',true);
+    krediStatus('Compte créé. Préparation de votre espace commerçant…');
+    // onAuthStateChanged reste l'unique responsable du chargement du compte et de ses données.
+  }catch(e){
+    console.error('[COMPTIVA] Échec de création du compte Firebase Auth :',e);
+    krediAuthMessage(krediFriendlyError(e));
+  }finally{
+    krediSignUpInFlight=false;
+    if(b){b.disabled=false;b.removeAttribute('aria-busy')}
+    if(form)form.removeAttribute('aria-busy');
+  }
+}
 async function krediForgotPassword(){if(!krediAuth){krediAuthMessage('Firebase n’est pas encore chargé.');return}const email=document.getElementById('cloudEmail').value.trim();if(!email){krediAuthMessage('Saisissez votre adresse e-mail pour recevoir le lien de réinitialisation.');return}try{await krediAuth.sendPasswordResetEmail(email);krediAuthMessage('Un lien de réinitialisation a été envoyé si ce compte existe.',true)}catch(e){krediAuthMessage(krediFriendlyError(e))}}
 async function krediSignOut(){if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}if(!confirm('Voulez-vous vous déconnecter de votre compte Comptiva ?'))return;try{if(krediSaveTimer)clearTimeout(krediSaveTimer);localStorage.setItem(STORE,JSON.stringify(db));await krediAuth.signOut()}catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}}
 window.addEventListener('error',event=>{if(event&&event.message&&event.message!=='Script error.')krediStatus('Erreur JavaScript : '+event.message)});
