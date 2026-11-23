@@ -1,46 +1,135 @@
-À APPLIQUER DANS FIREBASE CONSOLE → FIRESTORE DATABASE → RULES
+COMPTIVA — RÈGLES FIRESTORE COMPLÈTES (PROPOSITION À PUBLIER MANUELLEMENT)
 
-Remplacer uniquement le bloc existant :
-match /merchantSubscriptions/{merchantUid} { ... }
-
-par le bloc ci-dessous. Conserver tous les autres blocs existants (/users, /merchantDirectory et les autres collections) sans modification.
-
-match /merchantSubscriptions/{merchantUid} {
-  // Le Créateur garde l'administration complète des abonnements.
-  allow read, write: if isCreator();
-
-  // Un commerçant peut consulter uniquement sa propre fiche.
-  allow get: if signedIn() &&
-    (request.auth.uid == merchantUid || isCreator());
-
-  // Création unique de la fiche d'essai par le commerçant lui-même.
-  // Aucun droit merchant update/delete : impossible de prolonger ou réinitialiser
-  // l'essai depuis le navigateur après la création.
-  allow create: if signedIn() &&
-    request.auth.uid == merchantUid &&
-    request.resource.data.keys().hasOnly([
-      'uid', 'status', 'trialStart', 'trialEnd',
-      'createdAt', 'updatedAt'
-    ]) &&
-    request.resource.data.keys().hasAll([
-      'uid', 'status', 'trialStart', 'trialEnd',
-      'createdAt', 'updatedAt'
-    ]) &&
-    request.resource.data.uid == merchantUid &&
-    request.resource.data.status == 'trial' &&
-    request.resource.data.trialStart == request.time &&
-    request.resource.data.createdAt == request.time &&
-    request.resource.data.updatedAt == request.time &&
-    request.resource.data.trialEnd > request.time &&
-    request.resource.data.trialEnd <= request.time + duration.value(14, 'd');
-
-  // Modification et suppression réservées au Créateur.
-  allow update, delete: if isCreator();
-}
+Projet Firebase : comptiva-6c3cb
+UID du Créateur : ELopCSbMMrSTDEMCzNhchqonGci2
 
 IMPORTANT
-- Les fonctions signedIn() et isCreator() doivent déjà exister dans vos règles.
-- isCreator() doit vérifier l'UID propriétaire déjà utilisé par COMPTIVA.
-- Publier les règles après avoir remplacé ce seul bloc.
-- Ne pas ajouter de règle générale allow read, write: if true.
-- Cette règle ne connecte pas encore les paiements Mobile Money : elle enregistre uniquement l'essai gratuit et permet au Créateur de consulter l'état des fiches.
+- Ce fichier est une proposition de règles complètes à copier dans Firebase Console > Firestore Database > Rules.
+- Faire une sauvegarde des règles actuellement publiées avant remplacement.
+- Ces règles ne sont PAS publiées automatiquement dans Firebase par ce fichier GitHub.
+- Ne pas publier avant d'avoir comparé ce bloc avec les règles actuellement présentes dans Firebase.
+- Aucun document ni aucune donnée existante n'est supprimé.
+- L'accès en lecture aux propres données du commerçant reste autorisé après expiration.
+- Les écritures cloud dans /users sont bloquées si l'essai ou l'abonnement n'est plus valide.
+- Le Créateur conserve un accès complet.
+- Les paiements Mobile Money ne sont pas automatisés par ces règles : l'activation payée doit être effectuée par un processus serveur de confiance.
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCreator() {
+      return signedIn()
+        && request.auth.uid == "ELopCSbMMrSTDEMCzNhchqonGci2";
+    }
+
+    // Vérifie la fiche d'abonnement du commerçant côté serveur Firestore.
+    function hasActiveSubscription(merchantUid) {
+      let sub = get(
+        /databases/$(database)/documents/merchantSubscriptions/$(merchantUid)
+      );
+
+      return sub.exists()
+        && sub.data.keys().hasAll(['status'])
+        && (
+          (
+            sub.data.status == 'trial'
+            && sub.data.keys().hasAll(['trialEnd'])
+            && sub.data.trialEnd is timestamp
+            && request.time < sub.data.trialEnd
+          )
+          ||
+          (
+            sub.data.status in ['active', 'paid']
+            && sub.data.keys().hasAll(['paidUntil'])
+            && sub.data.paidUntil is timestamp
+            && request.time < sub.data.paidUntil
+          )
+        );
+    }
+
+    // Données privées : chaque commerçant ne voit que ses propres données.
+    // La lecture reste autorisée après expiration pour préserver l'accès aux données.
+    // Toute écriture cloud exige un essai ou un abonnement encore valide.
+    // Le Créateur est exempté.
+    match /users/{userId}/{document=**} {
+      allow read: if signedIn()
+        && request.auth.uid == userId;
+
+      allow write: if signedIn()
+        && request.auth.uid == userId
+        && (isCreator() || hasActiveSubscription(userId));
+    }
+
+    // Annuaire : le Créateur peut consulter et supprimer les fiches.
+    // Le commerçant peut créer/actualiser uniquement sa propre fiche de répertoire.
+    // Ce répertoire sert au suivi du compte et n'autorise pas l'accès aux données commerciales.
+    match /merchantDirectory/{merchantUid} {
+      allow read, delete: if isCreator();
+
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid;
+
+      allow update: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.diff(resource.data)
+          .affectedKeys().hasOnly([
+            'email', 'displayName', 'updatedAt'
+          ])
+        && request.resource.data.uid == merchantUid;
+    }
+
+    // Abonnements : le commerçant lit uniquement sa propre fiche.
+    // Il peut créer une seule fiche d'essai de 14 jours.
+    // Seul le Créateur peut ensuite modifier ou supprimer une fiche.
+    match /merchantSubscriptions/{merchantUid} {
+      allow read, write: if isCreator();
+
+      allow get: if signedIn()
+        && request.auth.uid == merchantUid;
+
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'status', 'trialStart', 'trialEnd',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'status', 'trialStart', 'trialEnd',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid
+        && request.resource.data.status == 'trial'
+        && request.resource.data.trialStart == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.trialEnd is timestamp
+        && request.resource.data.trialEnd > request.time
+        && request.resource.data.trialEnd
+          <= request.time + duration.value(14, 'd');
+
+      allow update, delete: if isCreator();
+    }
+  }
+}
+
+POINTS À SAVOIR
+1. Le code COMPTIVA de la branche automatic-subscription-expiry enregistre les données commerciales dans :
+   users/{uid}/comptivaData/main
+   Cette règle protège ce chemin ainsi que les autres sous-chemins de users/{uid}.
+2. Le code crée la fiche d'essai avec trialStart, createdAt et updatedAt en serverTimestamp(), et trialEnd comme Timestamp.
+3. Le commerçant conserve la lecture de ses données après expiration, mais ne peut plus les modifier/synchroniser dans Firestore.
+4. Le Créateur (UID ci-dessus) n'est pas soumis à la condition d'abonnement.
+5. Le commerçant peut toujours actualiser sa fiche merchantDirectory pour permettre le suivi du compte.
+6. Aucun paiement Orange Money ou MTN Mobile Money n'est confirmé automatiquement par ces règles.
+7. Toute autre collection ajoutée à l'application devra recevoir des règles dédiées avant son utilisation.
