@@ -733,17 +733,28 @@ function krediApplyCloudTrial(data){
  const paid=data.paidUntil&&typeof data.paidUntil.toDate==='function'?data.paidUntil.toDate().toISOString():(data.paidUntil||null);
  subscription.trialStart=start;subscription.trialEnd=end;subscription.paidUntil=paid;subscription.cloudStatus=data.status||'trial';saveSubscription();
 }
+function krediUseCachedSubscriptionOffline(accountUid){
+ if(navigator.onLine||!krediUser||krediUser.uid!==accountUid)return false;
+ const cached=subscription&&typeof subscription==='object'?subscription:{};
+ const status=String(cached.cloudStatus||'').toLowerCase();
+ const end=status==='trial'?krediSubscriptionDateMillis(cached.trialEnd):(['active','paid'].includes(status)?krediSubscriptionDateMillis(cached.paidUntil):0);
+ if(!Number(cached.lastServerVerifiedAt)||!end)return false;
+ if(end>Date.now()&&(status==='trial'||['active','paid'].includes(status))){krediSubscriptionEndMillis=end;krediSubscriptionAccess='active';krediScheduleSubscriptionExpiry(end);krediStatus('Mode hors connexion · dernière vérification d’abonnement conservée. Vos changements restent sur cet appareil jusqu’au retour d’Internet.');return true}
+ krediSubscriptionEndMillis=0;krediSubscriptionAccess='locked';krediShowSubscriptionMessage('Votre période d’accès connue est terminée. Reconnectez-vous et renouvelez votre abonnement. Vos données restent conservées sur cet appareil.');navigate('subscription');return false;
+}
 async function krediLoadMerchantSubscription(){
  if(!krediUser||krediIsCreator())return true;
  const accountUid=krediUser.uid,store=krediStore;
  krediSubscriptionAccess='checking';
- if(!store){if(krediUser&&krediUser.uid===accountUid){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription')}return false}
+ if(!store){if(krediUseCachedSubscriptionOffline(accountUid))return true;if(krediUser&&krediUser.uid===accountUid){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription')}return false}
  try{
   const snap=await store.collection('merchantSubscriptions').doc(accountUid).get({source:'server'});
   // Une réponse tardive ne doit jamais appliquer l’abonnement d’un ancien compte au compte actuel.
   if(!krediUser||krediUser.uid!==accountUid||!snap)return false;
   const data=snap.exists?(snap.data()||{}):null;
   krediApplyCloudTrial(data);
+  subscription.lastServerVerifiedAt=Date.now();saveSubscription();
+  krediNeedsSubscriptionRecheck=false;
   const now=Date.now(),status=String(data&&data.status||'').toLowerCase();
   const paidUntil=krediSubscriptionDateMillis(data&&data.paidUntil);
   const trialEnd=krediSubscriptionDateMillis(data&&data.trialEnd);
@@ -769,6 +780,8 @@ async function krediLoadMerchantSubscription(){
   return krediSubscriptionAccess==='active';
  }catch(error){
   if(!krediUser||krediUser.uid!==accountUid)return false;
+  krediNeedsSubscriptionRecheck=true;
+  if(krediUseCachedSubscriptionOffline(accountUid))return true;
   krediSubscriptionAccess='unknown';
   console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);
   krediShowSubscriptionMessage('Vérification de l’abonnement impossible pour le moment. Par sécurité, les fonctions commerciales restent bloquées jusqu’à confirmation de Firebase. Vos données ne sont pas supprimées.');
@@ -924,7 +937,7 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
 // Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
 // COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
 const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
-let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false;
+let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false,krediNeedsSubscriptionRecheck=typeof navigator!=='undefined'&&!navigator.onLine;
 const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[]});
 function krediStatus(t){['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t});const loginStatus=document.getElementById('authRuntimeStatus');if(loginStatus&&!document.body.classList.contains('auth-ready')){loginStatus.textContent=t||'';loginStatus.hidden=!t}}
 function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
@@ -1208,7 +1221,7 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
-    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;clearTimeout(window.krediSubscriptionExpiryTimer);
+    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
     krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1');
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
     if(!activeUser){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
@@ -1219,7 +1232,7 @@ async function krediInitFirebase(){try{
       // Si le compte a changé pendant le chargement asynchrone de Firestore,
       // abandonner cette ancienne initialisation avant d'ouvrir un écouteur.
       if(!krediUser||krediUser.uid!==activeUser.uid)return;
-      if(!firestoreReady){if(!krediIsCreator()){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
+      if(!firestoreReady){if(!krediIsCreator()&&!krediUseCachedSubscriptionOffline(activeUser.uid)){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
     }
     if(!krediStore && firebase.firestore){
       try{
@@ -1232,7 +1245,7 @@ async function krediInitFirebase(){try{
       }
     }
     if(!krediStore){
-      if(!krediIsCreator()){krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}
+      if(!krediIsCreator()&&!krediUseCachedSubscriptionOffline(activeUser.uid)){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}
       krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');
       return;
     }
@@ -1272,7 +1285,7 @@ async function krediInitFirebase(){try{
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
       krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
       if(!snap.exists||mergedText!==remoteText){
-        if(!krediIsCreator()&&!krediCanUseMerchantApp()){krediStatus('Données conservées en lecture seule : abonnement non actif. Renouvelez depuis la page Abonnement.');return}
+        if(!krediIsCreator()&&(krediNeedsSubscriptionRecheck||!krediCanUseMerchantApp())){krediStatus('Données locales conservées : vérification obligatoire de l’abonnement avant toute synchronisation cloud.');return}
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
         try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid)return;krediLastWrite=mergedText;krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
@@ -1287,8 +1300,17 @@ async function krediInitFirebase(){try{
     clearTimeout(krediAuthWaitTimer);
     krediShowDiagnostic(err,'ERREUR AUTHENTICATION');
   });
-  window.addEventListener('online',()=>{if(krediUser){krediStatus('Internet revenu. Reprise de la synchronisation…');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),1200)}});
-  window.addEventListener('offline',()=>{if(krediUser)krediStatus('Hors connexion · les changements restent sur cet appareil.')});
+  window.addEventListener('online',async()=>{
+    const uid=krediUser&&krediUser.uid;if(!uid)return;
+    krediStatus('Internet revenu. Vérification de l’abonnement avant toute synchronisation…');
+    if(!krediIsCreator()){
+      const allowed=await krediLoadMerchantSubscription();
+      if(!krediUser||krediUser.uid!==uid||!allowed){krediStatus('Synchronisation suspendue : abonnement non confirmé par le serveur. Les données locales sont conservées.');return}
+    }
+    if(!krediUser||krediUser.uid!==uid)return;
+    krediNeedsSubscriptionRecheck=false;clearTimeout(krediSaveTimer);krediQueueCloudSave();
+  });
+  window.addEventListener('offline',()=>{if(krediUser){krediNeedsSubscriptionRecheck=true;krediStatus('Hors connexion · modifications conservées sur cet appareil. Le serveur vérifiera l’abonnement avant toute synchronisation au retour d’Internet.')}});
 }catch(e){
   const detail=(e&&e.code?e.code+' · ':'')+(e&&e.message?e.message:'erreur JavaScript');
   krediStatus('Connexion sécurisée non initialisée : '+detail+' Les données locales ne sont pas modifiées.');
@@ -1307,6 +1329,7 @@ function krediQueueCloudSave(){
     krediStatus('Données modifiées, mais le navigateur ne peut pas mémoriser la file de synchronisation. Gardez cette page ouverte et vérifiez le stockage.');
     return;
   }
+  if(navigator.onLine&&!krediIsCreator()&&krediNeedsSubscriptionRecheck){krediCloudReady=false;krediStatus('Données conservées sur cet appareil · vérification de l’abonnement requise avant synchronisation.');return}
   if(!krediStore){
     krediCloudReady=false;
     krediStatus('Données enregistrées sur cet appareil · Firebase indisponible, synchronisation en attente.');
