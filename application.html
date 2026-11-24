@@ -844,9 +844,10 @@ function editPurchase(purchaseId){
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
  if(stockProduct&&Number(stockProduct.quantity||0)+oldQty<quantity){alert('Modification impossible : le stock disponible ne permet pas d’appliquer la nouvelle quantité après retour de l’ancien achat.');return}
  if(!confirm('Confirmer la correction de cet achat ? Le stock lié sera recalculé.'))return;
- const before=JSON.stringify(db),previous={item:purchase.item,quantity:purchase.quantity,amount:purchase.amount,supplier:purchase.supplier,date:purchase.date,method:purchase.method,note:purchase.note},now=new Date().toISOString();
+ const before=JSON.stringify(db),previous={item:purchase.item,quantity:purchase.quantity,amount:purchase.amount,supplier:purchase.supplier,date:purchase.date,method:purchase.method,note:purchase.note,stockProductId:purchase.stockProductId||null},now=new Date().toISOString();
  if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)-oldQty+quantity;
  Object.assign(purchase,{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim(),updatedAt:now});
+ if(stockProduct)purchase.stockProductId=stockProduct.id;
  db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'updated',reason:reason.trim(),before:previous,after:{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Achat corrigé. Le stock et les totaux ont été recalculés.');
