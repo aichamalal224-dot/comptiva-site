@@ -1,5 +1,5 @@
 /* COMPTIVA PWA shell cache. No customer records or API responses are cached. */
-const CACHE_NAME = 'comptiva-pwa-shell-v1';
+const CACHE_NAME = 'comptiva-pwa-shell-v2';
 const APP_URL = new URL('./application.html', self.registration.scope).href;
 const SHELL_URLS = [
   APP_URL,
@@ -7,7 +7,10 @@ const SHELL_URLS = [
   new URL('./icons/comptiva.svg', self.registration.scope).href
 ];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS)).then(() => self.skipWaiting()));
+  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(SHELL_URLS)));
+});
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'COMPTIVA_SKIP_WAITING') self.skipWaiting();
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key.startsWith('comptiva-pwa-') && key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
