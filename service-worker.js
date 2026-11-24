@@ -19,8 +19,11 @@ self.addEventListener('fetch', event => {
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate' && url.href === APP_URL) {
     event.respondWith(fetch(request).then(response => {
-      if (response && response.ok) { const copy = response.clone(); caches.open(CACHE_NAME).then(cache => cache.put(APP_URL, copy)); }
-      return response;
+      if (!response || !response.ok) return response;
+      const copy = response.clone();
+      return caches.open(CACHE_NAME)
+        .then(cache => cache.put(APP_URL, copy))
+        .then(() => response);
     }).catch(() => caches.match(APP_URL)));
     return;
   }
