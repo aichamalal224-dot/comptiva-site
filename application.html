@@ -874,7 +874,55 @@ function cancelPurchase(purchaseId){
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Achat annulé. Historique conservé'+(stockProduct?' et stock corrigé.':'.'));
 }
-function renderExpenses(){let el=document.getElementById('expensesTable');if(!el)return;let today=dayKey(new Date()),month=today.slice(0,7);document.getElementById('expenseDayTotal').textContent=money(db.expenses.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));document.getElementById('expenseMonthTotal').textContent=money(db.expenses.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));let rows=db.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>'<tr><td>'+dateFmt(x.date)+'</td><td>'+esc(x.category)+'</td><td>'+esc(x.description)+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td></tr>');el.innerHTML=table(['Date','Catégorie','Description','Montant','Paiement','Note'],rows)}
+function renderExpenses(){
+ let el=document.getElementById('expensesTable');if(!el)return;
+ const active=db.expenses.filter(x=>x.status!=='cancelled');
+ let today=dayKey(new Date()),month=today.slice(0,7);
+ document.getElementById('expenseDayTotal').textContent=money(active.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));
+ document.getElementById('expenseMonthTotal').textContent=money(active.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));
+ let rows=db.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
+  const cancelled=x.status==='cancelled';
+  const actions=cancelled?'<span class="pill overdue">Annulée</span>':'<button class="soft" onclick="editExpense(\\''+x.id+'\\')">Modifier</button> <button class="soft" onclick="cancelExpense(\\''+x.id+'\\')">Annuler</button>';
+  return '<tr'+(cancelled?' style="opacity:.65"':'')+'><td>'+dateFmt(x.date)+'</td><td>'+esc(x.category)+'</td><td>'+esc(x.description)+(cancelled?'<br><small>Motif : '+esc(x.cancelReason||'—')+'</small>':'')+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td><td>'+actions+'</td></tr>';
+ });
+ el.innerHTML=table(['Date','Catégorie','Description','Montant','Paiement','Note','Actions'],rows)
+}
+function editExpense(expenseId){
+ const expense=db.expenses.find(x=>x.id===expenseId);
+ if(!expense||expense.status==='cancelled'){alert('Cette dépense est introuvable ou déjà annulée.');return}
+ const categories=['Loyer','Transport','Électricité / eau','Téléphone / Internet','Salaire','Réparation / entretien','Taxes / frais administratifs','Autre'];
+ const methods=['Espèces','Orange Money','Mobile Money','Autre'];
+ const category=prompt('Catégorie : '+categories.join(', '),expense.category||'Autre');if(category===null)return;
+ if(!categories.includes(category.trim())){alert('Catégorie non reconnue.');return}
+ const description=prompt('Description :',expense.description||'');if(description===null)return;if(!description.trim()){alert('La description est obligatoire.');return}
+ const amountText=prompt('Montant en GNF (nombre entier positif) :',String(expense.amount));if(amountText===null)return;
+ const amount=Number(amountText);if(!Number.isSafeInteger(amount)||amount<=0){alert('Le montant doit être un nombre entier positif en GNF.');return}
+ const date=prompt('Date (AAAA-MM-JJ) :',expense.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez AAAA-MM-JJ.');return}
+ const method=prompt('Mode de paiement : '+methods.join(', '),expense.method||'Espèces');if(method===null)return;
+ if(!methods.includes(method.trim())){alert('Mode de paiement non reconnu.');return}
+ const note=prompt('Note (facultatif) :',expense.note||'');if(note===null)return;
+ const reason=prompt('Motif obligatoire de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif de correction est obligatoire.');return}
+ if(!confirm('Confirmer la correction de cette dépense de '+money(amount)+' ?'))return;
+ const before=JSON.stringify(db),now=new Date().toISOString();
+ const previous={category:expense.category,description:expense.description,amount:expense.amount,date:expense.date,method:expense.method,note:expense.note};
+ Object.assign(expense,{category:category.trim(),description:description.trim(),amount,date,method:method.trim(),note:note.trim(),updatedAt:now});
+ db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'updated',reason:reason.trim(),before:previous,after:{category:expense.category,description:expense.description,amount,date,method:expense.method,note:expense.note},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
+ flash('Dépense corrigée. Les totaux ont été recalculés.');
+}
+function cancelExpense(expenseId){
+ const expense=db.expenses.find(x=>x.id===expenseId);
+ if(!expense){alert('Dépense introuvable.');return}
+ if(expense.status==='cancelled'){flash('Cette dépense est déjà annulée.');return}
+ const reason=prompt('Indiquez la raison de l’annulation de cette dépense :');if(reason===null)return;
+ if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
+ if(!confirm('Confirmer l’annulation de cette dépense de '+money(expense.amount)+' ? Elle sera exclue des totaux, mais conservée dans l’historique.'))return;
+ const before=JSON.stringify(db),now=new Date().toISOString();
+ expense.status='cancelled';expense.cancelledAt=now;expense.cancelReason=reason.trim();expense.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
+ db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
+ flash('Dépense annulée. Historique conservé et totaux recalculés.');
+}
 function receiptMerchantHeader(){
  const p=db.businessProfile&&typeof db.businessProfile==='object'?db.businessProfile:{};
  const authName=krediUser&&String(krediUser.displayName||'').trim();
