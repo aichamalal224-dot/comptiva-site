@@ -661,7 +661,7 @@ function editPayment(paymentId){
  if(!debt||debt.status==='cancelled'){alert('La dette liée est introuvable ou annulée.');return}
  const amountText=prompt('Nouveau montant du remboursement (GNF) :',String(payment.amount));
  if(amountText===null)return;const amount=Number(amountText);
- if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être un nombre positif.');return}
+ if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}
  const date=prompt('Nouvelle date (AAAA-MM-JJ) :',payment.date||new Date().toISOString().slice(0,10));
  if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez le format AAAA-MM-JJ.');return}
  const method=prompt('Mode de paiement :',payment.method||'Espèces');
