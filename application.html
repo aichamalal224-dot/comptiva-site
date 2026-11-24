@@ -574,7 +574,7 @@ if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscripti
 function saveSubscription(){localStorage.setItem(SUB_STORE,JSON.stringify(subscription));renderSubscription()}
 function loadDB(){try{return JSON.parse(localStorage.getItem(STORE))||{clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],auditLog:[]}}catch(e){return {clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],auditLog:[]}}}
 if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];if(!Array.isArray(db.auditLog))db.auditLog=[];
-function saveDB(){if(krediUser&&!krediIsCreator()&&!krediCanUseMerchantApp()){db=loadDB();renderAll();flash('Accès suspendu : vérifiez ou renouvelez votre abonnement avant de modifier les données.');return}try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return}renderAll();krediQueueCloudSave()}
+function saveDB(){if(krediUser&&!krediIsCreator()&&!krediCanUseMerchantApp()){db=loadDB();renderAll();flash('Accès suspendu : vérifiez ou renouvelez votre abonnement avant de modifier les données.');return false}try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return false}renderAll();krediQueueCloudSave();return true}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
@@ -624,9 +624,11 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  if(!payment){alert('Remboursement introuvable.');return}
  const debt=db.debts.find(x=>x.id===payment.debtId);
  if(!debt){alert('Dette introuvable.');return}
- const ordered=db.payments.filter(x=>x.debtId===debt.id).slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
- const paymentIndex=ordered.indexOf(payment);const paidThrough=ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+Number(x.amount||0),0);
- const remaining=Math.max(0,Number(debt.amount||0)-paidThrough);
+ const cancelled=payment.status==='cancelled';
+ const ordered=db.payments.filter(x=>x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+ const paymentIndex=ordered.indexOf(payment);
+ const paidThrough=cancelled?0:ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+Number(x.amount||0),0);
+ const remaining=cancelled?null:Math.max(0,Number(debt.amount||0)-paidThrough);
  const customer=db.clients.find(x=>x.id===debt.clientId);const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const receiptNo=String(payment.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
@@ -637,14 +639,14 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  h2{text-align:center;font-size:15px;margin:12px 0}.meta p{margin:5px 0}.line{border-top:1px dashed #8b98a8;margin:12px 0}
  .item{display:flex;justify-content:space-between;gap:12px;margin:9px 0}.item span:last-child{text-align:right}.total{font-weight:800;font-size:16px}.small{font-size:11px;color:#53657b}
  @media print{body{padding:0;max-width:none}@page{margin:6mm}}</style></head><body>
- ${receiptMerchantHeader()}<h2>REÇU DE REMBOURSEMENT DE CRÉDIT</h2>${isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':''}
+ ${receiptMerchantHeader()}<h2>REÇU DE REMBOURSEMENT DE CRÉDIT</h2>${cancelled?'<div class="duplicate-mark" style="border-color:#b91c1c;color:#b91c1c">REMBOURSEMENT ANNULÉ — NON VALABLE</div>':''}${isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':''}
  <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
- <div class="line"></div><div class="item total"><span>Montant remboursé</span><span>${money(payment.amount)}</span></div>
+ <div class="line"></div><div class="item total"><span>Montant du remboursement</span><span>${money(payment.amount)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(payment.method||'—')}</span></div>
- <div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${money(paidThrough)}</b></div>
+ ${cancelled?'<p style="text-align:center;font-weight:800;color:#b91c1c">OPÉRATION ANNULÉE — CE DOCUMENT NE PROUVE AUCUN PAIEMENT.</p>':`<div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${money(paidThrough)}</b></div>
  <div class="item total"><span>Reste à payer</span><span>${money(remaining)}</span></div>
- <p style="text-align:center;font-weight:700">${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>
- <div class="line"></div><p style="text-align:center">Merci. Conservez ce reçu comme preuve de paiement.</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
+ <p style="text-align:center;font-weight:700">${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>`}
+ <div class="line"></div><p style="text-align:center">${cancelled?'Document d’annulation conservé dans l’historique.':'Merci. Conservez ce reçu comme preuve de paiement.'}</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script></body></html>`);
  w.document.close();
 }
@@ -687,12 +689,13 @@ function cancelSale(saleId){
  if(reason===null)return;
  if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cette vente de '+money(sale.total)+' ? Le chiffre d’affaires sera recalculé et le stock restauré si le produit est lié.'))return;
+ const before=JSON.stringify(db);
  const now=new Date().toISOString();
  if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)+Number(sale.quantity||0);
  sale.status='cancelled';sale.cancelledAt=now;sale.cancelReason=reason.trim();sale.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
  linkedDebts.forEach(d=>{d.status='cancelled';d.cancelledAt=now;d.cancelReason='Annulation de la vente liée : '+reason.trim();});
  db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
- saveDB();
+ if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Vente annulée. Historique conservé, chiffres recalculés'+(stockProduct?' et stock restauré.':'.'));
 }
 function openPaymentFor(debtId){openForm('payment',{debtId})}
