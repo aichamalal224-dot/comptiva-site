@@ -124,6 +124,12 @@ service cloud.firestore {
   }
 }
 
+COMPARAISON AVEC LES RÈGLES COMMUNIQUÉES PRÉCÉDEMMENT
+- La dernière version que l'utilisateur a collée autorisait déjà chaque commerçant à lire et écrire ses propres documents sous /users/{uid}, sans condition d'abonnement.
+- Elle autorisait le commerçant à lire sa fiche merchantSubscriptions, mais réservait sa création, sa modification et sa suppression au Créateur.
+- La présente proposition conserve la lecture des propres données après expiration, limite les écritures sous /users/{uid} à un essai/abonnement valide et autorise la création initiale d'un seul document d'essai de 14 jours par le commerçant.
+- Avant toute publication, vérifier dans Firebase Console que ces règles communiquées correspondent toujours aux règles réellement actives. L'utilisateur n'a pas confirmé explicitement la publication de cette version.
+
 POINTS À SAVOIR
 1. Le code COMPTIVA de la branche automatic-subscription-expiry enregistre les données commerciales dans :
    users/{uid}/comptivaData/main
