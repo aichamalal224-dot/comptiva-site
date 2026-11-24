@@ -1528,8 +1528,8 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
-    krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
-    try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=false;console.warn('[COMPTIVA] Marqueur local de synchronisation illisible :',storageError)}
+    if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
+    try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=!!activeUser;console.warn('[COMPTIVA] Marqueur local illisible : prudence, les données locales seront traitées comme potentiellement non synchronisées.',storageError)}
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
     if(!activeUser){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
     krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();
@@ -1615,7 +1615,7 @@ async function krediInitFirebase(){try{
         catch(e){if(!krediUser||krediUser.uid!==activeUid)return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
-      krediCloudReady=true;krediLocalDirty=false;localStorage.removeItem('comptiva_pending_'+activeUid);
+      krediCloudReady=true;krediLocalDirty=false;krediSafeStorageRemove('comptiva_pending_'+activeUid);
       krediStatus(navigator.onLine?'Connecté · données synchronisées':'Hors connexion · données locales disponibles');renderAll();
     },err=>{clearTimeout(serverProbeTimer);if(!krediUser||krediUser.uid!==activeUid)return;krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
   },err=>{
@@ -1808,7 +1808,7 @@ async function krediSignUp(){
   }
 }
 async function krediForgotPassword(){if(!krediAuth){krediAuthMessage('Firebase n’est pas encore chargé.');return}const email=document.getElementById('cloudEmail').value.trim();if(!email){krediAuthMessage('Saisissez votre adresse e-mail pour recevoir le lien de réinitialisation.');return}try{await krediAuth.sendPasswordResetEmail(email);krediAuthMessage('Un lien de réinitialisation a été envoyé si ce compte existe.',true)}catch(e){krediAuthMessage(krediFriendlyError(e))}}
-async function krediSignOut(){if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}if(!confirm('Voulez-vous vous déconnecter de votre compte Comptiva ?'))return;try{if(krediSaveTimer)clearTimeout(krediSaveTimer);localStorage.setItem(STORE,JSON.stringify(db));await krediAuth.signOut()}catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}}
+async function krediSignOut(){if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}if(!confirm('Voulez-vous vous déconnecter de votre compte Comptiva ?'))return;if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}let localSaved=false;try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(storageError){console.error('[COMPTIVA] Sauvegarde locale avant déconnexion impossible :',storageError)}try{await krediAuth.signOut();if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500)}catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}}
 window.addEventListener('error',event=>{if(event&&event.message&&event.message!=='Script error.')krediStatus('Erreur JavaScript : '+event.message)});
 // Le formulaire est relié immédiatement, sans attendre le retour du listener Firebase.
 const krediLoginForm=document.getElementById('authForm');
