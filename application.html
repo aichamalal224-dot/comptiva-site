@@ -756,8 +756,11 @@ function editSale(saleId){
  const total=Math.round(quantity*unitPrice);if(!Number.isSafeInteger(total)||total<=0){alert('Total de vente invalide.');return}
  const date=prompt('Date (AAAA-MM-JJ) :',sale.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide. Utilisez AAAA-MM-JJ.');return}
  const mode=prompt('Mode : Espèces, Orange Money, Mobile Money, Crédit client ou Paiement mixte',sale.method||'Espèces');if(mode===null)return;
- const isCredit=mode.trim().toLowerCase()==='crédit client'||mode.trim().toLowerCase()==='credit';
- const isMixed=mode.trim().toLowerCase()==='paiement mixte'||mode.trim().toLowerCase()==='mixed';
+ const normalizedMode=mode.trim().toLowerCase();
+ const allowedModes=['espèces','especes','orange money','mobile money','crédit client','credit','paiement mixte','mixed'];
+ if(!allowedModes.includes(normalizedMode)){alert('Mode de paiement non reconnu. Choisissez Espèces, Orange Money, Mobile Money, Crédit client ou Paiement mixte.');return}
+ const isCredit=normalizedMode==='crédit client'||normalizedMode==='credit';
+ const isMixed=normalizedMode==='paiement mixte'||normalizedMode==='mixed';
  let clientId=sale.clientId||'',cashPart=0,mobilePart=0,paidAmount=total,creditAmount=0;
  if(isCredit){const current=db.clients.find(c=>c.id===clientId);const clientLabel=prompt('Nom exact du client enregistré :',current?current.name:'');if(clientLabel===null)return;const client=db.clients.find(c=>c.name.trim().toLowerCase()===clientLabel.trim().toLowerCase());if(!client){alert('Client non trouvé. Enregistrez-le d’abord dans la rubrique Clients.');return}clientId=client.id;paidAmount=0;creditAmount=total}
  else if(isMixed){cashPart=Number(prompt('Part payée en espèces (GNF) :',String(sale.cashPart||0)));mobilePart=Number(prompt('Part payée par Mobile Money (GNF) :',String(sale.mobilePart||0)));if(!Number.isFinite(cashPart)||!Number.isFinite(mobilePart)||cashPart<0||mobilePart<0||Math.round(cashPart+mobilePart)!==total){alert('Les deux parts doivent être positives ou nulles et leur somme doit être égale au total.');return}paidAmount=total}
