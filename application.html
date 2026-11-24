@@ -727,52 +727,6 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  <p style="text-align:center;font-weight:700">${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>`}
  <div class="line"></div><p style="text-align:center">${cancelled?'Document d’annulation conservé dans l’historique.':'Merci. Conservez ce reçu comme preuve de paiement.'}</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script>
-<script>
-/* Installation PWA COMPTIVA — ne modifie pas les données métier. */
-(function(){
-  if(!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
-  window.addEventListener('load',function(){
-    navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(function(error){
-      console.warn('[COMPTIVA PWA] Service worker non enregistré :',error);
-    });
-  });
-  var deferredPrompt=null;
-  var standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
-  var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
-  var installButton=document.createElement('button');
-  installButton.type='button';
-  installButton.id='comptivaInstallButton';
-  installButton.textContent='Installer COMPTIVA';
-  installButton.setAttribute('aria-label','Installer COMPTIVA sur cet appareil');
-  installButton.style.cssText='position:fixed;right:16px;bottom:138px;z-index:30;display:none;background:#1256b4;color:#fff;border:0;border-radius:999px;padding:12px 17px;font:700 14px system-ui;box-shadow:0 5px 18px #082f6840';
-  document.body.appendChild(installButton);
-  if(standalone) return;
-  window.addEventListener('beforeinstallprompt',function(event){
-    event.preventDefault();
-    deferredPrompt=event;
-    installButton.style.display='block';
-  });
-  if(isIOS) installButton.style.display='block';
-  installButton.addEventListener('click',async function(){
-    if(deferredPrompt){
-      deferredPrompt.prompt();
-      try{await deferredPrompt.userChoice;}catch(error){console.warn('[COMPTIVA PWA] Choix installation indisponible.',error);}
-      deferredPrompt=null;
-      installButton.style.display='none';
-      return;
-    }
-    if(isIOS){
-      alert('Pour installer COMPTIVA sur iPhone ou iPad : appuyez sur le bouton Partager de Safari, puis sur « Sur l’écran d’accueil ».');
-    }else{
-      alert('Pour installer COMPTIVA, ouvrez le menu de votre navigateur puis choisissez « Installer COMPTIVA » ou « Ajouter à l’écran d’accueil », si cette option est proposée.');
-    }
-  });
-  window.addEventListener('appinstalled',function(){
-    installButton.style.display='none';
-    deferredPrompt=null;
-  });
-})();
-</script>
 
 </body></html>`);
  w.document.close();
@@ -1910,6 +1864,53 @@ function krediStartFirebaseOnce(){
 }
 if(document.readyState==='complete')krediStartFirebaseOnce();
 else window.addEventListener('load',krediStartFirebaseOnce,{once:true});
+</script>
+
+<script>
+/* Installation PWA COMPTIVA — ne modifie pas les données métier. */
+(function(){
+  if(!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(function(error){
+      console.warn('[COMPTIVA PWA] Service worker non enregistré :',error);
+    });
+  });
+  var deferredPrompt=null;
+  var standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
+  var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  var installButton=document.createElement('button');
+  installButton.type='button';
+  installButton.id='comptivaInstallButton';
+  installButton.textContent='Installer COMPTIVA';
+  installButton.setAttribute('aria-label','Installer COMPTIVA sur cet appareil');
+  installButton.style.cssText='position:fixed;right:16px;bottom:138px;z-index:30;display:none;background:#1256b4;color:#fff;border:0;border-radius:999px;padding:12px 17px;font:700 14px system-ui;box-shadow:0 5px 18px #082f6840';
+  document.body.appendChild(installButton);
+  if(standalone) return;
+  window.addEventListener('beforeinstallprompt',function(event){
+    event.preventDefault();
+    deferredPrompt=event;
+    installButton.style.display='block';
+  });
+  if(isIOS) installButton.style.display='block';
+  installButton.addEventListener('click',async function(){
+    if(deferredPrompt){
+      deferredPrompt.prompt();
+      try{await deferredPrompt.userChoice;}catch(error){console.warn('[COMPTIVA PWA] Choix installation indisponible.',error);}
+      deferredPrompt=null;
+      installButton.style.display='none';
+      return;
+    }
+    if(isIOS){
+      alert('Pour installer COMPTIVA sur iPhone ou iPad : appuyez sur le bouton Partager de Safari, puis sur « Sur l’écran d’accueil ».');
+    }else{
+      alert('Pour installer COMPTIVA, ouvrez le menu de votre navigateur puis choisissez « Installer COMPTIVA » ou « Ajouter à l’écran d’accueil », si cette option est proposée.');
+    }
+  });
+  window.addEventListener('appinstalled',function(){
+    installButton.style.display='none';
+    deferredPrompt=null;
+  });
+})();
 </script>
 </body>
 </html>
