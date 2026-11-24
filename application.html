@@ -828,6 +828,12 @@ function editPurchase(purchaseId){
  if(stockProduct&&item.trim().toLowerCase()!==String(purchase.item||'').trim().toLowerCase()){alert('Pour préserver le lien exact du stock, ne changez pas le nom du produit ici. Annulez cet achat puis enregistrez le bon achat après vérification.');return}
  const qtyText=prompt('Quantité achetée :',String(purchase.quantity||0));if(qtyText===null)return;const quantity=Number(qtyText);
  if(!Number.isFinite(quantity)||quantity<0){alert('Quantité invalide.');return}
+ // Si l'ancien achat n'avait aucune quantité suivie, ne rattacher le stock
+ // qu'en présence d'un produit dont le nom correspond exactement.
+ if(!stockProduct&&oldQty===0&&quantity>0){
+  const match=db.products.find(p=>String(p.name||'').trim().toLowerCase()===item.trim().toLowerCase());
+  if(match)stockProduct=match;
+ }
  const amountText=prompt('Montant total en GNF :',String(purchase.amount));if(amountText===null)return;const amount=Number(amountText);
  if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être positif.');return}
  const supplier=prompt('Fournisseur :',purchase.supplier||'');if(supplier===null)return;
