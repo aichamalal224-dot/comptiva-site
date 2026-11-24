@@ -579,6 +579,7 @@ function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
 function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('fr-FR')}
+function isValidISODate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [year,month,day]=value.split('-').map(Number);const date=new Date(Date.UTC(year,month-1,day));return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day}
 function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client supprimé/inconnu'}
 function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId&&p.status!=='cancelled').reduce((a,p)=>a+Number(p.amount||0),0)}
 function balance(d){if(!d||d.status==='cancelled')return 0;return Math.max(0,Number(d.amount||0)-paidFor(d.id))}
@@ -626,8 +627,8 @@ function editDebt(debtId){
  const clientNameInput=prompt('Nom exact du client enregistré :',clientCurrent?clientCurrent.name:'');if(clientNameInput===null)return;
  const client=db.clients.find(c=>c.name.trim().toLowerCase()===clientNameInput.trim().toLowerCase());if(!client){alert('Client introuvable. Enregistrez d’abord le client ou vérifiez son nom.');return}
  const amountText=prompt('Montant corrigé de la dette (GNF) :',String(debt.amount));if(amountText===null)return;const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être positif.');return}
- const date=prompt('Date de la dette (AAAA-MM-JJ) :',debt.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide.');return}
- const due=prompt('Échéance (AAAA-MM-JJ, laisser vide si aucune) :',debt.due||'');if(due===null)return;if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due)){alert('Échéance invalide.');return}
+ const date=prompt('Date de la dette (AAAA-MM-JJ) :',debt.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!isValidISODate(date)){alert('Date invalide.');return}
+ const due=prompt('Échéance (AAAA-MM-JJ, laisser vide si aucune) :',debt.due||'');if(due===null)return;if(due&&!isValidISODate(due)){alert('Échéance invalide.');return}
  const description=prompt('Motif / description :',debt.description||'');if(description===null)return;
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
  if(!confirm('Confirmer la correction de cette dette de '+money(amount)+' ?'))return;
@@ -662,7 +663,7 @@ function editPayment(paymentId){
  if(amountText===null)return;const amount=Number(amountText);
  if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être un nombre positif.');return}
  const date=prompt('Nouvelle date (AAAA-MM-JJ) :',payment.date||new Date().toISOString().slice(0,10));
- if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide. Utilisez le format AAAA-MM-JJ.');return}
+ if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez le format AAAA-MM-JJ.');return}
  const method=prompt('Mode de paiement :',payment.method||'Espèces');
  if(method===null)return;if(!method.trim()){alert('Le mode de paiement est obligatoire.');return}
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
@@ -754,7 +755,7 @@ function editSale(saleId){
  const qtyText=prompt('Quantité vendue :',String(sale.quantity));if(qtyText===null)return;const quantity=Number(qtyText);if(!Number.isFinite(quantity)||quantity<=0){alert('Quantité invalide.');return}
  const priceText=prompt('Prix unitaire en GNF :',String(sale.unitPrice));if(priceText===null)return;const unitPrice=Number(priceText);if(!Number.isFinite(unitPrice)||unitPrice<=0){alert('Prix unitaire invalide.');return}
  const total=Math.round(quantity*unitPrice);if(!Number.isSafeInteger(total)||total<=0){alert('Total de vente invalide.');return}
- const date=prompt('Date (AAAA-MM-JJ) :',sale.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide. Utilisez AAAA-MM-JJ.');return}
+ const date=prompt('Date (AAAA-MM-JJ) :',sale.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez AAAA-MM-JJ.');return}
  const mode=prompt('Mode : Espèces, Orange Money, Mobile Money, Crédit client ou Paiement mixte',sale.method||'Espèces');if(mode===null)return;
  const normalizedMode=mode.trim().toLowerCase();
  const allowedModes=['espèces','especes','orange money','mobile money','crédit client','credit','paiement mixte','mixed'];
@@ -841,7 +842,7 @@ function editPurchase(purchaseId){
  if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être positif.');return}
  const supplier=prompt('Fournisseur :',purchase.supplier||'');if(supplier===null)return;
  const date=prompt('Date (AAAA-MM-JJ) :',purchase.date||new Date().toISOString().slice(0,10));if(date===null)return;
- if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide.');return}
+ if(!isValidISODate(date)){alert('Date invalide.');return}
  const method=prompt('Mode de paiement :',purchase.method||'Espèces');if(method===null)return;if(!method.trim()){alert('Mode de paiement obligatoire.');return}
  const note=prompt('Note :',purchase.note||'');if(note===null)return;
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
