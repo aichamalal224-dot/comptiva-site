@@ -1594,7 +1594,14 @@ async function krediInitFirebase(){try{
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
-      const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
+      const remoteDocument=snap.exists?snap.data():null;
+      if(snap.exists&&(!remoteDocument||!Object.prototype.hasOwnProperty.call(remoteDocument,'db'))){
+        krediCloudReady=false;krediLocalDirty=true;
+        krediStatus('Synchronisation suspendue : le document Firebase existe mais ne contient pas le champ db attendu. Les données locales sont conservées ; aucune base vide ne sera fusionnée ni envoyée.');
+        console.error('[COMPTIVA] Document Firestore existant sans champ db : fusion bloquée.');
+        return;
+      }
+      const remoteData=snap.exists?remoteDocument.db:krediEmptyDB();
       const remoteShapeIssue=krediDatabaseShapeIssue(remoteData);
       if(remoteShapeIssue){krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue : les données reçues de Firebase sont mal formées ('+remoteShapeIssue+'). Aucune fusion ni écriture automatique ne sera effectuée.');console.error('[COMPTIVA] Structure distante invalide :',remoteShapeIssue);return}
       const localData=loadDB();
