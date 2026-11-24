@@ -882,7 +882,7 @@ function renderExpenses(){
  document.getElementById('expenseMonthTotal').textContent=money(active.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));
  let rows=db.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
   const cancelled=x.status==='cancelled';
-  const actions=cancelled?'<span class="pill overdue">Annulée</span>':'<button class="soft" onclick="editExpense(\\''+x.id+'\\')">Modifier</button> <button class="soft" onclick="cancelExpense(\\''+x.id+'\\')">Annuler</button>';
+  const actions=cancelled?'<span class="pill overdue">Annulée</span>':'<button class="soft" onclick="editExpense(\''+x.id+'\')">Modifier</button> <button class="soft" onclick="cancelExpense(\''+x.id+'\')">Annuler</button>';
   return '<tr'+(cancelled?' style="opacity:.65"':'')+'><td>'+dateFmt(x.date)+'</td><td>'+esc(x.category)+'</td><td>'+esc(x.description)+(cancelled?'<br><small>Motif : '+esc(x.cancelReason||'—')+'</small>':'')+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td><td>'+actions+'</td></tr>';
  });
  el.innerHTML=table(['Date','Catégorie','Description','Montant','Paiement','Note','Actions'],rows)
