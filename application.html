@@ -1633,7 +1633,7 @@ async function krediInitFirebase(){try{
         krediLocalDirty=true;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediCloudReady=false;krediStatus('Données locales conservées : le navigateur ne peut pas mémoriser la synchronisation en attente. Libérez de l’espace avant de réessayer.');return}
         krediStatus('Envoi des données locales vers Firebase…');
         try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;krediLastWrite=mergedText;krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
-        catch(e){if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/+activeUid+'/comptivaData/main')}
+        catch(e){if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
       krediCloudReady=true;krediLocalDirty=false;krediSafeStorageRemove('comptiva_pending_'+activeUid);
