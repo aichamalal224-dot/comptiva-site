@@ -11,7 +11,7 @@ IMPORTANT
 - Aucun document ni aucune donnée existante n'est supprimé.
 - L'accès en lecture aux propres données du commerçant reste autorisé après expiration.
 - Les écritures cloud dans /users sont bloquées si l'essai ou l'abonnement n'est plus valide.
-- Le Créateur conserve un accès complet.
+- Le Créateur peut consulter/gérer l'annuaire des commerçants et leurs fiches d'abonnement selon les règles ci-dessous. Les données commerciales de chaque boutique restent privées : ces règles ne donnent pas au Créateur un accès général à /users/{uid}.
 - Les paiements Mobile Money ne sont pas automatisés par ces règles : l'activation payée doit être effectuée par un processus serveur de confiance.
 
 rules_version = '2';
@@ -56,7 +56,8 @@ service cloud.firestore {
     // Données privées : chaque commerçant ne voit que ses propres données.
     // La lecture reste autorisée après expiration pour préserver l'accès aux données.
     // Toute écriture cloud exige un essai ou un abonnement encore valide.
-    // Le Créateur est exempté.
+    // Le Créateur n'est exempté que pour ses propres données sous /users/{creatorUid}.
+    // Il ne peut pas lire les données commerciales d'un autre commerçant via cette règle.
     match /users/{userId}/{document=**} {
       allow read: if signedIn()
         && request.auth.uid == userId;
