@@ -953,14 +953,25 @@ function saveMerchantProfile(event){
  event.preventDefault();
  const name=(document.getElementById('merchantBusinessName')?.value||'').trim();
  if(!name){flash('Indiquez le nom de votre magasin ou commerce.');return}
+ const previousProfile=db.businessProfile?{...db.businessProfile}:undefined;
+ const previousRaw=krediSafeStorageGet(STORE);
+ if(!previousRaw.ok){flash('Profil non enregistré : lecture de la sauvegarde locale impossible.');return}
  db.businessProfile={
   name,
   phone:(document.getElementById('merchantBusinessPhone')?.value||'').trim(),
   email:(document.getElementById('merchantBusinessEmail')?.value||'').trim(),
   address:(document.getElementById('merchantBusinessAddress')?.value||'').trim()
  };
- saveDB();
- flash('Profil du commerce enregistré. Il sera affiché sur vos prochains reçus.');
+ let saved=false;
+ try{saved=saveDB()===true}catch(error){console.error('[COMPTIVA] Enregistrement du profil commerce :',error)}
+ if(!saved){
+  if(previousProfile===undefined)delete db.businessProfile;else db.businessProfile=previousProfile;
+  if(previousRaw.value!==null)krediSafeStorageSet(STORE,previousRaw.value);
+  renderAll();
+  flash('Profil non enregistré : la sauvegarde locale n’a pas été confirmée. Vos anciennes informations sont conservées.');
+  return;
+ }
+ flash('Profil du commerce enregistré localement. Synchronisation cloud en attente de confirmation.');
 }
 function printReceipt(saleId,isDuplicate=false){
  const sale=db.sales.find(x=>x.id===saleId);
