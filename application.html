@@ -984,15 +984,26 @@ async function loadCreatorDirectory(){
   if(subList){
    const subRows=subscriptionDocs.map(x=>{
     const d=x.merchant.data||{},sub=x.data||{};
-    let state='En attente',end='—';
+    const asDate=value=>{if(value&&typeof value.toDate==='function')return value.toDate();if(!value)return null;const parsed=new Date(value);return isNaN(parsed.getTime())?null:parsed};
+    const fmt=value=>value?value.toLocaleDateString('fr-FR'):'—';
+    let state='En attente',start='—',end='—',remaining='—';
+    const now=new Date(),kind=String(sub.status||'').toLowerCase();
     if(x.error)state='Lecture impossible';
     else if(!x.exists)state='En attente · aucune fiche';
-    else if(['active','paid'].includes(String(sub.status||'').toLowerCase())){state='Actif';if(sub.paidUntil&&sub.paidUntil.toDate)end=sub.paidUntil.toDate().toLocaleDateString('fr-FR')}
-    else if(sub.status==='trial'){const dt=sub.trialEnd&&sub.trialEnd.toDate?sub.trialEnd.toDate():new Date(sub.trialEnd||0);if(dt instanceof Date&&!isNaN(dt)&&dt>new Date()){state='Essai gratuit';end=dt.toLocaleDateString('fr-FR')}else state='Essai terminé';}
-    else state=String(sub.status||'En attente');
-    return '<tr><td>'+esc(d.displayName||d.email||x.merchant.uid)+'</td><td>'+esc(state)+'</td><td>'+esc(end)+'</td></tr>';
+    else if(kind==='trial'){
+      const startDate=asDate(sub.trialStart),endDate=asDate(sub.trialEnd);
+      start=fmt(startDate);end=fmt(endDate);
+      if(endDate&&endDate>now){state='Essai gratuit';remaining=Math.max(0,Math.ceil((endDate-now)/86400000))+' jour(s)'}
+      else state='Essai terminé';
+    }else if(['active','paid'].includes(kind)){
+      const startDate=asDate(sub.paidStart||sub.subscriptionStart),endDate=asDate(sub.paidUntil);
+      start=fmt(startDate);end=fmt(endDate);
+      if(endDate&&endDate>now){state='Abonnement actif';remaining=Math.max(0,Math.ceil((endDate-now)/86400000))+' jour(s)'}
+      else state='Abonnement expiré';
+    }else state=String(sub.status||'En attente');
+    return '<tr><td>'+esc(d.displayName||d.email||x.merchant.uid)+'</td><td>'+esc(state)+'</td><td>'+esc(start)+'</td><td>'+esc(end)+'</td><td>'+esc(remaining)+'</td></tr>';
    });
-   subList.innerHTML=subRows.length?'<table><thead><tr><th>Commerçant</th><th>État</th><th>Échéance</th></tr></thead><tbody>'+subRows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant répertorié.</div>';
+   subList.innerHTML=subRows.length?'<table><thead><tr><th>Commerçant</th><th>État</th><th>Début</th><th>Échéance</th><th>Temps restant</th></tr></thead><tbody>'+subRows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant répertorié.</div>';
   }
  }catch(e){
   console.error('[COMPTIVA Créateur] Lecture du répertoire ou des abonnements refusée',e);
