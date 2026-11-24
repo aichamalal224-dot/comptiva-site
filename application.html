@@ -1882,10 +1882,61 @@ else window.addEventListener('load',krediStartFirebaseOnce,{once:true});
 /* Installation PWA COMPTIVA — ne modifie pas les données métier. */
 (function(){
   if(!('serviceWorker' in navigator) || !/^https?:$/.test(location.protocol)) return;
-  window.addEventListener('load',function(){
-    navigator.serviceWorker.register('./service-worker.js',{scope:'./'}).catch(function(error){
-      console.warn('[COMPTIVA PWA] Service worker non enregistré :',error);
+  function setupUpdateNotice(registration){
+    var notice=document.getElementById('comptivaUpdateNotice');
+    if(!notice){
+      notice=document.createElement('div');
+      notice.id='comptivaUpdateNotice';
+      notice.setAttribute('role','status');
+      notice.setAttribute('aria-live','polite');
+      notice.style.cssText='position:fixed;left:12px;right:12px;bottom:100px;z-index:80;display:none;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;background:#082f68;color:#fff;padding:13px 15px;border-radius:14px;box-shadow:0 8px 28px #082f6840;font:600 13px system-ui';
+      var message=document.createElement('span');
+      message.textContent='Une nouvelle version de COMPTIVA est prête. Terminez vos opérations et vérifiez leur sauvegarde avant la mise à jour.';
+      var button=document.createElement('button');
+      button.type='button';
+      button.textContent='Mettre à jour';
+      button.style.cssText='background:#fff;color:#082f68;border:0;border-radius:9px;padding:9px 13px;font-weight:750';
+      button.addEventListener('click',function(){
+        if(!registration.waiting)return;
+        button.disabled=true;
+        button.textContent='Mise à jour…';
+        registration.waiting.postMessage({type:'COMPTIVA_SKIP_WAITING'});
+      });
+      notice.appendChild(message);
+      notice.appendChild(button);
+      document.body.appendChild(notice);
+    }
+    function showIfReady(){
+      if(registration.waiting && navigator.serviceWorker.controller) notice.style.display='flex';
+    }
+    showIfReady();
+    registration.addEventListener('updatefound',function(){
+      var installing=registration.installing;
+      if(!installing)return;
+      installing.addEventListener('statechange',function(){
+        if(installing.state==='installed')showIfReady();
+      });
     });
+    navigator.serviceWorker.addEventListener('controllerchange',function(){
+      if(window.comptivaUpdateReloading)return;
+      window.comptivaUpdateReloading=true;
+      window.location.reload();
+    });
+    document.addEventListener('visibilitychange',function(){
+      if(document.visibilityState==='visible')registration.update().catch(function(error){
+        console.warn('[COMPTIVA PWA] Vérification de mise à jour indisponible :',error);
+      });
+    });
+    registration.update().catch(function(error){
+      console.warn('[COMPTIVA PWA] Vérification de mise à jour indisponible :',error);
+    });
+  }
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('./service-worker.js',{scope:'./',updateViaCache:'none'})
+      .then(setupUpdateNotice)
+      .catch(function(error){
+        console.warn('[COMPTIVA PWA] Service worker non enregistré :',error);
+      });
   });
   var deferredPrompt=null;
   var standalone=window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone===true;
