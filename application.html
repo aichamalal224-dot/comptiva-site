@@ -616,7 +616,27 @@ document.getElementById('dashboardUpcomingDebts').innerHTML=upcoming.length?upco
 let greet=document.getElementById('dashboardGreeting');if(greet&&krediUser){const profileName=String(db.businessProfile&&db.businessProfile.name||'').trim();let display=profileName||(krediUser.displayName||'').trim()||((krediUser.email||'').split('@')[0]||'Commerçant');greet.textContent='Bonjour, '+display;}
 }
 function renderClients(){let q=(document.getElementById('clientSearch')?.value||'').toLowerCase();let rows=(Array.isArray(db.clients)?db.clients:[]).filter(c=>c&&typeof c==='object'&&typeof c.name==='string'&&c.name.toLowerCase().includes(q)).map(c=>{let total=(Array.isArray(db.debts)?db.debts:[]).filter(d=>d&&typeof d==='object'&&d.clientId===c.id).reduce((a,d)=>a+balance(d),0);return '<tr><td>'+esc(c.name)+'</td><td>'+esc(c.phone||'—')+'</td><td>'+money(total)+'</td><td><button class="soft" onclick="startReminderForClient(\''+c.id+'\')">Rappel</button></td></tr>'});let el=document.getElementById('clientsTable');if(el)el.innerHTML=table(['Client / code','Téléphone','Solde total','Action'],rows)}
-function renderDebts(){let rows=db.debts.filter(d=>d.status!=='cancelled').slice().reverse().map(d=>'<tr><td>'+esc(clientName(d.clientId))+'</td><td>'+money(d.amount)+'</td><td>'+money(paidFor(d.id))+'</td><td class="balance">'+money(balance(d))+'</td><td>'+dateFmt(d.date)+'</td><td>'+dateFmt(d.due)+'</td><td>'+status(d)+'</td><td><button class="soft" onclick="openPaymentFor(\''+d.id+'\')">+ Paiement</button> <button class="soft" onclick="printDebtStatement(\''+d.id+'\')">🖨 Relevé</button> <button class="soft" onclick="printDebtStatement(\''+d.id+'\',true)">📄 Duplicata</button> '+(!d.saleId?'<button class="danger" onclick="cancelDebt(\''+d.id+'\')">Annuler</button>':'<span class="stat-label">Liée à une vente</span>')+'</td></tr>');document.getElementById('debtsTable').innerHTML=table(['Client','Dette','Payé','Reste','Date','Échéance','Statut','Action'],rows)}
+function renderDebts(){let rows=db.debts.filter(d=>d.status!=='cancelled').slice().reverse().map(d=>'<tr><td>'+esc(clientName(d.clientId))+'</td><td>'+money(d.amount)+'</td><td>'+money(paidFor(d.id))+'</td><td class="balance">'+money(balance(d))+'</td><td>'+dateFmt(d.date)+'</td><td>'+dateFmt(d.due)+'</td><td>'+status(d)+'</td><td><button class="soft" onclick="openPaymentFor(\''+d.id+'\')">+ Paiement</button> <button class="soft" onclick="printDebtStatement(\''+d.id+'\')">🖨 Relevé</button> <button class="soft" onclick="printDebtStatement(\''+d.id+'\',true)">📄 Duplicata</button> '+(!d.saleId?'<button class="soft" onclick="editDebt(\''+d.id+'\')">Modifier</button> <button class="danger" onclick="cancelDebt(\''+d.id+'\')">Annuler</button>':'<span class="stat-label">Liée à une vente</span>')+'</td></tr>');document.getElementById('debtsTable').innerHTML=table(['Client','Dette','Payé','Reste','Date','Échéance','Statut','Action'],rows)}
+function editDebt(debtId){
+ const debt=db.debts.find(d=>d.id===debtId);
+ if(!debt||debt.status==='cancelled'){alert('Cette dette est introuvable ou déjà annulée.');return}
+ if(debt.saleId){alert('Cette dette est liée à une vente. Corrigez-la depuis la rubrique Ventes.');return}
+ if(paidFor(debt.id)>0){alert('Modification bloquée : cette dette comporte des remboursements actifs. Annulez d’abord les remboursements concernés ou corrigez uniquement après régularisation.');return}
+ const clientCurrent=db.clients.find(c=>c.id===debt.clientId);
+ const clientNameInput=prompt('Nom exact du client enregistré :',clientCurrent?clientCurrent.name:'');if(clientNameInput===null)return;
+ const client=db.clients.find(c=>c.name.trim().toLowerCase()===clientNameInput.trim().toLowerCase());if(!client){alert('Client introuvable. Enregistrez d’abord le client ou vérifiez son nom.');return}
+ const amountText=prompt('Montant corrigé de la dette (GNF) :',String(debt.amount));if(amountText===null)return;const amount=Number(amountText);if(!Number.isFinite(amount)||amount<=0){alert('Le montant doit être positif.');return}
+ const date=prompt('Date de la dette (AAAA-MM-JJ) :',debt.date||new Date().toISOString().slice(0,10));if(date===null)return;if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||isNaN(new Date(date+'T00:00:00').getTime())){alert('Date invalide.');return}
+ const due=prompt('Échéance (AAAA-MM-JJ, laisser vide si aucune) :',debt.due||'');if(due===null)return;if(due&&!/^\d{4}-\d{2}-\d{2}$/.test(due)){alert('Échéance invalide.');return}
+ const description=prompt('Motif / description :',debt.description||'');if(description===null)return;
+ const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
+ if(!confirm('Confirmer la correction de cette dette de '+money(amount)+' ?'))return;
+ const before=JSON.stringify(db),previous={clientId:debt.clientId,amount:debt.amount,date:debt.date,due:debt.due,description:debt.description},now=new Date().toISOString();
+ Object.assign(debt,{clientId:client.id,amount,date,due,description:description.trim(),updatedAt:now});
+ db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'updated',reason:reason.trim(),before:previous,after:{clientId:client.id,amount,date,due,description:description.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
+ flash('Dette corrigée. Les soldes et indicateurs ont été recalculés.');
+}
 function cancelDebt(debtId){
  const debt=db.debts.find(d=>d.id===debtId);
  if(!debt){alert('Dette introuvable.');return}
