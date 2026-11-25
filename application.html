@@ -624,8 +624,20 @@ function krediBuildShopMigrationPreview(){
  return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals:{salesGNF:sum('sales','total'),purchasesGNF:sum('purchases','amount'),expensesGNF:sum('expenses','amount'),paymentsGNF:sum('payments','amount'),stockUnits:rows.products.reduce((n,x)=>n+Number(x.quantity||0),0)},missing,orphanCount,localCheckPassed:orphanCount===0,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
 }
 function krediStableSnapshot(value){
- if(value===null||typeof value!=='object')return JSON.stringify(value);
+ if(value===null)return 'null';
+ if(typeof value==='string'||typeof value==='boolean')return JSON.stringify(value);
+ if(typeof value==='number'){
+  if(!Number.isFinite(value))throw new Error('valeur numérique non sérialisable');
+  return JSON.stringify(value);
+ }
+ if(typeof value!=='object')throw new Error('valeur non sérialisable');
+ if(value instanceof Date){
+  if(Number.isNaN(value.getTime()))throw new Error('date invalide');
+  return JSON.stringify(value.toISOString());
+ }
  if(Array.isArray(value))return '['+value.map(krediStableSnapshot).join(',')+']';
+ const prototype=Object.getPrototypeOf(value);
+ if(prototype!==Object.prototype&&prototype!==null)throw new Error('objet de format non pris en charge');
  return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+krediStableSnapshot(value[key])).join(',')+'}';
 }
 async function krediVerifyShopMigrationBackup(){
@@ -642,7 +654,9 @@ async function krediVerifyShopMigrationBackup(){
   if(!krediUser||!krediStoreMatchesActiveUser()){say('Compte changé pendant la vérification : résultat ignoré.');return false}
   if(!snap.exists){say('Aucune sauvegarde cloud trouvée pour ce compte. La migration reste bloquée.');return false}
   const remote=snap.data()||{};
-  if(!remote.db||typeof remote.db!=='object'){say('Format de sauvegarde cloud inattendu. Migration bloquée pour protéger les données.');return false}
+  if(!remote.db||typeof remote.db!=='object'||Array.isArray(remote.db)){say('Format de sauvegarde cloud inattendu. Migration bloquée pour protéger les données.');return false}
+  const remoteIssue=krediDatabaseShapeIssue(remote.db);
+  if(remoteIssue){say('La sauvegarde cloud existe mais sa structure est invalide ('+remoteIssue+'). Migration bloquée ; aucune donnée n’a été modifiée.');return false}
   const localSnapshot=krediStableSnapshot(db),remoteSnapshot=krediStableSnapshot(remote.db);
   if(localSnapshot!==remoteSnapshot){say('Sauvegarde cloud trouvée, mais elle ne correspond pas exactement aux données locales. Synchronisez ou résolvez le conflit avant toute migration.');return false}
   const stamp=remote.updatedAt&&typeof remote.updatedAt.toDate==='function'?remote.updatedAt.toDate().toLocaleString('fr-FR'):'date non disponible';
