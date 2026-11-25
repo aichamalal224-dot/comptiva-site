@@ -653,7 +653,7 @@ async function krediStartSellerPresence(){
  }
  const uid=krediUser.uid,shopId=docs[0].id;
  const send=async()=>{
-  if(!krediUser||krediUser.uid!==uid||krediPresenceShopId!==shopId||document.visibilityState==='hidden')return;
+  if(!krediUser||krediUser.uid!==uid||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
   try{await krediStore.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
   catch(error){console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
  };
