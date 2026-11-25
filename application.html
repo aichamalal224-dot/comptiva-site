@@ -1201,8 +1201,22 @@ function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'
 function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('fr-FR')}
 function isValidISODate(value){if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;const [year,month,day]=value.split('-').map(Number);const date=new Date(Date.UTC(year,month-1,day));return date.getUTCFullYear()===year&&date.getUTCMonth()===month-1&&date.getUTCDate()===day}
 function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client supprimé/inconnu'}
-function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId&&p.status!=='cancelled').reduce((a,p)=>a+Number(p.amount||0),0)}
-function balance(d){if(!d||d.status==='cancelled')return 0;return Math.max(0,Number(d.amount||0)-paidFor(d.id))}
+function paidFor(debtId){
+ const active=db.payments.filter(p=>p&&p.debtId===debtId&&p.status!=='cancelled');
+ const ids=new Set();let total=0;
+ for(const payment of active){
+  if(!payment.id||ids.has(String(payment.id))||!Number.isSafeInteger(payment.amount)||payment.amount<=0)return NaN;
+  ids.add(String(payment.id));total+=payment.amount;
+  if(!Number.isSafeInteger(total))return NaN;
+ }
+ return total;
+}
+function balance(d){
+ if(!d||d.status==='cancelled')return 0;
+ if(!Number.isSafeInteger(d.amount)||d.amount<=0)return NaN;
+ const paid=paidFor(d.id);if(!Number.isSafeInteger(paid)||paid<0||paid>d.amount)return NaN;
+ return d.amount-paid;
+}
 function status(d){let b=balance(d);if(b<=0)return '<span class="pill paid">Soldé</span>';if(d.due && d.due<new Date().toISOString().slice(0,10))return '<span class="pill overdue">En retard</span>';return '<span class="pill pending">En cours</span>'}
 function flash(msg,duration=3200){let el=document.getElementById('flash');if(!el)return;el.textContent=msg;el.classList.remove('hidden');clearTimeout(window.comptivaFlashTimer);window.comptivaFlashTimer=setTimeout(()=>el.classList.add('hidden'),duration)}
 function navigate(page){if(page==='creator'&&!krediIsCreator()){flash('Accès réservé au compte Créateur.');return}if(krediUser&&!krediIsCreator()&&page!=='subscription'&&!krediCanUseMerchantApp()){page='subscription';flash(krediSubscriptionAccess==='checking'?'Vérification de votre abonnement en cours…':'Votre abonnement est terminé ou doit être vérifié. Consultez la page Abonnement.')}document.querySelectorAll('[id^="page-"]').forEach(x=>x.classList.add('hidden'));let p=document.getElementById('page-'+page);if(p)p.classList.remove('hidden');let titles={dashboard:'Tableau de bord',profile:'Profil du commerce',sales:'Ventes',reports:'Chiffres de la boutique',clients:'Clients',debts:'Dettes',payments:'Remboursements',purchases:'Achats de marchandises',expenses:'Dépenses',stock:'Gestion du stock',reminders:'Rappels',subscription:'Abonnement',form:document.getElementById('formTitle').textContent};document.getElementById('topTitle').textContent=titles[page]||'Comptiva';document.querySelectorAll('[data-page]').forEach(b=>b.classList.toggle('active',b.dataset.page===page));if(page==='profile')renderMerchantProfile();if(page==='clients')renderClients();if(page==='debts')renderDebts();if(page==='payments')renderPayments();if(page==='reminders')renderReminderOptions();if(page==='reports')renderReports();if(page==='sales')renderSales();if(page==='stock')renderStock();if(page==='purchases')renderPurchases();if(page==='expenses')renderExpenses();if(page==='subscription')renderSubscription();if(page==='creator')loadCreatorDirectory();window.scrollTo(0,0)}
@@ -1242,7 +1256,7 @@ function editDebt(debtId){
  const debt=db.debts.find(d=>d.id===debtId);
  if(!debt||debt.status==='cancelled'){alert('Cette dette est introuvable ou déjà annulée.');return}
  if(debt.saleId){alert('Cette dette est liée à une vente. Corrigez-la depuis la rubrique Ventes.');return}
- if(paidFor(debt.id)>0){alert('Modification bloquée : cette dette comporte des remboursements actifs. Annulez d’abord les remboursements concernés ou corrigez uniquement après régularisation.');return}
+ const paid=paidFor(debt.id);if(!Number.isSafeInteger(paid)||paid<0||paid>Number(debt.amount)||paid>0){alert('Modification bloquée : les remboursements liés à cette dette sont incohérents ou déjà actifs. Vérifiez l’historique avant toute correction.');return}
  const clientCurrent=db.clients.find(c=>c.id===debt.clientId);
  const clientNameInput=prompt('Nom exact du client enregistré :',clientCurrent?clientCurrent.name:'');if(clientNameInput===null)return;
  const client=db.clients.find(c=>c.name.trim().toLowerCase()===clientNameInput.trim().toLowerCase());if(!client){alert('Client introuvable. Enregistrez d’abord le client ou vérifiez son nom.');return}
@@ -1263,7 +1277,7 @@ function cancelDebt(debtId){
  if(!debt){alert('Dette introuvable.');return}
  if(debt.status==='cancelled'){flash('Cette dette est déjà annulée.');return}
  if(debt.saleId){alert('Cette dette provient d’une vente. Annulez ou corrigez la vente depuis la rubrique Ventes pour conserver la cohérence des comptes.');return}
- if(paidFor(debt.id)>0){alert('Annulation impossible : des remboursements actifs sont liés à cette dette. Annulez d’abord les remboursements concernés, avec leur motif, puis réessayez.');return}
+ const paid=paidFor(debt.id);if(!Number.isSafeInteger(paid)||paid<0||paid>Number(debt.amount)||paid>0){alert('Annulation impossible : les remboursements liés à cette dette sont incohérents ou encore actifs. Vérifiez et régularisez l’historique avant de réessayer.');return}
  const reason=prompt('Indiquez la raison de l’annulation de cette dette :');if(reason===null)return;if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cette dette de '+money(debt.amount)+' ? Elle sera retirée des soldes, mais son historique sera conservé.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();
@@ -1279,6 +1293,7 @@ function editPayment(paymentId){
  if(!payment||payment.status==='cancelled'){alert('Ce remboursement est introuvable ou déjà annulé.');return}
  const debt=db.debts.find(d=>d.id===payment.debtId);
  if(!debt||debt.status==='cancelled'){alert('La dette liée est introuvable ou annulée.');return}
+ const currentPaid=paidFor(debt.id);if(!Number.isSafeInteger(currentPaid)||currentPaid<0||currentPaid>Number(debt.amount)){alert('Correction bloquée : les données financières de cette dette sont incohérentes. Vérifiez les remboursements avant de continuer.');return}
  const amountText=prompt('Nouveau montant du remboursement (GNF) :',String(payment.amount));
  if(amountText===null)return;const amount=Number(amountText);
  if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}
@@ -1287,8 +1302,9 @@ function editPayment(paymentId){
  const method=prompt('Mode de paiement :',payment.method||'Espèces');
  if(method===null)return;if(!method.trim()){alert('Le mode de paiement est obligatoire.');return}
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
- const otherPaid=db.payments.filter(p=>p.debtId===debt.id&&p.id!==payment.id&&p.status!=='cancelled').reduce((n,p)=>n+Number(p.amount||0),0);
- if(otherPaid+amount>Number(debt.amount||0)){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return;}
+ const otherPayments=db.payments.filter(p=>p&&p.debtId===debt.id&&p.id!==payment.id&&p.status!=='cancelled');
+ const otherIds=new Set();let otherPaid=0;for(const p of otherPayments){if(!p.id||otherIds.has(String(p.id))||!Number.isSafeInteger(p.amount)||p.amount<=0){alert('Correction bloquée : un autre remboursement lié à cette dette contient des données invalides ou un identifiant dupliqué.');return}otherIds.add(String(p.id));otherPaid+=p.amount;if(!Number.isSafeInteger(otherPaid)){alert('Correction bloquée : total des remboursements invalide.');return}}
+ if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||otherPaid+amount>debt.amount){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return;}
  if(!confirm('Confirmer la correction de ce remboursement ?'))return;
  const before=JSON.stringify(db),previous={amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString();
  payment.amount=amount;payment.date=date;payment.method=method.trim();payment.updatedAt=now;
@@ -1361,13 +1377,13 @@ if(currentForm==='sale'){let qty=Number(v.quantity),price=Number(v.unitPrice),to
 if(currentForm==='purchase'){let amount=Number(v.amount);if(!v.item.trim()||!Number.isSafeInteger(amount)||amount<=0){alert('Saisissez une description et un montant entier positif en GNF.');return}let purchaseQty=Number(v.quantity||0);if(!Number.isFinite(purchaseQty)||purchaseQty<0){alert('La quantité doit être un nombre valide et ne peut pas être négative.');return}let matchedProduct=db.products.find(p=>p.name.trim().toLowerCase()===v.item.trim().toLowerCase());let purchase={id:id('A'),...krediActorStamp(),item:v.item.trim(),supplier:v.supplier.trim(),quantity:purchaseQty,amount,date:v.date,method:v.method||'Espèces',note:v.note.trim()};if(matchedProduct&&purchaseQty>0){const beforeQty=Number(matchedProduct.quantity);if(!Number.isFinite(beforeQty)||beforeQty<0){alert('Achat bloqué : le stock actuel du produit est invalide.');return}const afterQty=beforeQty+purchaseQty;if(!Number.isFinite(afterQty)||afterQty<beforeQty){alert('Achat bloqué : le calcul du nouveau stock est invalide.');return}matchedProduct.quantity=afterQty;purchase.stockProductId=matchedProduct.id;purchase.stockAddedAt=new Date().toISOString();db.auditLog.push({id:id('AUD'),entityType:'stock',entityId:matchedProduct.id,action:'purchase_addition',relatedPurchaseId:purchase.id,quantity:purchaseQty,before:beforeQty,after:afterQty,at:purchase.stockAddedAt,actor:(krediUser&&krediUser.uid)||'merchant',actorName:purchase.createdByName||''});}db.purchases.push(purchase);flash(matchedProduct&&purchaseQty>0?'Achat enregistré et stock augmenté.':'Achat de marchandises enregistré.')}
 if(currentForm==='expense'){let amount=Number(v.amount);if(!v.description.trim()||!Number.isSafeInteger(amount)||amount<=0){alert('Saisissez une description et un montant entier positif en GNF.');return}if(!isValidISODate(v.date)){alert('Date de dépense invalide.');return}db.expenses.push({id:id('E'),...krediActorStamp(),category:v.category,description:v.description.trim(),amount,date:v.date,method:v.method||'Espèces',note:v.note.trim()});flash('Dépense enregistrée.')}
 if(currentForm==='debt'){if(!db.clients.some(c=>c.id===v.clientId)){alert('Ajoutez d’abord un client.');return}let debtAmount=Number(v.amount);if(!Number.isSafeInteger(debtAmount)||debtAmount<=0){alert('Le montant de la dette doit être un nombre entier positif en GNF.');return}db.debts.push({id:id('D'),...krediActorStamp(),clientId:v.clientId,amount:debtAmount,date:v.date,due:v.due,description:v.description});flash('Dette enregistrée.')}
-if(currentForm==='payment'){let d=db.debts.find(d=>d.id===v.debtId);if(!d){alert('Ajoutez d’abord une dette en cours.');return}let amount=Number(v.amount);if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}if(amount>balance(d)){alert('Remboursement refusé : le montant dépasse le solde restant de cette dette. Corrigez le montant avant de continuer.');return}db.payments.push({id:id('P'),...krediActorStamp(),debtId:v.debtId,amount,date:v.date,method:v.method});flash('Remboursement enregistré.')}
+if(currentForm==='payment'){let d=db.debts.find(d=>d.id===v.debtId);if(!d){alert('Ajoutez d’abord une dette en cours.');return}let amount=Number(v.amount);if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}const remaining=balance(d);if(!Number.isSafeInteger(remaining)||remaining<0){alert('Remboursement bloqué : les données de cette dette ou de ses remboursements sont incohérentes. Vérifiez l’historique avant toute nouvelle opération.');return}if(amount>remaining){alert('Remboursement refusé : le montant dépasse le solde restant de cette dette. Corrigez le montant avant de continuer.');return}db.payments.push({id:id('P'),...krediActorStamp(),debtId:v.debtId,amount,date:v.date,method:v.method});flash('Remboursement enregistré.')}
 if(!saveDB()){try{db=JSON.parse(before)}catch(rollbackError){db=loadDB();console.error('[COMPTIVA] Restauration après échec impossible :',rollbackError)}renderAll();alert('Enregistrement impossible : les données précédentes ont été restaurées. Vérifiez le stockage de cet appareil puis réessayez.');return}navigate(currentForm==='client'?'clients':currentForm==='debt'?'debts':currentForm==='payment'?'payments':currentForm==='sale'?'sales':currentForm==='purchase'?'purchases':currentForm==='expense'?'expenses':'dashboard')}
 function editSale(saleId){
  const sale=db.sales.find(x=>x.id===saleId);
  if(!sale||sale.status==='cancelled'){alert('Cette vente est introuvable ou déjà annulée.');return}
  const linked=db.debts.filter(d=>d.saleId===sale.id&&d.status!=='cancelled');
- if(linked.some(d=>paidFor(d.id)>0)){alert('Modification bloquée : la dette liée à cette vente comporte déjà un remboursement actif. Annulez d’abord le remboursement concerné ou corrigez la vente après régularisation.');return}
+ if(linked.some(d=>{const paid=paidFor(d.id);return !Number.isSafeInteger(paid)||paid<0||paid>Number(d.amount)||paid>0})){alert('Modification bloquée : la dette liée à cette vente comporte des remboursements actifs ou incohérents. Vérifiez l’historique avant toute correction.');return}
  if(linked.length>1){alert('Modification bloquée : plusieurs dettes sont liées à cette vente. Une vérification manuelle est nécessaire.');return}
  let stockProduct=null;
  if(sale.stockProductId){
