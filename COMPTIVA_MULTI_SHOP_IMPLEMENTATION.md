@@ -642,3 +642,59 @@ Avant toute migration multi-boutiques :
 - Aucun changement de code, aucune migration, aucun déploiement et aucun changement de `main` effectués pendant cette passe.
 
 **Statut :** risque de conception identifié et documenté ; séparation financière non implémentée. La correction doit être intégrée au moment de la migration multi-boutiques, avec séparation physique des documents et validation Emulator.
+
+
+## Audit des références financières et des règles multi-boutiques — 26 novembre 2026
+
+### Contrôles déjà présents dans l'application locale
+
+Inspection de `application.html` :
+
+- La création locale d'une vente valide une quantité positive, un prix unitaire entier positif, un total entier positif et, pour un paiement mixte, l'égalité entre les parts espèces/mobile et le total.
+- Une vente à crédit exige un client présent dans `db.clients`.
+- La création d'une dette exige un client existant et un montant entier positif.
+- La création d'un remboursement exige une dette active, une date valide, un montant entier positif et un montant qui ne dépasse pas le solde calculé.
+- `krediDebtRelationIssue()` contrôle l'existence du client de la dette et, si elle est issue d'une vente, l'existence de cette vente, la cohérence du client, le montant du crédit et le statut de la vente.
+- `krediPaymentActionCheck()` contrôle l'identifiant unique du remboursement, la date, le montant, la dette active, la relation client/vente et le total des remboursements.
+- `saleFinancialAmounts()` vérifie les montants entiers, l'égalité encaissé + crédit = total, la cohérence quantité × prix unitaire et les parts d'un paiement mixte.
+- Ces validations sont des contrôles applicatifs locaux. Elles ne remplacent pas les règles Firestore : un appel direct à l'API peut les contourner si les règles serveur n'imposent pas les mêmes invariants.
+
+### Défauts constatés dans les règles Firestore du modèle partagé
+
+Inspection de `firestore.rules` :
+
+1. **Ventes — création insuffisamment validée :** la règle exige seulement un `shopId` égal au chemin et `createdBy == request.auth.uid`. Elle ne valide pas les types et bornes de `total`, `quantity`, `unitPrice`, `paidAmount`, `creditAmount`, les parts espèces/mobile, le client ou le produit référencé.
+2. **Dettes — référence client non vérifiée :** la règle de création vérifie seulement `shopId`. Elle ne vérifie ni l'existence de `clientId` dans la même boutique, ni le montant positif entier, ni la cohérence éventuelle avec une vente d'origine.
+3. **Paiements — dette non vérifiée :** la règle de création exige `shopId` et `createdBy`, mais ne vérifie pas l'existence de `debtId` dans la même boutique, le montant positif entier, la date, le solde restant ou l'absence de surpaiement.
+4. **Mises à jour Patron trop larges :** les mises à jour de ventes, dettes et paiements préservent certains champs `shopId`/auteur, mais ne limitent pas les autres champs modifiables par `diff().affectedKeys().hasOnly(...)`. Les invariants financiers peuvent être contournés par une écriture directe.
+5. **Références croisées :** les règles ne valident pas les références entre ventes, clients, dettes, paiements et produits dans le périmètre de la même boutique. Un document peut être créé avec une référence absente ou étrangère si les autres conditions minimales sont satisfaites.
+
+### Incompatibilité importante entre le modèle applicatif et les règles partagées
+
+- `krediActorStamp()` produit les champs `createdByUid`, `createdByName`, `createdAt` et `updatedAt`.
+- La création de vente et de paiement dans `application.html` utilise ce tampon d'auteur ; l'audit n'a trouvé aucune affectation `createdBy:` dans le code.
+- Les règles de création partagée de `sales` et `payments` exigent pourtant `request.resource.data.createdBy == request.auth.uid`.
+- Les objets opérationnels locaux ne montrent pas non plus l'ajout systématique de `shopId` dans les ventes, dettes et paiements créés par `saveForm()`, alors que les règles partagées l'exigent.
+- **Conséquence :** le code actuel et les règles du modèle partagé ne sont pas encore compatibles pour ces écritures. Cela constitue un blocage de migration à résoudre explicitement, pas une raison d'ajouter un champ auteur arbitraire ni de desserrer les règles.
+- Le champ `createdBy` ne doit jamais être déduit du nom affiché ou attribué à l'auteur actuel lors d'une migration d'historique. Les UID d'auteur historiques manquants ou différents doivent rester signalés et faire l'objet d'une décision explicite.
+
+### Correction d'architecture recommandée avant activation
+
+1. Définir un schéma serveur exact par collection : champs obligatoires, champs optionnels, types, bornes, champs immuables et valeurs de statut autorisées.
+2. Valider les relations avec les documents de la même boutique : vente → client/produit ; dette → client/vente ; paiement → dette. Vérifier aussi que la dette n'est pas annulée et que le total payé après opération ne dépasse pas son montant.
+3. Pour garantir l'absence de surpaiement en cas de paiements simultanés, ne pas compter uniquement sur une somme lue côté client ou sur une règle isolée. Concevoir une opération atomique transactionnelle ou un backend de confiance avec contrôle de concurrence.
+4. Limiter les mises à jour Patron à des champs précis et préserver les identifiants, l'auteur initial, la boutique, les relations et les preuves d'audit.
+5. Définir un contrat de migration explicite pour `createdByUid` / `createdByName` et `shopId`. Aucun UID, boutique ou relation manquante ne doit être inventé.
+6. Ajouter les tests Emulator FIN-01 à FIN-04 et des cas supplémentaires : paiement concurrent, dette annulée, client d'une autre boutique, vente étrangère, montant décimal/négatif/nul, tentative de modification du montant et de l'auteur par le Patron.
+7. Conserver le fonctionnement historique `users/{uid}/comptivaData/main` jusqu'à validation complète du nouveau modèle.
+
+### Vérifications et limites de cette passe
+
+- Les fonctions locales de validation de vente, dette et remboursement ont été inspectées ; elles sont plus complètes que les règles du modèle partagé.
+- Les règles de création et mise à jour de `sales`, `debts`, `payments` ont été relues.
+- L'incompatibilité `createdByUid` (application) / `createdBy` (règles) et l'absence d'ajout systématique de `shopId` dans les objets locaux sont confirmées par lecture statique.
+- Aucune règle, application ou donnée Firestore n'a été modifiée pendant cette passe.
+- Aucun test Emulator, transaction concurrente, navigateur ou compte Patron/Vendeur réel n'a été exécuté.
+- Aucun déploiement, migration ou changement de `main` effectué.
+
+**Statut :** contrôles locaux utiles, mais validation serveur des références et montants insuffisante ; incompatibilité de contrat entre code actuel et règles multi-boutiques identifiée. La migration ne doit pas être activée avant définition du schéma, correction du contrat et tests Emulator.
