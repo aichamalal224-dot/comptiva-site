@@ -878,3 +878,41 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 - Cette cartographie est fondée sur le code actuel de la branche et ne prouve pas le comportement d'un compte Firebase réel.
 
 **Statut :** dépendances principales identifiées. La séparation technique peut maintenant être conçue sans confondre coût catalogue, montant d'achat et prix réel d'une vente.
+
+
+## Audit complémentaire des autorisations Firestore multi-boutiques — 26 novembre 2026
+
+### Constats confirmés à la lecture de firestore.rules
+
+1. **Accès Patron non conditionné à l'abonnement pour certaines lectures.** `canUseShop(shopId)` renvoie vrai pour `isShopPatron(shopId)` sans vérifier l'abonnement ni le statut actif de la boutique. Cette fonction protège notamment la lecture du document racine de boutique, des produits, des ventes, clients, dettes et paiements. En conséquence, un Patron dont l'abonnement a expiré, ou dont la boutique est suspendue, conserve certaines lectures. Les écritures Patron passent en revanche par `canWriteShop`, qui vérifie le statut actif et l'abonnement.
+2. **Lectures de gestion accessibles au Patron même sans abonnement actif.** La lecture des membres et de la présence est autorisée avec `isShopPatron` seul. Il faut décider explicitement si l'accès aux données d'administration doit être maintenu après expiration/suspension, et appliquer une politique cohérente.
+3. **Schéma des produits partagé non verrouillé.** Les créations et mises à jour de `shops/{shopId}/products/{productId}` sont réservées au Patron, mais les règles ne limitent pas les clés autorisées dans `request.resource.data`. Comme Patron et vendeur peuvent lire le document produit entier via `canUseShop`, un champ financier ajouté par erreur dans ce document serait lisible par le vendeur. La séparation physique des documents financiers et la liste blanche des champs publics restent indispensables.
+4. **Validations métier insuffisantes sur les écritures partagées.** Les créations de ventes vérifient `shopId` et `createdBy`, mais pas une liste blanche de champs, les montants, les quantités, les modes de paiement ni les références client/produit. Les créations de dettes vérifient essentiellement `shopId`, sans valider montant, client ou vente source. Les créations de paiements vérifient `shopId` et `createdBy`, sans contrôler la dette, le montant, la date ni le solde restant.
+5. **Mises à jour Patron trop larges.** Les règles de mise à jour des ventes, dettes et paiements ne définissent pas de liste blanche des champs modifiables ni les invariants financiers à préserver. Le fait de réserver ces écritures au Patron ne suffit pas à empêcher les incohérences accidentelles ou les modifications abusives depuis un client compromis.
+6. **Achats et dépenses : schéma à durcir.** Les règles vérifient le rattachement au `shopId` et le rôle Patron, mais ne valident pas une liste blanche complète, les types, les montants, les dates ou les relations de stock.
+7. **Journal d'audit : création insuffisamment contrainte.** La règle vérifie le `shopId` et `actorUid`, mais ne fixe pas une liste blanche d'événements, les types/champs obligatoires ni la cohérence de la cible. Les mises à jour et suppressions sont bien interdites.
+
+### Points positifs conservés
+
+- Les données historiques sous `users/{userId}/comptivaData/main` restent limitées au compte propriétaire.
+- L'accès vendeur aux sous-collections partagées est borné par le chemin de la boutique et par une appartenance active, avec contrôle de l'abonnement du Patron.
+- Les écritures vendeur dans les produits, achats, dépenses et rapports sont refusées par les règles actuelles.
+- Les suppressions directes des ventes, dettes, paiements, achats et dépenses partagés sont refusées.
+- Les documents d'audit partagés ne peuvent pas être modifiés ou supprimés après création.
+- Aucun changement de règle n'est effectué pendant cet audit : la politique d'accès après expiration doit être décidée avant de corriger les conditions de lecture.
+
+### Corrections prioritaires à planifier
+
+1. Définir la politique d'accès après expiration et suspension, puis harmoniser `canUseShop`, les lectures Patron, les lectures de gestion et les écritures.
+2. Définir des schémas stricts et des listes blanches de champs pour produits publics, documents financiers, ventes, dettes, paiements, achats, dépenses et événements d'audit.
+3. Ajouter des validations de montants, dates, quantités, relations croisées et invariants financiers. Les paiements concurrents et les mutations de stock devront passer par un mécanisme atomique de confiance (transaction serveur ou backend).
+4. Écrire des tests Firebase Emulator couvrant explicitement les cas autorisés et refusés, notamment abonnement expiré, boutique suspendue, vendeur actif/inactif, compte étranger, champs financiers injectés et incohérences de paiement.
+5. Ne pas appliquer ces durcissements aux chemins historiques avant une stratégie de compatibilité et de migration vérifiée.
+
+### Vérifications et limites de cette passe
+
+- Relecture de la totalité du fichier `firestore.rules` de la branche de travail et rapprochement avec le modèle multi-boutiques documenté.
+- Analyse statique uniquement : aucun test Firebase Emulator, aucun compte réel, aucune requête Firestore réelle et aucune migration exécutés.
+- Aucune modification des règles Firestore, de l'application ou des données. Aucune publication et aucune modification de `main`.
+
+**Statut :** audit statique des principales autorisations partagé complété pour cette passe. Les risques ci-dessus sont documentés et doivent être corrigés et testés avant activation du modèle multi-boutiques.
