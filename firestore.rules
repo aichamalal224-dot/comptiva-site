@@ -126,10 +126,10 @@ service cloud.firestore {
         && request.resource.data.uid == memberUid
         && request.resource.data.shopId == shopId
         && request.resource.data.role == 'seller'
-        && request.resource.data.active == true
+        && request.resource.data.active is bool
         && request.resource.data.patronUid == request.auth.uid
         && exists(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid))
-        && get(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == true;
+        && get(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == request.resource.data.active;
       allow delete: if isShopPatron(shopId);
     }
 
