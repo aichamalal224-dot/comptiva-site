@@ -709,25 +709,52 @@ function krediStableSnapshot(value){
  if(prototype!==Object.prototype&&prototype!==null)throw new Error('objet de format non pris en charge');
  return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+krediStableSnapshot(value[key])).join(',')+'}';
 }
-async function krediCheckSharedSaleIdCollisions(preview){
+// Compare uniquement les champs métier connus. Les métadonnées ajoutées lors d'une migration (shopId, createdBy, updatedBy...) ne changent pas la comparaison.
+function krediCompareSharedSaleContent(localSale,remoteSale,expectedShopId){
+ const required=['product','quantity','unitPrice','total','date','saleType','method'];
+ const compared=['id','product','quantity','unitPrice','total','date','saleType','clientId','method','paidAmount','creditAmount','cashPart','mobilePart','status','stockProductId','stockDeductedAt','stockDeductedQuantity','stockRestored','stockRestoredAt','stockRestoredQuantity','stockRestoredProductId'];
+ const missing=required.filter(key=>!Object.prototype.hasOwnProperty.call(localSale,key)||!Object.prototype.hasOwnProperty.call(remoteSale,key));
+ if(missing.length)return{status:'insufficient',fields:missing};
+ if(remoteSale.shopId!==undefined&&remoteSale.shopId!==expectedShopId)return{status:'different',fields:['shopId']};
+ const differences=[];
+ for(const key of compared){
+  const localHas=Object.prototype.hasOwnProperty.call(localSale,key),remoteHas=Object.prototype.hasOwnProperty.call(remoteSale,key);
+  if(localHas!==remoteHas){differences.push(key);continue}
+  if(localHas){
+   try{if(krediStableSnapshot(localSale[key])!==krediStableSnapshot(remoteSale[key]))differences.push(key)}
+   catch(error){return{status:'insufficient',fields:[key]}}
+  }
+ }
+ return differences.length?{status:'different',fields:differences}:{status:'same',fields:[]};
+}
+async function krediCheckSharedSaleIdCollisions(){
  if(!krediUser||!krediUser.uid||!krediStoreMatchesActiveUser())throw new Error('Compte propriétaire non confirmé avant le contrôle des doublons.');
  const uid=krediUser.uid,shopId='shop-'+uid;
  const shopRef=krediStore.collection('shops').doc(shopId);
  const shopSnap=await shopRef.get({source:'server'});
  if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé pendant le contrôle des doublons.');
- if(!shopSnap.exists)return{shopExists:false,checked:0,collisions:[]};
+ if(!shopSnap.exists)return{shopExists:false,checked:0,collisions:[],same:0,different:0,insufficient:0};
  const shop=shopSnap.data()||{};
  if(shop.ownerUid!==uid||shop.patronUid!==uid||shop.status!=='active')throw new Error('Propriété ou statut de la boutique principale non confirmé : contrôle des doublons interrompu.');
  const sales=Array.isArray(db.sales)?db.sales:[];
  const collisions=[];
+ let same=0,different=0,insufficient=0;
  for(let offset=0;offset<sales.length;offset+=20){
   if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé pendant le contrôle des doublons.');
   const batch=sales.slice(offset,offset+20);
   const snapshots=await Promise.all(batch.map(sale=>shopRef.collection('sales').doc(sale.id).get({source:'server'})));
-  snapshots.forEach((snap,index)=>{if(snap.exists)collisions.push({id:batch[index].id})});
+  snapshots.forEach((snap,index)=>{
+   if(!snap.exists)return;
+   const localSale=batch[index],remoteSale=snap.data()||{};
+   const comparison=krediCompareSharedSaleContent(localSale,remoteSale,shopId);
+   if(comparison.status==='same')same++;
+   else if(comparison.status==='different')different++;
+   else insufficient++;
+   collisions.push({id:localSale.id,status:comparison.status,fields:comparison.fields.slice(0,8)});
+  });
  }
  if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé après le contrôle des doublons.');
- return{shopExists:true,checked:sales.length,collisions};
+ return{shopExists:true,checked:sales.length,collisions,same,different,insufficient};
 }
 async function krediVerifyShopMigrationBackup(){
  const el=document.getElementById('shopMigrationPreflight');
@@ -748,10 +775,10 @@ async function krediVerifyShopMigrationBackup(){
   if(remoteIssue){say('La sauvegarde cloud existe mais sa structure est invalide ('+remoteIssue+'). Migration bloquée ; aucune donnée n’a été modifiée.');return false}
   const localSnapshot=krediStableSnapshot(db),remoteSnapshot=krediStableSnapshot(remote.db);
   if(localSnapshot!==remoteSnapshot){say('Sauvegarde cloud trouvée, mais elle ne correspond pas exactement aux données locales. Synchronisez ou résolvez le conflit avant toute migration.');return false}
-  const collisions=await krediCheckSharedSaleIdCollisions(preview);
+  const collisions=await krediCheckSharedSaleIdCollisions();
   if(collisions.collisions.length){
-   const ids=collisions.collisions.slice(0,10).map(x=>x.id).join(', ');
-   say('Migration bloquée : '+collisions.collisions.length+' identifiant(s) de vente existent déjà dans la boutique partagée ('+ids+(collisions.collisions.length>10?'…':'')+'). Les contenus ne sont pas comparés et aucune vente n’est écrasée. Vérification manuelle requise.');
+   const examples=collisions.collisions.slice(0,6).map(x=>x.id+' ['+(x.status==='same'?'contenu concordant':x.status==='different'?'contenu différent':'comparaison incomplète')+(x.fields.length?' : '+x.fields.join('/'):'')+']').join(' · ');
+   say('Migration bloquée : '+collisions.collisions.length+' ID de vente déjà présents. Comparaison métier : '+collisions.same+' concordant(s), '+collisions.different+' différent(s), '+collisions.insufficient+' non vérifiable(s). Exemples : '+examples+(collisions.collisions.length>6?'…':'')+'. Même si le contenu concorde, aucun doublon n’est automatiquement ignoré ou écrasé. Vérification manuelle requise.');
    return false;
   }
   const stamp=remote.updatedAt&&typeof remote.updatedAt.toDate==='function'?remote.updatedAt.toDate().toLocaleString('fr-FR'):'date non disponible';
