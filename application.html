@@ -1411,6 +1411,7 @@ function cancelSale(saleId){
  if(!sale){alert('Vente introuvable.');return}
  if(sale.status==='cancelled'){flash('Cette vente est déjà annulée.');return}
  const linkedDebts=db.debts.filter(d=>d.saleId===sale.id&&d.status!=='cancelled');
+ if(linkedDebts.length>1){alert('Annulation bloquée : plusieurs dettes actives sont liées à cette vente. Vérifiez et régularisez les dettes avant toute annulation.');return}
  if(linkedDebts.some(d=>paidFor(d.id)>0)){
   alert('Annulation impossible : un remboursement est déjà enregistré pour la dette liée à cette vente. Régularisez d’abord le remboursement dans l’historique.');
   return;
