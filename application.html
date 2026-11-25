@@ -2215,11 +2215,13 @@ function krediRequirePatron(action){if(krediIsVerifiedPatron())return true;flash
 async function krediResolveShopRole(uid){
  krediShopRole={status:'checking',role:'unknown',uid};
  if(!uid||!krediStore)throw new Error('Compte ou Firestore indisponible.');
+ if(krediIsCreator()){krediShopRole={status:'verified',role:'creator',uid};return krediShopRole}
  const indexSnap=await krediStore.collection('userShopMemberships').doc(uid).collection('shops').get({source:'server'});
- const links=indexSnap.docs.filter(doc=>{const data=doc.data()||{};return data.active===true&&data.role==='seller'});
- if(links.length>1)throw new Error('Plusieurs affectations vendeur actives : rôle ambigu.');
+ const links=indexSnap.docs.filter(doc=>{const data=doc.data()||{};return data.role==='seller'});
+ if(links.length>1)throw new Error('Plusieurs affectations vendeur détectées : rôle ambigu.');
  if(links.length===1){
   const linkDoc=links[0],link=linkDoc.data()||{},shopId=linkDoc.id;
+  if(link.active!==true)throw new Error('Affectation vendeur inactive : les droits Patron ne sont pas accordés.');
   if(link.uid!==uid||link.shopId!==shopId||!link.patronUid)throw new Error('Index d’affectation vendeur incohérent.');
   const shopRef=krediStore.collection('shops').doc(shopId);
   const [shopSnap,memberSnap]=await Promise.all([shopRef.get({source:'server'}),shopRef.collection('members').doc(uid).get({source:'server'})]);
