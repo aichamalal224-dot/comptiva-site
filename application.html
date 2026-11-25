@@ -642,7 +642,7 @@ function krediBuildShopMigrationPreview(){
  });
  rows.purchases.forEach(x=>{if(x.stockProductId&&!productIds.has(x.stockProductId))missing.purchaseProduct++});
  const active=key=>rows[key].filter(x=>x.status!=='cancelled');
- const numericFields={sales:'total',purchases:'amount',expenses:'amount',payments:'amount',products:'quantity'};
+ const numericFields={sales:'total',purchases:'amount',expenses:'amount',products:'quantity'};
  const numericIssues={sales:0,purchases:0,expenses:0,payments:0,products:0,debts:0};
  Object.entries(numericFields).forEach(([key,field])=>rows[key].forEach(row=>{
   const raw=row[field];
