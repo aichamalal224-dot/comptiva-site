@@ -916,3 +916,32 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 - Aucune modification des règles Firestore, de l'application ou des données. Aucune publication et aucune modification de `main`.
 
 **Statut :** audit statique des principales autorisations partagé complété pour cette passe. Les risques ci-dessus sont documentés et doivent être corrigés et testés avant activation du modèle multi-boutiques.
+
+
+## Audit et garde-fous des affectations Patron/Vendeur — 26 novembre 2026
+
+### Audit complémentaire des règles d'accès
+
+- Le Créateur peut lire/écrire les documents `merchantSubscriptions` et lire/supprimer les entrées `merchantDirectory`. Ces droits sont concentrés sur l'UID Créateur fixé dans les règles.
+- Le Créateur peut lire un document racine `shops/{shopId}` et les documents `members` explicitement autorisés, mais les règles ne lui donnent pas automatiquement accès à toutes les sous-collections opérationnelles (ventes, dettes, paiements, produits, achats, dépenses).
+- Un commerçant peut lire uniquement son document d'abonnement par `get`; la lecture de liste n'est pas accordée. La création personnelle est limitée à un essai avec une durée maximale de 14 jours. La modification et la suppression sont réservées au Créateur.
+- Les données historiques `users/{uid}/comptivaData/main` restent lisibles par le propriétaire même après expiration ; les écritures historiques sont bloquées si l'abonnement n'est pas actif, sauf compte Créateur. Ce comportement correspond à une conservation en lecture seule et doit être clairement expliqué dans l'interface.
+- Le Patron conserve actuellement certaines lectures du modèle partagé même si l'abonnement est expiré ou si la boutique est suspendue. C'est une politique de lecture seule partielle à formaliser, pas une preuve d'accès complet : les vendeurs sont toujours contrôlés par l'appartenance active et l'abonnement Patron.
+- Les règles de suspension du vendeur reposent sur deux documents synchronisés : `shops/{shopId}/members/{uid}` et `userShopMemberships/{uid}/shops/{shopId}`. Les deux doivent rester concordants.
+
+### Défaut applicatif corrigé partiellement
+
+- Les fonctions d'affectation et de suspension/réactivation vendeur sont désormais protégées dans l'interface par `krediRequirePatron(...)`, en plus des règles Firestore.
+- L'affectation écrit encore le document membre puis l'index dans deux opérations séquentielles. La règle actuelle de l'index utilise `get(memberPath)` pour vérifier l'état du membre déjà persisté. Un lot atomique utilisant cette règle pourrait donc être refusé ; il ne faut pas le substituer à la séquence sans adapter la règle avec `getAfter()` et valider le comportement dans Emulator.
+- La suspension/réactivation suit également une séquence membre puis index et signale explicitement si la seconde étape échoue. Dans ce cas, les documents peuvent temporairement diverger ; il faut contrôler/réparer les deux documents avant une nouvelle tentative.
+- Une future correction robuste devra choisir entre une opération serveur de confiance et une écriture batch avec règles `getAfter()`, puis couvrir affectation, suspension, réactivation, rollback et reprise après échec dans Emulator.
+
+### Vérifications de cette passe
+
+- Relecture des règles d'abonnement, de l'index d'affectation, des documents membres et des fonctions applicatives d'affectation/suspension.
+- Contrôle statique : garde Patron présente dans les deux fonctions ; ordre membre puis index conservé pour rester compatible avec les règles actuelles ; message d'erreur de désynchronisation conservé.
+- Les trois blocs JavaScript de `application.html` compilent : 3/3.
+- Aucun test Firebase Emulator, aucun test de comptes réels, aucune requête Firestore réelle, aucune migration et aucun déploiement.
+- Les règles Firestore n'ont pas été modifiées ; les données réelles ne sont pas touchées ; `main` reste intacte.
+
+**Statut :** garde UI Patron renforcée pour les affectations. La synchronisation des deux documents reste non atomique et constitue un risque connu, explicitement reporté jusqu'à adaptation des règles et tests Emulator.
