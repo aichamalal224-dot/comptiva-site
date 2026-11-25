@@ -260,3 +260,12 @@ Vérifications synthétiques du calcul : registre valide (30 payés sur 100, sol
 Ajout d'un contrôle de cohérence des dettes avant les opérations financières : le client référencé doit exister ; pour une dette liée à une vente, la vente source doit exister, le client de la dette doit correspondre au client de la vente, le montant de crédit de la vente doit correspondre au montant de la dette, et une dette ne peut rester active si la vente source est annulée. La création et la correction/annulation de remboursements, ainsi que la modification/annulation de dettes et de ventes associées, bloquent lorsque ces relations sont incohérentes. Aucun rapprochement automatique ni changement de client n'est effectué.
 
 Tests synthétiques du contrôle de relation : relation cohérente acceptée ; client absent, vente source absente, client différent, montant différent et dette active liée à une vente annulée détectés. Les trois blocs JavaScript compilent. Ces tests ne remplacent pas les tests réels du navigateur et de Firebase Emulator ; les données historiques ne sont pas réparées automatiquement.
+
+
+### Validation des calculs financiers des ventes — 25 novembre 2026
+
+Les fonctions de calcul du chiffre d'affaires, des encaissements à la vente et du crédit valident maintenant chaque vente active : le total doit être un entier sûr strictement positif, les parts encaissée et à crédit doivent être des entiers sûrs non négatifs, et leur somme doit être exactement égale au total. Les ventes annulées restent exclues. Une vente incohérente rend le calcul de la période non exploitable au lieu d'injecter une valeur fausse dans les totaux. L'affichage monétaire ne convertit plus silencieusement une valeur non entière sûre ou non numérique en « 0 GNF » : il indique « À vérifier ».
+
+Tests synthétiques exécutés : vente espèces, vente entièrement à crédit, paiement mixte 40/60 et vente annulée acceptés avec les totaux attendus ; surpaiement, montant textuel et montant négatif refusés comme données non calculables. Ces tests portent sur les fonctions isolées et ne remplacent pas une compilation complète du fichier, un test navigateur ou Firebase Emulator.
+
+Limites encore à auditer : validation des montants des remboursements et achats/dépenses dans les agrégats de période ; traitement des dates invalides ; distinction entre achats de marchandises, variation de stock et coût des marchandises effectivement vendues. L'indicateur CA − achats − dépenses reste une estimation simplifiée, pas un bénéfice net comptable.
