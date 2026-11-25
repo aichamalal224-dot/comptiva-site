@@ -465,3 +465,51 @@ L'application crée/vérifie la boutique principale, gère les documents membres
 - Vérification statique des chemins et des fonctions d'accès effectuée ; aucun test d'autorisation Firebase Emulator, aucune tentative réelle de lecture/écriture directe avec un compte vendeur, aucun test avec deux comptes réels et aucun test multi-appareil n'ont été réalisés.
 - Le fichier `FIRESTORE_SUBSCRIPTION_RULES_PATCH.txt` se présente explicitement comme une proposition à publier manuellement. Aucun `firebase.json` n'a été trouvé à la racine de cette branche lors de l'inspection. Le statut exact des règles déployées dans le projet Firebase reste donc inconnu.
 - Aucune règle ni aucun code applicatif n'a été modifié pendant cet audit. Ne pas publier ces règles, ne pas activer le multi-boutiques et ne pas présenter les permissions comme validées avant correction des points ci-dessus et tests Emulator couvrant au minimum Patron, vendeur actif, vendeur suspendu, autre commerçant et utilisateur non connecté.
+
+
+### Audit complémentaire des scénarios d'accès directs Firestore — 25 novembre 2026
+
+Deuxième passe ciblée sur les autorisations effectives des règles, en raisonnant opération par opération et sans passer par les boutons de l'application. Fichier contrôlé : `firestore.rules`, SHA inchangé `fe5d434957a8e49b1d583a165b4371a8c64394bc`. Il s'agit d'une analyse statique des conditions écrites, pas d'un test d'exécution dans Firebase Emulator.
+
+**Matrice d'accès déduite des règles du dépôt**
+- Non connecté : aucune autorisation explicite de lecture/écriture sur les chemins métier ; les conditions d'accès nécessitent une authentification.
+- Commerçant historique A : lecture de `users/A/**` autorisée pour A ; lecture de `users/B/**` refusée. Les écritures dans son propre chemin sont soumises à l'abonnement, sauf exception Créateur dans son propre UID.
+- Patron de la boutique : lecture de sa boutique et de ses collections selon les règles ; écritures métier soumises au statut actif et à l'abonnement. Il peut gérer membres, produits, achats, dépenses et rapports.
+- Vendeur actif reconnu par un document membre actif : accès lecture aux ventes, clients, dettes, paiements et produits ; création possible de ventes, clients, dettes et paiements ; modification de clients possible ; pas de modification/suppression des ventes, pas de mutation de produits/stock, pas d'accès aux achats, dépenses et rapports. Attention : le code des règles ne vérifie pas assez strictement le rôle vendeur avant d'accorder ces droits.
+- Vendeur suspendu : le document membre doit avoir `active == true` pour être reconnu ; une affectation suspendue doit donc perdre les droits partagés. Cela reste à vérifier dans l'Emulator et sur un compte réel.
+- Autre commerçant : il ne devient pas membre simplement en connaissant le `shopId` ; les règles exigent un document membre actif côté boutique. Aucune tentative réelle avec un deuxième compte n'a été effectuée.
+- Créateur : accès de lecture au document racine de n'importe quelle boutique et accès global à `merchantSubscriptions`, mais les règles ne lui accordent pas automatiquement la lecture des sous-collections commerciales de toutes les boutiques.
+
+**Constats directs supplémentaires**
+1. La fonction `isShopSeller(shopId)` est définie mais n'est appelée par aucune autre condition d'autorisation du fichier. La fonction réellement utilisée, `isActiveShopMember(shopId)`, vérifie l'existence du document membre, `active == true`, le statut actif de la boutique et l'abonnement du Patron, mais ne vérifie ni `role == 'seller'`, ni `member.uid == request.auth.uid`, ni la concordance du Patron dans la fiche membre. Les permissions accordées à un membre actif sont donc plus larges que le rôle explicitement attendu. C'est un défaut de contrôle d'autorisation à corriger en priorité.
+2. L'index `userShopMemberships` n'est pas exigé par `isActiveShopMember`. Il sert à retrouver l'affectation côté application, mais la frontière d'autorisation est le document `shops/{shopId}/members/{uid}`. Il faut éviter que l'index et la fiche membre divergent ; les écritures des deux documents ne sont pas atomiques dans le code examiné.
+3. La lecture des produits est `canUseShop(shopId)`, et non `isShopPatron(shopId)`. Un vendeur actif peut donc lire le document produit entier. Aucun masquage de champs n'est possible dans une règle Firestore document classique : les coûts, marges ou valeurs d'achat présents dans ce document seraient visibles. Séparer les données publiques du stock et les données financières privées avant d'ajouter ces champs.
+4. Les règles de création de vente et de remboursement vérifient `shopId` et `createdBy`, mais ne vérifient pas que le `clientId`, `debtId`, `saleId` ou `productId` lié existe et appartient à la même boutique. Un vendeur autorisé pourrait donc envoyer directement des documents incohérents ou des montants arbitraires, même sans pouvoir modifier le stock. Les règles de dette/client ne valident pas non plus tous les champs métier.
+5. Les règles d'update de vente et de paiement réservent la modification au Patron et préservent `shopId`/auteur, mais ne limitent pas la liste des autres champs modifiables. Le Patron peut donc remplacer des champs de validation ou des valeurs financières par un appel direct ; cela peut contourner les contrôles métier du navigateur.
+6. La mise à jour du document racine de boutique autorise le Patron à changer `status` uniquement si `canWriteShop` est déjà vrai, et `canWriteShop` exige que le statut actuel soit `active`. Si le Patron passe le statut à `suspended` ou à une autre valeur, il ne satisfait plus ensuite `canWriteShop` et ne peut plus réactiver la boutique par cette règle. Prévoir un chemin de réactivation explicitement contrôlé, ou un changement de statut réservé au Créateur/backend.
+7. Le journal `auditLog` est append-only au niveau des règles, mais un membre autorisé peut créer un événement avec des champs additionnels, une date ou un type non contrôlé. Il ne doit pas être considéré comme un registre probant avant validation stricte ou écriture via un backend de confiance.
+8. Les règles des collections partagées s'appuient sur le chemin `shops/{shopId}/...` ; elles ne valident pas systématiquement que le champ `shopId` des documents lus correspond au paramètre du chemin. Les contrôles de cohérence existants dans l'application sont des diagnostics, pas une barrière serveur sur chaque lecture.
+
+**Priorité de correction proposée**
+P0 — centraliser la validation d'appartenance : authentification, boutique active, abonnement Patron, rôle exactement `seller`, UID membre égal à l'UID connecté et patron de la fiche membre égal au propriétaire de la boutique. Vérifier les opérations d'affectation/suspension de manière cohérente.
+
+P0 — séparer les champs produits visibles du vendeur des coûts/marges et autres données financières ; ne pas compter sur le masquage de l'interface.
+
+P1 — définir des schémas `keys().hasOnly/hasAll`, types, bornes, champs immuables et invariants de relations pour chaque création/mise à jour. Pour les opérations financières et les relations croisées, privilégier des transactions/backend de confiance plutôt que des règles trop complexes ou des données fournies par le client.
+
+P1 — définir la procédure de suspension/réactivation de boutique afin d'éviter le verrouillage définitif du Patron.
+
+P1 — renforcer le journal d'audit (auteur, date serveur, type d'événement, champs autorisés) et préciser qu'un journal client n'est pas inviolable.
+
+**Scénarios Emulator obligatoires avant toute publication**
+1. Utilisateur non connecté : lire et écrire chaque chemin privé et partagé — refus.
+2. Patron A : accès autorisé à sa boutique, refusé à la boutique B ; tenter des changements de champs interdits et de statut.
+3. Vendeur actif A : lire uniquement les collections prévues ; tenter de lire achats/dépenses/rapports, modifier une vente validée, supprimer une vente, modifier un produit, forger un auteur ou créer un remboursement lié à une dette étrangère — refus selon la politique attendue.
+4. Vendeur suspendu A : toutes les lectures/écritures partagées interdites après suspension, y compris présence et index incohérent.
+5. Compte B non membre : connaître le shopId de A ne doit donner aucun accès.
+6. Document membre avec rôle différent de seller, UID incohérent ou patron incohérent : accès refusé.
+7. Patron : impossible de modifier auteur, statut de validation ou données financières en contournant les invariants ; test de suspension puis réactivation contrôlée.
+8. Tests de requêtes de liste/collectionGroup et de chaque sous-collection, pas seulement de lectures document par document.
+
+**État de cette passe**
+Aucune règle Firestore et aucun code applicatif n'ont été modifiés. Les constats et scénarios ont été ajoutés à cette documentation uniquement. Pas d'Emulator, pas de test réel de comptes, pas de déploiement, pas de changement de `main`. La migration vers les collections partagées reste non démontrée ; cette matrice décrit les autorisations prévues par le fichier du dépôt, pas le fonctionnement réel d'un mode multi-boutiques en production.
