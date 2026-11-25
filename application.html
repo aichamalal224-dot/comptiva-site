@@ -779,13 +779,16 @@ async function krediCheckSharedSaleIdCollisions(){
     if(debt.saleId!==localSale.id)relationIssues.push('dette.saleId');
     if(String(debt.clientId||'')!==String(remoteSale.clientId||''))relationIssues.push('dette.clientId');
     const paymentsSnap=await shopRef.collection('payments').where('debtId','==',debtDoc.id).get({source:'server'});
+    const localPaymentIds=(Array.isArray(db.payments)?db.payments:[]).filter(payment=>payment.debtId===debtDoc.id).map(payment=>String(payment.id)).sort();
+    const remotePaymentIds=paymentsSnap.docs.map(paymentDoc=>String(paymentDoc.id)).sort();
+    if(krediStableSnapshot(localPaymentIds)!==krediStableSnapshot(remotePaymentIds))relationIssues.push('remboursements:identifiants différents');
     paymentsSnap.docs.forEach(paymentDoc=>{
      const payment=paymentDoc.data()||{};
      checkShopRef(payment,'remboursement');
      if(payment.debtId!==debtDoc.id)relationIssues.push('remboursement.debtId');
     });
    }
-   if(relationIssues.length)different++;
+   
    collisions.push({id:localSale.id,status:comparison.status,fields:comparison.fields.slice(0,8),relationIssues:relationIssues.slice(0,10)});
   }
  }
