@@ -457,6 +457,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
       <div class="stats"><div class="card"><div class="stat-label">Produits enregistrés</div><div class="stat-number" id="stockProductCount">0</div></div><div class="card"><div class="stat-label">Unités en stock</div><div class="stat-number" id="stockUnitCount">0</div></div><div class="card"><div class="stat-label">Produits à réapprovisionner</div><div class="stat-number" id="stockLowCount">0</div></div></div>
       <input class="search" id="stockSearch" placeholder="Rechercher un produit..." oninput="renderStock()">
       <div class="card" style="margin-top:14px"><div class="table-wrap" id="stockTable"></div></div>
+      <div class="card" style="margin-top:14px"><h3>Contrôle de cohérence du stock</h3><p class="stat-label">Diagnostic en lecture seule : aucune quantité ne sera corrigée automatiquement.</p><div id="stockAuditSummary" class="notice">Contrôle en attente.</div></div>
     </section>
     <section id="page-expenses" class="hidden">
       <div class="pagehead"><div><h2>Dépenses de la boutique</h2><p>Notez le loyer, le transport, l’électricité et les autres frais.</p></div><button class="primary" onclick="openForm('expense')">+ Nouvelle dépense</button></div>
@@ -1173,6 +1174,59 @@ function openPaymentFor(debtId){openForm('payment',{debtId})}
 
 function updateSaleTotal(){let q=Number(document.getElementById('quantity')?.value||0),p=Number(document.getElementById('unitPrice')?.value||0),el=document.getElementById('saleTotalPreview');if(el)el.textContent=money(q*p)}
 function renderSales(){let el=document.getElementById('salesTable');if(!el)return;let rows=db.sales.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(s=>{let cancelled=s.status==='cancelled';return '<tr><td>'+dateFmt(s.date)+'</td><td>'+esc(s.product)+(cancelled?' <span class="pill overdue">Annulée</span>':'')+'</td><td>'+esc(String(s.quantity))+'</td><td>'+money(s.unitPrice)+'</td><td><b>'+money(s.total)+'</b></td><td>'+esc(s.method||(s.saleType==='credit'?'Crédit client':'Espèces'))+'</td><td>'+money(paidOfSale(s))+'</td><td>'+money(creditOfSale(s))+'</td><td>'+esc(s.clientId?clientName(s.clientId):'—')+'</td><td>'+esc(s.createdByName||'Historique antérieur')+'</td><td><button class="soft" onclick="printReceipt(\''+s.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printReceipt(\''+s.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editSale(\''+s.id+'\')">Modifier</button> <button class="danger" onclick="cancelSale(\''+s.id+'\')">Annuler</button>')+'</td></tr>'});el.innerHTML=table(['Date','Article / statut','Qté','Prix unitaire','Total vente','Mode','Encaissé','À crédit','Client','Enregistré par','Actions'],rows)}
+function krediStockConsistencyAudit(){
+ const issues=[],movements=db.auditLog.filter(x=>x&&x.entityType==='stock');
+ const products=new Map(db.products.map(p=>[String(p.id),p]));
+ const keys=new Map();
+ let valid=0;
+ const addIssue=(code,message)=>issues.push({code,message});
+ movements.forEach(m=>{
+  const product=products.get(String(m.entityId||''));
+  if(!product){addIssue('movement_product_missing','Mouvement '+String(m.id||'sans ID')+' : produit introuvable.');return}
+  const qty=Number(m.quantity),before=Number(m.before),after=Number(m.after);
+  if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(before)||before<0||!Number.isFinite(after)||after<0){
+   addIssue('movement_invalid_values','Mouvement '+String(m.id||'sans ID')+' : quantité ou valeurs avant/après invalides.');return;
+  }
+  let expected=null;
+  if(m.action==='sale_deduction'||m.action==='sale_cancellation_restoration')expected=before-qty;
+  if(m.action==='purchase_addition')expected=before+qty;
+  if(expected!==null&&(!Number.isFinite(expected)||Math.abs(expected-after)>1e-9)){
+   addIssue('movement_arithmetic','Mouvement '+String(m.id||'sans ID')+' : calcul avant/après incohérent.');return;
+  }
+  if(!['sale_deduction','purchase_addition','sale_cancellation_restoration'].includes(m.action)){
+   addIssue('movement_unknown_action','Mouvement '+String(m.id||'sans ID')+' : type non reconnu ('+String(m.action||'absent')+').');return;
+  }
+  const relation=m.relatedSaleId||m.relatedPurchaseId||'';
+  const key=m.action+'|'+relation+'|'+m.entityId;
+  keys.set(key,(keys.get(key)||0)+1);
+  valid++;
+ });
+ keys.forEach((count,key)=>{if(count>1)addIssue('duplicate_movement','Mouvement répété ('+key+'), '+count+' occurrences.')});
+ db.sales.forEach(sale=>{
+  if(!sale.stockProductId||!sale.stockDeductedAt)return;
+  const found=movements.filter(m=>m.action==='sale_deduction'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
+  if(found.length===0)addIssue('sale_movement_missing','Vente '+String(sale.id)+' : trace de déduction du stock manquante.');
+  if(found.length>1)addIssue('sale_movement_repeated','Vente '+String(sale.id)+' : plusieurs traces de déduction.');
+  if(sale.stockRestoredAt){
+   const restored=movements.filter(m=>m.action==='sale_cancellation_restoration'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockRestoredProductId||sale.stockProductId));
+   if(restored.length===0)addIssue('restoration_missing','Vente '+String(sale.id)+' : restauration marquée mais trace absente.');
+   if(restored.length>1)addIssue('restoration_repeated','Vente '+String(sale.id)+' : plusieurs traces de restauration.');
+  }
+ });
+ db.purchases.forEach(purchase=>{
+  if(!purchase.stockProductId||!purchase.stockAddedAt)return;
+  const found=movements.filter(m=>m.action==='purchase_addition'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));
+  if(found.length===0)addIssue('purchase_movement_missing','Achat '+String(purchase.id)+' : trace d’ajout au stock manquante.');
+  if(found.length>1)addIssue('purchase_movement_repeated','Achat '+String(purchase.id)+' : plusieurs traces d’ajout.');
+ });
+ return {valid,issues};
+}
+function renderStockConsistencyAudit(){
+ const el=document.getElementById('stockAuditSummary');if(!el)return;
+ const result=krediStockConsistencyAudit();
+ if(!result.issues.length){el.innerHTML='<b>Contrôle terminé : aucune anomalie détectée dans les traces contrôlables.</b><br>'+result.valid+' mouvement(s) valide(s) analysé(s). Les stocks historiques sans trace initiale ne peuvent pas être recalculés intégralement.';return}
+ el.innerHTML='<b>'+result.issues.length+' anomalie(s) à examiner</b><br>'+result.valid+' mouvement(s) valide(s) analysé(s).<ul>'+result.issues.slice(0,30).map(x=>'<li>'+esc(x.message)+'</li>').join('')+'</ul>'+(result.issues.length>30?'<p>Affichage limité aux 30 premières anomalies.</p>':'')+'<p>Aucune quantité n’a été modifiée.</p>';
+}
 function renderStock(){let el=document.getElementById('stockTable');if(!el)return;let q=(document.getElementById('stockSearch')?.value||'').toLowerCase(),items=db.products.filter(p=>(p.name+' '+(p.category||'')+' '+(p.sku||'')).toLowerCase().includes(q));document.getElementById('stockProductCount').textContent=db.products.length;document.getElementById('stockUnitCount').textContent=db.products.reduce((n,p)=>n+Number(p.quantity||0),0).toLocaleString('fr-FR');document.getElementById('stockLowCount').textContent=db.products.filter(p=>Number(p.quantity||0)<=Number(p.alertAt||0)).length;let rows=items.map(p=>{let low=Number(p.quantity||0)<=Number(p.alertAt||0);return '<tr><td><b>'+esc(p.name)+'</b><br><span class="stat-label">'+esc(p.sku||'')+'</span></td><td>'+esc(p.category||'Autre')+'</td><td><b>'+Number(p.quantity||0).toLocaleString('fr-FR')+'</b> '+(low?'<span class="pill pending">Stock faible</span>':'<span class="pill paid">Disponible</span>')+'</td><td>'+money(p.purchasePrice||0)+'</td><td>'+money(p.salePrice||0)+'</td><td>'+money((Number(p.salePrice||0)-Number(p.purchasePrice||0)))+'</td></tr>'});el.innerHTML=table(['Produit / référence','Catégorie','Quantité restante','Prix d’achat unitaire','Prix de vente unitaire','Marge unitaire estimée'],rows)}
 function renderPurchases(){let el=document.getElementById('purchasesTable');if(!el)return;let active=db.purchases.filter(x=>x.status!=='cancelled'),today=dayKey(new Date()),month=today.slice(0,7);document.getElementById('purchaseDayTotal').textContent=money(active.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));document.getElementById('purchaseMonthTotal').textContent=money(active.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));let rows=db.purchases.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{let cancelled=x.status==='cancelled';return '<tr><td>'+dateFmt(x.date)+'</td><td>'+esc(x.item)+(cancelled?' <span class="pill overdue">Annulé</span>':'')+'</td><td>'+esc(x.supplier||'—')+'</td><td>'+esc(x.quantity?String(x.quantity):'—')+'</td><td><b>'+money(x.amount)+'</b></td><td>'+esc(x.method||'—')+'</td><td>'+esc(x.note||'—')+'</td><td>'+esc(x.createdByName||'Historique antérieur')+'</td><td>'+(cancelled?'—':'<button class="soft" onclick="editPurchase(\''+x.id+'\')">Modifier</button> <button class="danger" onclick="cancelPurchase(\''+x.id+'\')">Annuler</button>')+'</td></tr>'});el.innerHTML=table(['Date','Marchandise / statut','Fournisseur','Quantité','Montant','Paiement','Note','Enregistré par','Action'],rows)}
 function editPurchase(purchaseId){
