@@ -283,3 +283,12 @@ Tests synthétiques exécutés : remboursement valide, opération annulée, acha
 L'audit en lecture seule contrôle désormais, pour chaque achat relié au stock, l'existence et l'unicité de la trace initiale `purchase_addition`, sa quantité, la continuité des corrections successives `purchase_edit_adjustment`, la concordance entre la quantité finale tracée et celle enregistrée sur l'achat, ainsi que les retraits d'annulation. Il signale également un retrait d'annulation présent sur un achat encore actif. Les achats historiques suivis sans preuve initiale sont signalés comme non vérifiables ; aucune quantité n'est recalculée ni modifiée automatiquement.
 
 Cette vérification ne constitue pas un inventaire physique et ne prouve pas le stock disponible réel : elle contrôle uniquement la cohérence des traces présentes dans la base locale. Les achats sans lien exact avec un produit restent hors de ce contrôle ciblé.
+
+
+### Totaux des achats et distinction entre marge théorique et coût réel — 25 novembre 2026
+
+Les totaux des achats du jour et du mois dans la rubrique Achats réutilisent désormais `sumValidDatedAmounts`, comme les autres agrégats datés : les achats annulés sont exclus, et une date ou un montant invalide empêche l'affichage d'un total apparemment fiable (affichage « À vérifier »). Cela évite les conversions permissives de montants textuels ou invalides en valeurs numériques dans ces deux indicateurs.
+
+La colonne de stock est renommée « Marge théorique au prix d’achat actuel ». Elle compare le prix de vente catalogue au prix d'achat actuellement enregistré sur la fiche produit. Elle ne représente pas la marge historique des ventes : le modèle ne conserve pas encore de coût unitaire figé sur chaque vente ni de méthode de valorisation des lots (FIFO ou coût moyen). Il est donc impossible de calculer honnêtement le coût réel des marchandises vendues et le bénéfice réel à partir de ces seuls champs. Aucun coût historique n'a été inventé ou réattribué.
+
+Le suivi des dettes fournisseurs reste également incomplet : le mode « Crédit fournisseur » ne suffit pas à constituer un registre de factures fournisseurs, échéances, règlements partiels et soldes. Cette fonctionnalité doit faire l'objet d'un développement séparé avant de présenter un passif fournisseur fiable.
