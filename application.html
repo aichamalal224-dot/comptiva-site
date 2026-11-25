@@ -1888,10 +1888,14 @@ function krediQueueCloudSave(){
         else krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
       }
     }finally{
-      if(krediSaveInFlightToken===operationToken){krediSaveInFlight=false;krediSaveInFlightUid='';krediSaveInFlightToken=0}
-      // Après la libération du verrou, laisser la session courante reprendre
-      // son propre envoi si elle a des modifications en attente.
-      if(krediUser&&STORE==='comptiva_user_v1_'+krediUser.uid&&krediLocalDirty&&navigator.onLine){
+      // Seule l'opération qui possède encore le verrou ET le même UID peut
+      // le libérer. Une ancienne session ne doit jamais toucher au verrou
+      // éventuellement repris par une session plus récente.
+      const releasedOwnLock=krediSaveInFlightToken===operationToken&&krediSaveInFlightUid===uid;
+      if(releasedOwnLock){krediSaveInFlight=false;krediSaveInFlightUid='';krediSaveInFlightToken=0}
+      // Après la libération effective de son verrou, laisser uniquement la
+      // session actuellement connectée reprendre ses propres données en attente.
+      if(releasedOwnLock&&!krediSaveInFlight&&krediUser&&STORE==='comptiva_user_v1_'+krediUser.uid&&krediLocalDirty&&navigator.onLine){
         clearTimeout(krediSaveTimer);
         krediSaveTimer=setTimeout(()=>{if(krediUser&&STORE==='comptiva_user_v1_'+krediUser.uid)krediQueueCloudSave()},700);
       }
