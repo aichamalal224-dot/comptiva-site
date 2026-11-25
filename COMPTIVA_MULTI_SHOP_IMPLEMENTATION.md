@@ -585,3 +585,17 @@ Aucune règle Firestore et aucun code applicatif n'ont été modifiés. Les cons
 - Aucun déploiement de règles en production avant validation complète et autorisation explicite.
 
 **Statut :** plan préparatoire documenté ; tests non exécutés ; règles non modifiées ; aucun déploiement.
+
+
+## Correction des contrôles d'appartenance Patron / Vendeur — 26 novembre 2026
+
+- Correction apportée à `firestore.rules`, fonction `isActiveShopMember(shopId)`.
+- Un membre n'est désormais reconnu comme Vendeur actif que si son document contient les champs requis `uid`, `role`, `active`, `assignedBy`, avec `uid == request.auth.uid`, `role == 'seller'`, `active == true` et `assignedBy == shopData(shopId).patronUid`.
+- Le statut de la boutique doit rester actif et l'abonnement du Patron doit être valide.
+- Cette fonction est utilisée par les contrôles d'accès partagé : la correction renforce donc les lectures/écritures déléguées aux membres actifs sans ouvrir les données aux autres comptes.
+- Les documents d'affectation historiques incomplets ou dont l'auteur n'est pas le Patron seront refusés jusqu'à correction contrôlée de leurs données. Ne pas les réécrire automatiquement.
+- Limite restante : `isShopSeller(shopId)` est conservée et doit être vérifiée dans l'ensemble des règles; les autres défauts recensés (champs financiers produits lisibles, références croisées, validation des montants, réactivation après suspension) ne sont pas corrigés par ce changement.
+- Vérifications effectuées après relecture des fichiers : présence statique des quatre contrôles d'identité/rôle/état/Patron ; compilation des scripts de `application.html` ; comparaison de branche avec `main`.
+- Aucun test Firebase Emulator, aucune écriture Firestore réelle, aucun déploiement de règles et aucun test navigateur n'ont été exécutés.
+
+**Statut :** correction source enregistrée sur la branche de travail uniquement ; à valider dans Firebase Emulator avant toute publication.
