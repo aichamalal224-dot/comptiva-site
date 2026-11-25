@@ -1256,7 +1256,7 @@ function editDebt(debtId){
  const debt=db.debts.find(d=>d.id===debtId);
  if(!debt||debt.status==='cancelled'){alert('Cette dette est introuvable ou déjà annulée.');return}
  if(debt.saleId){alert('Cette dette est liée à une vente. Corrigez-la depuis la rubrique Ventes.');return}
- const paid=paidFor(debt.id);if(!Number.isSafeInteger(paid)||paid<0||paid>Number(debt.amount)||paid>0){alert('Modification bloquée : les remboursements liés à cette dette sont incohérents ou déjà actifs. Vérifiez l’historique avant toute correction.');return}
+ const paid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(paid)||paid<0||paid>debt.amount||paid>0){alert('Modification bloquée : les remboursements liés à cette dette sont incohérents ou déjà actifs. Vérifiez l’historique avant toute correction.');return}
  const clientCurrent=db.clients.find(c=>c.id===debt.clientId);
  const clientNameInput=prompt('Nom exact du client enregistré :',clientCurrent?clientCurrent.name:'');if(clientNameInput===null)return;
  const client=db.clients.find(c=>c.name.trim().toLowerCase()===clientNameInput.trim().toLowerCase());if(!client){alert('Client introuvable. Enregistrez d’abord le client ou vérifiez son nom.');return}
@@ -1277,7 +1277,7 @@ function cancelDebt(debtId){
  if(!debt){alert('Dette introuvable.');return}
  if(debt.status==='cancelled'){flash('Cette dette est déjà annulée.');return}
  if(debt.saleId){alert('Cette dette provient d’une vente. Annulez ou corrigez la vente depuis la rubrique Ventes pour conserver la cohérence des comptes.');return}
- const paid=paidFor(debt.id);if(!Number.isSafeInteger(paid)||paid<0||paid>Number(debt.amount)||paid>0){alert('Annulation impossible : les remboursements liés à cette dette sont incohérents ou encore actifs. Vérifiez et régularisez l’historique avant de réessayer.');return}
+ const paid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(paid)||paid<0||paid>debt.amount||paid>0){alert('Annulation impossible : les remboursements liés à cette dette sont incohérents ou encore actifs. Vérifiez et régularisez l’historique avant de réessayer.');return}
  const reason=prompt('Indiquez la raison de l’annulation de cette dette :');if(reason===null)return;if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cette dette de '+money(debt.amount)+' ? Elle sera retirée des soldes, mais son historique sera conservé.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();
@@ -1293,7 +1293,7 @@ function editPayment(paymentId){
  if(!payment||payment.status==='cancelled'){alert('Ce remboursement est introuvable ou déjà annulé.');return}
  const debt=db.debts.find(d=>d.id===payment.debtId);
  if(!debt||debt.status==='cancelled'){alert('La dette liée est introuvable ou annulée.');return}
- const currentPaid=paidFor(debt.id);if(!Number.isSafeInteger(currentPaid)||currentPaid<0||currentPaid>Number(debt.amount)){alert('Correction bloquée : les données financières de cette dette sont incohérentes. Vérifiez les remboursements avant de continuer.');return}
+ const currentPaid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(currentPaid)||currentPaid<0||currentPaid>debt.amount){alert('Correction bloquée : les données financières de cette dette sont incohérentes. Vérifiez les remboursements avant de continuer.');return}
  const amountText=prompt('Nouveau montant du remboursement (GNF) :',String(payment.amount));
  if(amountText===null)return;const amount=Number(amountText);
  if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}
@@ -1428,7 +1428,7 @@ function cancelSale(saleId){
  if(sale.status==='cancelled'){flash('Cette vente est déjà annulée.');return}
  const linkedDebts=db.debts.filter(d=>d.saleId===sale.id&&d.status!=='cancelled');
  if(linkedDebts.length>1){alert('Annulation bloquée : plusieurs dettes actives sont liées à cette vente. Vérifiez et régularisez les dettes avant toute annulation.');return}
- if(linkedDebts.some(d=>paidFor(d.id)>0)){
+ if(linkedDebts.some(d=>{const paid=paidFor(d.id);return !Number.isSafeInteger(d.amount)||d.amount<=0||!Number.isSafeInteger(paid)||paid<0||paid>d.amount||paid>0})){
   alert('Annulation impossible : un remboursement est déjà enregistré pour la dette liée à cette vente. Régularisez d’abord le remboursement dans l’historique.');
   return;
  }
