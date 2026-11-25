@@ -1322,45 +1322,65 @@ function printDebtStatement(id,isDuplicate=false){
  w.document.close()
 }
 function renderPayments(){let rows=db.payments.slice().reverse().map(p=>{let d=db.debts.find(d=>d.id===p.debtId),cancelled=p.status==='cancelled';return '<tr><td>'+esc(d?clientName(d.clientId):'Dette inconnue')+(cancelled?' <span class="pill overdue">Annulé</span>':'')+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td><button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\''+p.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\''+p.id+'\')">Modifier</button> <button class="danger" onclick="cancelPayment(\''+p.id+'\')">Annuler</button>')+'</td></tr>'});document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)}
+function krediPaymentActionCheck(payment){
+ if(!payment||!payment.id)return {issue:'Identifiant du remboursement absent.'};
+ const matches=db.payments.filter(p=>p&&p.id===payment.id);
+ if(matches.length!==1)return {issue:'Identifiant de remboursement absent ou dupliqué dans le registre.'};
+ if(payment.status==='cancelled')return {issue:'Ce remboursement est déjà annulé.'};
+ if(!isValidISODate(payment.date))return {issue:'Date du remboursement invalide.'};
+ if(!Number.isSafeInteger(payment.amount)||payment.amount<=0)return {issue:'Montant du remboursement invalide.'};
+ const debt=db.debts.find(d=>d&&d.id===payment.debtId);
+ if(!debt||debt.status==='cancelled')return {issue:'Dette liée introuvable ou annulée.'};
+ const relationIssue=krediDebtRelationIssue(debt);
+ if(relationIssue)return {issue:relationIssue};
+ const paid=paidFor(debt.id);
+ if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(paid)||paid<0||paid>debt.amount)return {issue:'Registre des remboursements incohérent : total payé ou solde à vérifier.'};
+ return {debt,paid};
+}
 function editPayment(paymentId){
- const payment=db.payments.find(p=>p.id===paymentId);
+ const payment=db.payments.find(p=>p&&p.id===paymentId);
  if(!payment||payment.status==='cancelled'){alert('Ce remboursement est introuvable ou déjà annulé.');return}
- const debt=db.debts.find(d=>d.id===payment.debtId);
- if(!debt||debt.status==='cancelled'){alert('La dette liée est introuvable ou annulée.');return}
- const relationIssue=krediDebtRelationIssue(debt);if(relationIssue){alert('Correction bloquée : '+relationIssue);return}
- const currentPaid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(currentPaid)||currentPaid<0||currentPaid>debt.amount){alert('Correction bloquée : les données financières de cette dette sont incohérentes. Vérifiez les remboursements avant de continuer.');return}
+ const check=krediPaymentActionCheck(payment);
+ if(check.issue){alert('Correction bloquée : '+check.issue);return}
+ const debt=check.debt,currentPaid=check.paid;
  const amountText=prompt('Nouveau montant du remboursement (GNF) :',String(payment.amount));
  if(amountText===null)return;const amount=Number(amountText);
  if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}
- const date=prompt('Nouvelle date (AAAA-MM-JJ) :',payment.date||new Date().toISOString().slice(0,10));
+ const date=prompt('Nouvelle date (AAAA-MM-JJ) :',payment.date);
  if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez le format AAAA-MM-JJ.');return}
  const method=prompt('Mode de paiement :',payment.method||'Espèces');
  if(method===null)return;if(!method.trim()){alert('Le mode de paiement est obligatoire.');return}
  const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
  const otherPayments=db.payments.filter(p=>p&&p.debtId===debt.id&&p.id!==payment.id&&p.status!=='cancelled');
- const otherIds=new Set();let otherPaid=0;for(const p of otherPayments){if(!p.id||otherIds.has(String(p.id))||!Number.isSafeInteger(p.amount)||p.amount<=0){alert('Correction bloquée : un autre remboursement lié à cette dette contient des données invalides ou un identifiant dupliqué.');return}otherIds.add(String(p.id));otherPaid+=p.amount;if(!Number.isSafeInteger(otherPaid)){alert('Correction bloquée : total des remboursements invalide.');return}}
- if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||otherPaid+amount>debt.amount){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return;}
+ const otherIds=new Set();let otherPaid=0;
+ for(const p of otherPayments){
+  if(!p.id||otherIds.has(String(p.id))||!isValidISODate(p.date)||!Number.isSafeInteger(p.amount)||p.amount<=0){alert('Correction bloquée : un autre remboursement lié à cette dette contient des données invalides.');return}
+  otherIds.add(String(p.id));otherPaid+=p.amount;
+  if(!Number.isSafeInteger(otherPaid)){alert('Correction bloquée : total des remboursements invalide.');return}
+ }
+ if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||otherPaid+amount>debt.amount){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return}
  if(!confirm('Confirmer la correction de ce remboursement ?'))return;
- const before=JSON.stringify(db),previous={amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString();
+ const before=JSON.stringify(db),previous={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString(),actor=krediActorStamp();
  payment.amount=amount;payment.date=date;payment.method=method.trim();payment.updatedAt=now;
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{amount,date,method:method.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
+ db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{status:payment.status,amount,date,method:method.trim(),updatedAt:now},at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Remboursement corrigé. Le solde de la dette a été recalculé.');
 }
 function cancelPayment(paymentId){
- const payment=db.payments.find(p=>p.id===paymentId);
+ const payment=db.payments.find(p=>p&&p.id===paymentId);
  if(!payment){alert('Remboursement introuvable.');return}
  if(payment.status==='cancelled'){flash('Ce remboursement est déjà annulé.');return}
- const debt=db.debts.find(d=>d.id===payment.debtId);
- if(!debt||debt.status==='cancelled'){alert('Cette dette est annulée ou introuvable. Aucune modification n’a été faite.');return}
- const relationIssue=krediDebtRelationIssue(debt);if(relationIssue){alert('Annulation bloquée : '+relationIssue);return}
+ const check=krediPaymentActionCheck(payment);
+ if(check.issue){alert('Annulation bloquée : '+check.issue);return}
  const reason=prompt('Indiquez la raison de l’annulation de ce remboursement :');
  if(reason===null)return;
  if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation du remboursement de '+money(payment.amount)+' ? Le solde de la dette sera recalculé.'))return;
- const before=JSON.stringify(db),now=new Date().toISOString();
- payment.status='cancelled';payment.cancelledAt=now;payment.cancelReason=reason.trim();payment.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
+ const before=JSON.stringify(db),now=new Date().toISOString(),actor=krediActorStamp();
+ const previous={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method};
+ payment.status='cancelled';payment.cancelledAt=now;payment.cancelReason=reason.trim();payment.cancelledBy=actor.createdByUid||'merchant';
+ const after={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method,cancelledAt:now,cancelReason:reason.trim(),cancelledBy:payment.cancelledBy};
+ db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),before:previous,after,at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Remboursement annulé. Le solde de la dette a été recalculé et l’historique conservé.');
 }
