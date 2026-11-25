@@ -1370,7 +1370,10 @@ function editSale(saleId){
  if(linked.some(d=>paidFor(d.id)>0)){alert('Modification bloquée : la dette liée à cette vente comporte déjà un remboursement actif. Annulez d’abord le remboursement concerné ou corrigez la vente après régularisation.');return}
  if(linked.length>1){alert('Modification bloquée : plusieurs dettes sont liées à cette vente. Une vérification manuelle est nécessaire.');return}
  let stockProduct=null;
- if(sale.stockProductId){stockProduct=db.products.find(p=>p.id===sale.stockProductId);if(!stockProduct){alert('Modification bloquée : le produit de stock lié est introuvable.');return}}
+ if(sale.stockProductId){
+  if(!sale.stockDeductedAt||!Number.isFinite(Number(sale.stockDeductedQuantity))||Number(sale.stockDeductedQuantity)<=0||Math.abs(Number(sale.stockDeductedQuantity)-Number(sale.quantity))>1e-9){alert('Modification bloquée : cette vente possède un lien de stock, mais aucune preuve fiable de la quantité réellement déduite. Vérifiez le stock manuellement avant toute correction.');return}
+  stockProduct=db.products.find(p=>p.id===sale.stockProductId);if(!stockProduct){alert('Modification bloquée : le produit de stock lié est introuvable.');return}
+ }
  const product=prompt('Article vendu :',sale.product||'');if(product===null)return;if(!product.trim()){alert('Article obligatoire.');return}
  if(stockProduct&&product.trim().toLowerCase()!==String(sale.product||'').trim().toLowerCase()){alert('Pour préserver le lien exact du stock, ne changez pas le nom du produit ici. Annulez cette vente puis enregistrez une nouvelle vente après vérification.');return}
  if(!stockProduct){const possible=db.products.find(p=>String(p.name||'').trim().toLowerCase()===String(sale.product||'').trim().toLowerCase());if(possible){alert('Modification bloquée : cette ancienne vente ne possède pas de lien exact avec le stock. Vérifiez manuellement le stock avant toute correction.');return}}
@@ -1414,6 +1417,7 @@ function cancelSale(saleId){
  }
  let stockProduct=null;
  if(sale.stockProductId){
+  if(!sale.stockDeductedAt||!Number.isFinite(Number(sale.stockDeductedQuantity))||Number(sale.stockDeductedQuantity)<=0||Math.abs(Number(sale.stockDeductedQuantity)-Number(sale.quantity))>1e-9){alert('Annulation bloquée : cette vente possède un lien de stock, mais aucune preuve fiable de la quantité réellement déduite. Aucune réintégration automatique ne sera effectuée. Vérifiez le stock manuellement.');return}
   stockProduct=db.products.find(p=>p.id===sale.stockProductId);
   if(!stockProduct){alert('Annulation bloquée : le produit de stock lié à cette vente est introuvable. Vérifiez le stock avant toute correction.');return}
  }else{
