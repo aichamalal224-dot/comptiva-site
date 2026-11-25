@@ -728,6 +728,41 @@ async function krediAssignSellerToPrimaryShop(){
   say('Affectation incomplète ou refusée. Vérifiez les règles Firestore et l’UID. Si la fiche membre a été créée mais pas l’index, faites vérifier les deux documents avant de recommencer.');
  }
 }
+async function krediSetSellerActive(sellerUid,active){
+ const status=document.getElementById('sellerManagementStatus');
+ const say=message=>{if(status)status.textContent=message};
+ if(!krediUser||!krediStore||!krediStoreMatchesActiveUser()){say('Connectez-vous au compte Patron avant de modifier une affectation.');return}
+ if(!/^[A-Za-z0-9_-]{1,128}$/.test(String(sellerUid||''))||sellerUid===krediUser.uid||typeof active!=='boolean'){say('Identifiant vendeur ou statut invalide.');return}
+ if(!krediCanUseMerchantApp()&&!krediIsCreator()){say('Abonnement non confirmé : modification bloquée.');return}
+ const shopId='shop-'+krediUser.uid,shop=krediStore.collection('shops').doc(shopId);
+ const member=shop.collection('members').doc(sellerUid);
+ const index=krediStore.collection('userShopMemberships').doc(sellerUid).collection('shops').doc(shopId);
+ try{
+  const shopSnap=await shop.get({source:'server'});
+  if(!shopSnap.exists||(shopSnap.data()||{}).ownerUid!==krediUser.uid||(shopSnap.data()||{}).patronUid!==krediUser.uid){say('Propriétaire de la boutique non vérifié : modification refusée.');return}
+  const memberSnap=await member.get({source:'server'});
+  const data=memberSnap.exists?memberSnap.data()||{}:null;
+  if(!data||data.role!=='seller'){say('Affectation vendeur introuvable : aucune modification effectuée.');return}
+  if(data.active===active){say(active?'Ce vendeur est déjà actif.':'Ce vendeur est déjà suspendu.');return}
+  const now=firebase.firestore.FieldValue.serverTimestamp();
+  // Le membre est mis à jour en premier : la règle de l’index vérifie ensuite le même statut.
+  await member.update({active:active,updatedAt:now});
+  try{
+   if(active)await index.set({uid:sellerUid,shopId:shopId,role:'seller',active:true,patronUid:krediUser.uid,updatedAt:now});
+   else await index.set({uid:sellerUid,shopId:shopId,role:'seller',active:false,patronUid:krediUser.uid,updatedAt:now});
+  }catch(indexError){
+   console.error('[COMPTIVA] Statut membre modifié mais index non actualisé.',indexError);
+   say('Statut du membre modifié, mais index vendeur non actualisé. Vérifiez les deux documents Firestore avant toute nouvelle action.');
+   krediRefreshSellerPresence();
+   return;
+  }
+  say(active?'Vendeur réactivé. Il pourra reprendre sa connexion avec son compte.':'Vendeur suspendu. Son accès aux opérations de la boutique est bloqué par les règles Firestore. Son historique est conservé.');
+  krediRefreshSellerPresence();
+ }catch(error){
+  console.error('[COMPTIVA] Modification statut vendeur refusée.',error);
+  say('Modification refusée : vérifiez les règles Firestore, l’abonnement et la connexion.');
+ }
+}
 async function krediRefreshSellerPresence(){
  const target=document.getElementById('sellerPresenceList');
  if(!target)return;
@@ -748,7 +783,10 @@ async function krediRefreshSellerPresence(){
    const online=!!(m.active===true&&stamp&&now-stamp<=90000);
    const name=[m.firstName,m.lastName].filter(Boolean).join(' ').trim()||m.email||('Vendeur '+doc.id.slice(0,6));
    const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Pas encore connecté';
-   return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small></span><span class="pill '+(online?'':'pending')+'">'+(online?'Connecté':'Pas encore connecté / hors ligne')+'</span></div>';
+   const active=m.active===true;
+   const actionLabel=active?'Suspendre':'Réactiver';
+   const actionValue=active?'false':'true';
+   return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small><br><small>'+ (active?'Affectation active':'Affectation suspendue') +'</small></span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill '+(online?'':'pending')+'">'+(online?'Connecté':(active?'Pas encore connecté / hors ligne':'Suspendu'))+'</span><button class="soft" type="button" onclick="krediSetSellerActive(\''+krediEscapePresence(doc.id)+'\','+actionValue+')">'+actionLabel+'</button></span></div>';
   }).join('');
  };
  try{
