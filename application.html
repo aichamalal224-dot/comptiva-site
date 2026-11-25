@@ -1090,10 +1090,10 @@ async function krediAssignSellerToPrimaryShop(){
   if(!shopSnap.exists||(shopSnap.data()||{}).ownerUid!==krediUser.uid){say('Propriétaire de la boutique non vérifié : affectation refusée.');return}
   if(memberSnap.exists&&(memberSnap.data()||{}).active===true){say('Ce vendeur est déjà affecté à cette boutique.');return}
   const now=firebase.firestore.FieldValue.serverTimestamp();
-  const batch=krediStore.batch();
-  batch.set(member,{uid:uid,role:'seller',active:true,firstName:firstName,lastName:lastName,email:email,createdAt:now,updatedAt:now,assignedBy:krediUser.uid});
-  batch.set(index,{uid:uid,shopId:shopId,role:'seller',active:true,patronUid:krediUser.uid,updatedAt:now});
-  await batch.commit();
+  // L'index est écrit après le membre : la règle Firestore actuelle vérifie
+  // l'état déjà persisté du document membre (get(), pas getAfter()).
+  await member.set({uid:uid,role:'seller',active:true,firstName:firstName,lastName:lastName,email:email,createdAt:now,updatedAt:now,assignedBy:krediUser.uid});
+  await index.set({uid:uid,shopId:shopId,role:'seller',active:true,patronUid:krediUser.uid,updatedAt:now});
   say('Vendeur affecté avec succès. Il peut se connecter avec son propre compte Firebase. Le suivi de présence sera activé à sa prochaine connexion.');
   ['newSellerUid','newSellerFirstName','newSellerLastName','newSellerEmail'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=''});
   krediRefreshSellerPresence();
