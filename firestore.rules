@@ -117,6 +117,22 @@ service cloud.firestore {
       allow update, delete: if isCreator();
     }
 
+    // Index privé : chaque vendeur ne peut consulter que sa propre affectation.
+    match /userShopMemberships/{memberUid}/shops/{shopId} {
+      allow get, list: if signedIn() && request.auth.uid == memberUid;
+      allow create, update: if signedIn()
+        && isShopPatron(shopId)
+        && request.resource.data.keys().hasOnly(['uid', 'shopId', 'role', 'active', 'patronUid', 'updatedAt'])
+        && request.resource.data.uid == memberUid
+        && request.resource.data.shopId == shopId
+        && request.resource.data.role == 'seller'
+        && request.resource.data.active == true
+        && request.resource.data.patronUid == request.auth.uid
+        && exists(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid))
+        && get(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == true;
+      allow delete: if isShopPatron(shopId);
+    }
+
     // NEW MULTI-SHOP MODEL. Do not activate before the application migration is ready.
     match /shops/{shopId} {
       allow get: if isCreator() || canUseShop(shopId);
@@ -153,6 +169,19 @@ service cloud.firestore {
           && request.resource.data.active is bool
           && request.resource.data.assignedBy == request.auth.uid;
         allow delete: if canWriteShop(shopId) && isShopPatron(shopId) && memberUid != request.auth.uid;
+      }
+
+      // Heartbeat : un vendeur écrit uniquement son propre signal ; Patron lit les signaux.
+      match /presence/{memberUid} {
+        allow read: if isShopPatron(shopId);
+        allow create, update: if signedIn()
+          && request.auth.uid == memberUid
+          && isActiveShopMember(shopId)
+          && request.resource.data.keys().hasOnly(['uid', 'lastSeen', 'clientState'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.lastSeen == request.time
+          && request.resource.data.clientState == 'active';
+        allow delete: if false;
       }
 
       match /sales/{saleId} {
