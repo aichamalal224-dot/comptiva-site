@@ -241,3 +241,8 @@ Vérifications synthétiques du contrôle : preuve correcte acceptée ; horodata
 La modification d'un achat historique dont la quantité suivie était nulle pouvait retrouver silencieusement le premier produit portant le même nom, augmenter son stock, mais ne pas créer la preuve `purchase_addition` attendue ensuite par les fonctions de correction/annulation. La correspondance automatique bloque désormais le cas où plusieurs produits ont le même nom. Lorsqu'un seul produit correspond et que la modification ajoute une quantité positive à partir d'une ancienne quantité nulle, l'application enregistre explicitement `stockProductId`, `stockAddedAt` et une trace `purchase_addition` avec les valeurs avant/après. Les modifications d'achats déjà suivis conservent leur trace `purchase_edit_adjustment`. Cette correction ne résout pas l'ambiguïté métier d'un nom identique à un produit différent ; elle bloque les doublons exacts et rend la preuve nécessaire aux opérations suivantes.
 
 Vérifications prévues : compilation JavaScript et tests synthétiques du chemin quantité initiale nulle, correspondance unique et doublon de noms. Aucun test réel Firestore ou navigateur n'est couvert par ces vérifications.
+
+
+### Protection contre plusieurs dettes actives sur une vente — 25 novembre 2026
+
+L'audit a relevé une asymétrie : la modification d'une vente bloquait déjà plusieurs dettes actives liées à la même vente, mais son annulation ne le faisait pas. L'annulation bloque désormais également ce cas ambigu avant toute modification du stock, de la vente ou des dettes. Une seule dette active liée reste traitée selon les contrôles de remboursement existants ; plusieurs dettes nécessitent une régularisation manuelle.
