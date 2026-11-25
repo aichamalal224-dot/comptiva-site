@@ -1782,9 +1782,20 @@ function krediSaveConflictSnapshot(uid,localData,remoteData,baselineText,reason)
  if(!uid||uid!==(krediUser&&krediUser.uid)||!krediStoreMatchesActiveUser())return false;
  const prefix='comptiva_conflict_'+uid+'_',keys=[];
  try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith(prefix))keys.push(key)}}catch(e){console.warn('[COMPTIVA] Lecture des sauvegardes de conflit impossible',e);return false}
- if(keys.length>=5){console.warn('[COMPTIVA] Limite de cinq sauvegardes de conflit atteinte ; aucune ancienne copie ne sera supprimée.');return false}
  let baseline=null;try{baseline=baselineText?JSON.parse(baselineText):null}catch(e){baseline={unparsedBaseline:baselineText}}
- const envelope={app:'COMPTIVA',version:1,schemaVersion:1,scope:'account-conflict-recovery',ownerUid:uid,createdAt:new Date().toISOString(),reason:String(reason||'conflit de synchronisation'),localData:localData||null,remoteData:remoteData||null,baselineData:baseline};
+ const snapshotReason=String(reason||'conflit de synchronisation');
+ const localSnapshot=localData||null,remoteSnapshot=remoteData||null;
+ // Une écoute Firestore peut répéter le même instantané : ne pas consommer
+ // les cinq emplacements de récupération avec des copies strictement identiques.
+ const signature=JSON.stringify([snapshotReason,localSnapshot,remoteSnapshot,baseline]);
+ for(const key of keys){
+  try{
+   const existing=JSON.parse(localStorage.getItem(key)||'null');
+   if(existing&&existing.ownerUid===uid&&JSON.stringify([existing.reason,existing.localData||null,existing.remoteData||null,existing.baselineData??null])===signature)return true;
+  }catch(e){console.warn('[COMPTIVA] Une ancienne copie de conflit est illisible ; elle est conservée.',e)}
+ }
+ if(keys.length>=5){console.warn('[COMPTIVA] Limite de cinq sauvegardes de conflit atteinte ; aucune ancienne copie ne sera supprimée.');return false}
+ const envelope={app:'COMPTIVA',version:1,schemaVersion:1,scope:'account-conflict-recovery',ownerUid:uid,createdAt:new Date().toISOString(),reason:snapshotReason,localData:localSnapshot,remoteData:remoteSnapshot,baselineData:baseline};
  const key=prefix+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
  try{localStorage.setItem(key,JSON.stringify(envelope));return true}catch(error){console.error('[COMPTIVA] Copie de récupération du conflit impossible',error);return false}
 }
