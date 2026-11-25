@@ -52,6 +52,15 @@ service cloud.firestore {
         && hasActiveSubscription(shopData(shopId).patronUid);
     }
 
+    function canWriteShop(shopId) {
+      return shopExists(shopId)
+        && shopData(shopId).status == 'active'
+        && (
+          (isShopPatron(shopId) && hasActiveSubscription(shopData(shopId).patronUid))
+          || isActiveShopMember(shopId)
+        );
+    }
+
     function isShopSeller(shopId) {
       let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
       return isActiveShopMember(shopId)
@@ -122,7 +131,7 @@ service cloud.firestore {
         && request.resource.data.status == 'active'
         && request.resource.data.schemaVersion == 1
         && hasActiveSubscription(request.auth.uid);
-      allow update: if isShopPatron(shopId)
+      allow update: if canWriteShop(shopId) && isShopPatron(shopId)
         && request.resource.data.ownerUid == resource.data.ownerUid
         && request.resource.data.patronUid == resource.data.patronUid
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -133,7 +142,7 @@ service cloud.firestore {
         allow read: if isCreator()
           || (signedIn() && request.auth.uid == memberUid && isActiveShopMember(shopId))
           || isShopPatron(shopId);
-        allow create, update: if isShopPatron(shopId)
+        allow create, update: if canWriteShop(shopId) && isShopPatron(shopId)
           && memberUid != request.auth.uid
           && request.resource.data.keys().hasOnly([
             'uid', 'role', 'active', 'firstName', 'lastName', 'email',
@@ -143,16 +152,15 @@ service cloud.firestore {
           && request.resource.data.role == 'seller'
           && request.resource.data.active is bool
           && request.resource.data.assignedBy == request.auth.uid;
-        allow delete: if isShopPatron(shopId) && memberUid != request.auth.uid;
+        allow delete: if canWriteShop(shopId) && isShopPatron(shopId) && memberUid != request.auth.uid;
       }
 
       match /sales/{saleId} {
         allow read: if canUseShop(shopId);
-        allow create: if canUseShop(shopId)
-          && hasActiveSubscription(shopData(shopId).patronUid)
+        allow create: if canWriteShop(shopId)
           && request.resource.data.shopId == shopId
           && request.resource.data.createdBy == request.auth.uid;
-        allow update: if isShopPatron(shopId)
+        allow update: if canWriteShop(shopId) && isShopPatron(shopId)
           && request.resource.data.shopId == resource.data.shopId
           && request.resource.data.createdBy == resource.data.createdBy;
         allow delete: if false;
@@ -160,19 +168,19 @@ service cloud.firestore {
 
       match /clients/{clientId} {
         allow read: if canUseShop(shopId);
-        allow create: if canUseShop(shopId)
+        allow create: if canWriteShop(shopId)
           && request.resource.data.shopId == shopId;
-        allow update: if canUseShop(shopId)
+        allow update: if canWriteShop(shopId)
           && resource.data.shopId == shopId
           && request.resource.data.shopId == shopId;
-        allow delete: if isShopPatron(shopId);
+        allow delete: if canWriteShop(shopId) && isShopPatron(shopId);
       }
 
       match /debts/{debtId} {
         allow read: if canUseShop(shopId);
-        allow create: if canUseShop(shopId)
+        allow create: if canWriteShop(shopId)
           && request.resource.data.shopId == shopId;
-        allow update: if isShopPatron(shopId)
+        allow update: if canWriteShop(shopId) && isShopPatron(shopId)
           && resource.data.shopId == shopId
           && request.resource.data.shopId == shopId;
         allow delete: if false;
@@ -193,12 +201,12 @@ service cloud.firestore {
         allow read: if canUseShop(shopId);
         // Stock mutations are Patron-only until atomic sale/inventory operations
         // have been migrated and verified. This intentionally blocks direct seller edits.
-        allow create, update, delete: if isShopPatron(shopId);
+        allow create, update, delete: if canWriteShop(shopId) && isShopPatron(shopId);
       }
 
       match /purchases/{purchaseId} {
         allow read: if isShopPatron(shopId);
-        allow create, update: if isShopPatron(shopId)
+        allow create, update: if canWriteShop(shopId) && isShopPatron(shopId)
           && request.resource.data.shopId == shopId;
         allow delete: if false;
       }
