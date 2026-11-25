@@ -1710,12 +1710,16 @@ async function krediInitFirebase(){try{
       // Lever le verrou de conflit uniquement si le cloud contient déjà
       // exactement la base locale en attente : aucune donnée ne sera perdue.
       if(krediCloudConflictUid===activeUid&&mergedTextFromRemote===JSON.stringify(localData))krediCloudConflictUid='';
+      krediShowConflictRecoveryButton();
       // Si des changements locaux attendent et que la version cloud a changé
       // depuis notre dernière base connue, ne jamais choisir silencieusement
       // une version : une résolution de conflit est nécessaire.
       if(hasPending&&(!krediLastWrite||(mergedTextFromRemote!==krediLastWrite&&mergedTextFromRemote!==JSON.stringify(localData)))){
         krediCloudReady=false;krediLocalDirty=true;krediCloudConflictUid=activeUid;
+        const conflictSnapshotSaved=krediSaveConflictSnapshot(activeUid,localData,remoteData,krediLastWrite,'Version cloud différente pendant des modifications locales en attente');
         krediSafeStorageSet('comptiva_pending_'+activeUid,'1');
+        krediShowConflictRecoveryButton();
+        if(!conflictSnapshotSaved)console.warn('[COMPTIVA] Le conflit est bloqué, mais sa copie locale de récupération n’a pas pu être enregistrée.');
         krediStatus('Conflit de synchronisation détecté : les données ont changé sur un autre appareil pendant que cet appareil avait des modifications en attente. Aucune écriture automatique ne sera faite. Gardez les deux appareils et contactez le support avant de reprendre la synchronisation.');
         console.warn('[COMPTIVA] Synchronisation suspendue pour conflit multi-appareils.');
         return;
@@ -1745,7 +1749,7 @@ async function krediInitFirebase(){try{
         krediLocalDirty=true;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediCloudReady=false;krediStatus('Données locales conservées : le navigateur ne peut pas mémoriser la synchronisation en attente. Libérez de l’espace avant de réessayer.');return}
         krediStatus('Envoi des données locales vers Firebase…');
         try{krediLastWrite=remoteText;await krediWriteCloudIfUnchanged(ref,remoteText,merged);if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
-        catch(e){if(!isCurrentSession())return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
+        catch(e){if(!isCurrentSession())return;krediCloudReady=false;if(e&&String(e.code||'').startsWith('comptiva/cloud-')){krediCloudConflictUid=activeUid;const saved=krediSaveConflictSnapshot(activeUid,db,null,krediLastWrite,'Conflit détecté pendant une transaction Firestore ; version cloud à relire');krediSafeStorageSet('comptiva_pending_'+activeUid,'1');krediShowConflictRecoveryButton();if(!saved)console.warn('[COMPTIVA] Copie de récupération non enregistrée après conflit de transaction.')}krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
       krediLastWrite=remoteText;
@@ -1774,6 +1778,33 @@ async function krediInitFirebase(){try{
   krediStatus('Connexion sécurisée non initialisée : '+detail+' Les données locales ne sont pas modifiées.');
   console.error('[COMPTIVA] Initialisation Firebase',e);
 }}
+function krediSaveConflictSnapshot(uid,localData,remoteData,baselineText,reason){
+ if(!uid||uid!==(krediUser&&krediUser.uid)||!krediStoreMatchesActiveUser())return false;
+ const prefix='comptiva_conflict_'+uid+'_',keys=[];
+ try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith(prefix))keys.push(key)}}catch(e){console.warn('[COMPTIVA] Lecture des sauvegardes de conflit impossible',e);return false}
+ if(keys.length>=5){console.warn('[COMPTIVA] Limite de cinq sauvegardes de conflit atteinte ; aucune ancienne copie ne sera supprimée.');return false}
+ let baseline=null;try{baseline=baselineText?JSON.parse(baselineText):null}catch(e){baseline={unparsedBaseline:baselineText}}
+ const envelope={app:'COMPTIVA',version:1,schemaVersion:1,scope:'account-conflict-recovery',ownerUid:uid,createdAt:new Date().toISOString(),reason:String(reason||'conflit de synchronisation'),localData:localData||null,remoteData:remoteData||null,baselineData:baseline};
+ const key=prefix+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7);
+ try{localStorage.setItem(key,JSON.stringify(envelope));return true}catch(error){console.error('[COMPTIVA] Copie de récupération du conflit impossible',error);return false}
+}
+function krediDownloadConflictSnapshots(){
+ const uid=krediUser&&krediUser.uid;
+ if(!uid||!krediStoreMatchesActiveUser()||krediCloudConflictUid!==uid){alert('Téléchargement refusé : reconnectez-vous au compte concerné et vérifiez le conflit.');return}
+ const prefix='comptiva_conflict_'+uid+'_',items=[];
+ try{for(let i=0;i<localStorage.length;i++){const key=localStorage.key(i);if(key&&key.startsWith(prefix)){const raw=localStorage.getItem(key);if(raw)items.push(JSON.parse(raw))}}}catch(error){alert('Lecture des copies de récupération impossible. Ne modifiez pas les données et contactez le support.');return}
+ if(!items.length){alert('Aucune copie de récupération du conflit n’est disponible sur cet appareil.');return}
+ const payload={app:'COMPTIVA',version:1,schemaVersion:1,scope:'account-conflict-recovery-bundle',ownerUid:uid,createdAt:new Date().toISOString(),snapshots:items};
+ const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');
+ a.href=url;a.download='comptiva-recuperation-conflit-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+ flash('Copies de récupération téléchargées. Elles contiennent des données commerciales confidentielles : conservez-les en lieu sûr.',6500);
+}
+function krediShowConflictRecoveryButton(){
+ const status=document.getElementById('cloudSyncStatus');if(!status||!status.parentNode)return;
+ let button=document.getElementById('krediConflictRecoveryDownload');
+ if(!button){button=document.createElement('button');button.id='krediConflictRecoveryDownload';button.type='button';button.textContent='Télécharger les copies de conflit';button.style.cssText='display:none;margin-top:6px;padding:7px 10px;border:1px solid #b45309;border-radius:8px;background:#fff7ed;color:#9a3412;font-weight:700;font-size:12px;cursor:pointer';button.addEventListener('click',krediDownloadConflictSnapshots);status.parentNode.appendChild(button)}
+ button.style.display=krediUser&&krediCloudConflictUid===krediUser.uid?'inline-block':'none';
+}
 function krediSafeStorageGet(key){try{return{ok:true,value:localStorage.getItem(key)}}catch(error){console.warn('[COMPTIVA] Lecture du stockage local impossible :',error);return{ok:false,value:null}}}
 function krediSafeStorageSet(key,value){try{localStorage.setItem(key,value);return true}catch(error){console.warn('[COMPTIVA] Écriture du stockage local impossible :',error);return false}}
 function krediSafeStorageRemove(key){try{localStorage.removeItem(key);return true}catch(error){console.warn('[COMPTIVA] Nettoyage du stockage local impossible :',error);return false}}
@@ -1796,7 +1827,7 @@ function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud)return;
   if(!krediIsCreator()&&!krediCanUseMerchantApp()){krediStatus('Abonnement non actif : aucune modification commerciale ne sera synchronisée. Vos données existantes sont conservées.');return}
   const uid=krediUser.uid,sessionEpoch=krediSessionEpoch,expectedStore='comptiva_user_v1_'+uid;
-  if(krediCloudConflictUid===uid){krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue pour ce compte : conflit entre appareils. Vos modifications locales sont conservées ; aucune nouvelle écriture automatique ne sera tentée.');return}
+  if(krediCloudConflictUid===uid){krediShowConflictRecoveryButton();krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue pour ce compte : conflit entre appareils. Vos modifications locales sont conservées ; aucune nouvelle écriture automatique ne sera tentée.');return}
   const isCurrentSaveSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&STORE===expectedStore;
   krediLocalDirty=true;
   if(!krediSafeStorageSet('comptiva_pending_'+uid,'1')){
