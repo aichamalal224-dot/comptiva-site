@@ -967,5 +967,5 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 ### Vérifications
 
 - Vérification statique du précontrôle des deux documents, de la concordance des champs et du retour arrière après échec de l'index.
-- Compilation des trois blocs JavaScript de `application.html` à effectuer après relecture du fichier modifié.
+- Compilation des trois blocs JavaScript de `application.html` après relecture : 3/3 réussie.
 - Aucun test Firebase Emulator ou compte réel dans cette passe ; aucune règle Firestore ni donnée réelle modifiée ; aucun déploiement ; `main` intacte.
