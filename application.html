@@ -1524,7 +1524,25 @@ async function updateCreatorAdRequest(button){
 }
 function krediTrackMerchant(user){if(!user||!user.uid||user.uid===KREDI_CREATOR_UID||!krediStore)return;const name=user.displayName||(user.email?user.email.split('@')[0]:'Commerçant');krediStore.collection('merchantDirectory').doc(user.uid).set({uid:user.uid,email:user.email||'',displayName:name,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(e=>console.warn('[COMPTIVA] Inscription au répertoire commerçant non confirmée :',e));}
 function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comptiva_subscription_v1_'+uid;db=loadDB();if(!window.krediDBStorageIssue||window.krediDBStorageIssue.store!==STORE){if(!db||typeof db!=='object'||Array.isArray(db))db={};['sales','clients','debts','payments','purchases','expenses','products'].forEach(key=>{if(!Array.isArray(db[key]))db[key]=[];else db[key]=db[key].filter(row=>row&&typeof row==='object'&&!Array.isArray(row))})}else{krediStatus('Attention : les données locales de ce compte sont illisibles. Elles sont protégées ; aucune synchronisation ne les remplacera.')}subscription=loadSubscription();if(!subscription||typeof subscription!=='object'||Array.isArray(subscription))subscription={};if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings||typeof subscription.paymentSettings!=='object')subscription.paymentSettings={number:'',name:''};}
-function krediDatabaseShapeIssue(data){if(!data||typeof data!=='object'||Array.isArray(data))return 'racine invalide';for(const key of ['clients','debts','payments','sales','purchases','expenses','products','auditLog']){if(Object.prototype.hasOwnProperty.call(data,key)&&!Array.isArray(data[key]))return 'tableau invalide : '+key;if(Array.isArray(data[key])&&data[key].some(row=>!row||typeof row!=='object'||Array.isArray(row)))return 'enregistrement invalide : '+key}if(data.businessProfile!==undefined&&(!data.businessProfile||typeof data.businessProfile!=='object'||Array.isArray(data.businessProfile)))return 'profil commerce invalide';return ''}
+function krediDatabaseShapeIssue(data){
+ if(!data||typeof data!=='object'||Array.isArray(data))return 'racine invalide';
+ const collections=['clients','debts','payments','sales','purchases','expenses','products','auditLog'];
+ const safeId=/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+ for(const key of collections){
+  if(Object.prototype.hasOwnProperty.call(data,key)&&!Array.isArray(data[key]))return 'tableau invalide : '+key;
+  if(!Array.isArray(data[key]))continue;
+  const seenIds=new Set();
+  for(let index=0;index<data[key].length;index++){
+   const row=data[key][index];
+   if(!row||typeof row!=='object'||Array.isArray(row))return 'enregistrement invalide : '+key+' (ligne '+(index+1)+')';
+   if(typeof row.id!=='string'||!safeId.test(row.id))return 'identifiant absent ou non autorisé : '+key+' (ligne '+(index+1)+')';
+   if(seenIds.has(row.id))return 'identifiant en double : '+key+' ('+row.id+')';
+   seenIds.add(row.id);
+  }
+ }
+ if(data.businessProfile!==undefined&&(!data.businessProfile||typeof data.businessProfile!=='object'||Array.isArray(data.businessProfile)))return 'profil commerce invalide';
+ return '';
+}
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
