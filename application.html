@@ -1706,6 +1706,17 @@ async function krediInitFirebase(){try{
       if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue : la base locale est illisible. Les données cloud ne seront pas fusionnées ni écrites avant récupération de la copie locale.');return}
       const pendingMarker=krediSafeStorageGet('comptiva_pending_'+activeUid);
       const hasPending=!!(krediLocalDirty||(pendingMarker.ok&&pendingMarker.value==='1')||!pendingMarker.ok);
+      const mergedTextFromRemote=JSON.stringify({...krediEmptyDB(),...remoteData});
+      // Si des changements locaux attendent et que la version cloud a changé
+      // depuis notre dernière base connue, ne jamais choisir silencieusement
+      // une version : une résolution de conflit est nécessaire.
+      if(hasPending&&(!krediLastWrite||mergedTextFromRemote!==krediLastWrite)){
+        krediCloudReady=false;krediLocalDirty=true;
+        krediSafeStorageSet('comptiva_pending_'+activeUid,'1');
+        krediStatus('Conflit de synchronisation détecté : les données ont changé sur un autre appareil pendant que cet appareil avait des modifications en attente. Aucune écriture automatique ne sera faite. Gardez les deux appareils et contactez le support avant de reprendre la synchronisation.');
+        console.warn('[COMPTIVA] Synchronisation suspendue pour conflit multi-appareils.');
+        return;
+      }
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
       const mergedShapeIssue=krediDatabaseShapeIssue(merged);
       if(mergedShapeIssue){krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue : la fusion des données présente une anomalie ('+mergedShapeIssue+'). Aucune donnée ne sera écrasée.');console.error('[COMPTIVA] Fusion locale/distante invalide :',mergedShapeIssue);return}
@@ -1730,10 +1741,11 @@ async function krediInitFirebase(){try{
         if(!krediIsCreator()&&(krediNeedsSubscriptionRecheck||!krediCanUseMerchantApp())){krediStatus('Données locales conservées : vérification obligatoire de l’abonnement avant toute synchronisation cloud.');return}
         krediLocalDirty=true;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediCloudReady=false;krediStatus('Données locales conservées : le navigateur ne peut pas mémoriser la synchronisation en attente. Libérez de l’espace avant de réessayer.');return}
         krediStatus('Envoi des données locales vers Firebase…');
-        try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
+        try{krediLastWrite=remoteText;await krediWriteCloudIfUnchanged(ref,remoteText,merged);if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
         catch(e){if(!isCurrentSession())return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
+      krediLastWrite=remoteText;
       krediCloudReady=true;krediLocalDirty=false;krediSafeStorageRemove('comptiva_pending_'+activeUid);
       krediStatus(navigator.onLine?'Connecté · données synchronisées':'Hors connexion · données locales disponibles');renderAll();
     },err=>{clearTimeout(serverProbeTimer);if(!isCurrentSession())return;krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
@@ -1762,6 +1774,19 @@ async function krediInitFirebase(){try{
 function krediSafeStorageGet(key){try{return{ok:true,value:localStorage.getItem(key)}}catch(error){console.warn('[COMPTIVA] Lecture du stockage local impossible :',error);return{ok:false,value:null}}}
 function krediSafeStorageSet(key,value){try{localStorage.setItem(key,value);return true}catch(error){console.warn('[COMPTIVA] Écriture du stockage local impossible :',error);return false}}
 function krediSafeStorageRemove(key){try{localStorage.removeItem(key);return true}catch(error){console.warn('[COMPTIVA] Nettoyage du stockage local impossible :',error);return false}}
+async function krediWriteCloudIfUnchanged(ref,expectedRemoteText,nextData){
+  return firebase.firestore().runTransaction(async transaction=>{
+    const snapshot=await transaction.get(ref);
+    const document=snapshot.exists?snapshot.data():null;
+    if(snapshot.exists&&(!document||!Object.prototype.hasOwnProperty.call(document,'db')))throw Object.assign(new Error('Le document cloud ne contient pas la base attendue.'),{code:'comptiva/cloud-shape-conflict'});
+    const currentData=snapshot.exists?document.db:krediEmptyDB();
+    const issue=krediDatabaseShapeIssue(currentData);
+    if(issue)throw Object.assign(new Error('La base cloud est invalide : '+issue),{code:'comptiva/cloud-shape-conflict'});
+    const currentText=JSON.stringify({...krediEmptyDB(),...currentData});
+    if(currentText!==expectedRemoteText)throw Object.assign(new Error('Les données cloud ont changé depuis la dernière lecture. Écriture suspendue pour éviter un écrasement entre appareils.'),{code:'comptiva/cloud-version-conflict'});
+    transaction.set(ref,{db:nextData,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+  });
+}
 function krediQueueCloudSave(){
   if(!krediStoreMatchesActiveUser()){krediCloudReady=false;krediStatus('Sécurité des comptes : synchronisation bloquée car l’espace de stockage ne correspond pas au compte connecté.');return}
   if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation bloquée : la base locale est illisible. Récupération nécessaire avant tout envoi vers Firebase.');return}
@@ -1793,7 +1818,9 @@ function krediQueueCloudSave(){
     krediSaveInFlight=true;krediSaveInFlightUid=uid;krediSaveInFlightToken=operationToken;
     const payload=JSON.stringify(db);
     try{
-      await storeForSave.collection('users').doc(uid).collection('comptivaData').doc('main').set({db:JSON.parse(payload),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+      if(!krediLastWrite)throw Object.assign(new Error('La version cloud de référence est inconnue. Synchronisation suspendue pour protéger les données.'),{code:'comptiva/cloud-version-conflict'});
+      const targetRef=storeForSave.collection('users').doc(uid).collection('comptivaData').doc('main');
+      await krediWriteCloudIfUnchanged(targetRef,krediLastWrite,JSON.parse(payload));
       if(!isCurrentSaveSession())return;
       krediLastWrite=payload;
       if(JSON.stringify(db)===payload){
@@ -1806,7 +1833,11 @@ function krediQueueCloudSave(){
       }
       renderAll();
     }catch(e){
-      if(isCurrentSaveSession()){krediCloudReady=false;krediLocalDirty=true;krediSafeStorageSet('comptiva_pending_'+uid,'1');krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main')}
+      if(isCurrentSaveSession()){
+        krediCloudReady=false;krediLocalDirty=true;krediSafeStorageSet('comptiva_pending_'+uid,'1');
+        if(e&&String(e.code||'').startsWith('comptiva/cloud-'))krediStatus('Synchronisation suspendue pour protéger vos données : '+(e.message||'conflit de version cloud')+' Aucune écriture n’a été appliquée.');
+        else krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
+      }
     }finally{
       if(krediSaveInFlightToken===operationToken){krediSaveInFlight=false;krediSaveInFlightUid='';krediSaveInFlightToken=0}
       // Après la libération du verrou, laisser la session courante reprendre
