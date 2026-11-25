@@ -783,6 +783,7 @@ async function krediAuditAllSharedRelations(shopRef,shopId,uid){
  const assertOwner=()=>{if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé pendant l’audit paginé des relations.')};
  for(const name of collections){
   rows[name]=[];
+  scanned[name]=0;
   let last=null,done=false;
   while(!done){
    assertOwner();
