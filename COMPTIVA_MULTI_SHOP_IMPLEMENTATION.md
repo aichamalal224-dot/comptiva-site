@@ -306,3 +306,16 @@ Vérification effectuée : lecture des formulaires, de `saveForm`, des fonctions
 Les totaux des dépenses du jour et du mois dans la rubrique Dépenses utilisaient auparavant des additions permissives (`Number(amount || 0)`) et un filtrage de date partiel. Ils réutilisent désormais `sumValidDatedAmounts`, déjà employé par le tableau de bord : chaque dépense active doit porter une date ISO réelle et un montant entier sûr strictement positif ; les dépenses annulées sont exclues ; une donnée active invalide fait afficher « À vérifier » au lieu d'un total silencieusement faussé. La création et la modification contrôlent déjà le montant, la date et le mode de paiement ; l'annulation conserve l'enregistrement dans l'historique et l'exclut des totaux.
 
 Tests synthétiques ciblés : dépense valide du jour, cumul mensuel, dépense annulée, montant textuel, date impossible et dépense hors période — résultats vérifiés. Les trois blocs JavaScript ont été recompilés après correction. Aucun test navigateur, Firebase Emulator, multi-appareil ou rapprochement bancaire réel n'a été effectué.
+
+
+### Audit des rapports financiers — 25 novembre 2026
+
+Le rapport distingue le chiffre d'affaires des ventes, les montants encaissés immédiatement à la vente, les ventes à crédit et les remboursements reçus sur les dettes. Le total restant dû est un indicateur global et non un total limité à la date sélectionnée.
+
+Le calcul du solde global et des remboursements du jour s'appuie désormais sur un contrôle commun du registre des dettes et paiements actifs : identifiants uniques, dette active existante, relation client/vente cohérente, dates ISO réelles, montants entiers positifs et remboursements cumulés qui ne dépassent pas le montant de la dette. Si une incohérence est détectée, les montants concernés affichent « À vérifier » au lieu d'inclure un paiement orphelin ou un doublon. Les remboursements annulés restent exclus.
+
+Le rapport valide également la date choisie et détecte toute vente active portant une date invalide. Dans ce cas, les totaux de ventes des périodes ne sont pas présentés comme fiables ; les lignes détaillées ne retiennent que les ventes dont la date est valide.
+
+Tests synthétiques ciblés : dette sans paiement, remboursement partiel, remboursement annulé, paiement orphelin, identifiant de paiement dupliqué, surpaiement, date de paiement impossible et identifiant de dette dupliqué — 8/8 résultats attendus. Les trois blocs JavaScript intégrés compilent après modification.
+
+Limites : ces contrôles sont exécutés sur les données locales chargées dans l'application. Aucun test navigateur, Firebase Emulator, multi-appareil, rapprochement de caisse ou vérification de transactions Mobile Money réelles n'a été effectué. Les anomalies historiques ne sont pas corrigées automatiquement.
