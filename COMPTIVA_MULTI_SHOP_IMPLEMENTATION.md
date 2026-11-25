@@ -276,3 +276,10 @@ Limites encore à auditer : validation des montants des remboursements et achats
 Ajout de `sumValidDatedAmounts` pour les agrégats de période du tableau de bord et du rapport : les remboursements reçus le jour choisi ainsi que les achats et dépenses du mois vérifient désormais chaque enregistrement actif. La date doit être une date ISO réelle et le montant un entier sûr strictement positif. Les opérations annulées sont exclues. Une date ou un montant incohérent rend l'agrégat non calculable (« À vérifier » via l'affichage monétaire), au lieu d'être silencieusement ignoré ou converti en zéro.
 
 Tests synthétiques exécutés : remboursement valide, opération annulée, achat mensuel, date impossible, montant textuel, montant négatif et opération hors période — 7/7 résultats attendus. Les trois blocs JavaScript du fichier ont été compilés avec `new Function` — 3/3 réussis. Aucun test navigateur, multi-appareil ou Firebase Emulator n'a été réalisé.
+
+
+### Vérification renforcée de la chaîne des achats et du stock — 25 novembre 2026
+
+L'audit en lecture seule contrôle désormais, pour chaque achat relié au stock, l'existence et l'unicité de la trace initiale `purchase_addition`, sa quantité, la continuité des corrections successives `purchase_edit_adjustment`, la concordance entre la quantité finale tracée et celle enregistrée sur l'achat, ainsi que les retraits d'annulation. Il signale également un retrait d'annulation présent sur un achat encore actif. Les achats historiques suivis sans preuve initiale sont signalés comme non vérifiables ; aucune quantité n'est recalculée ni modifiée automatiquement.
+
+Cette vérification ne constitue pas un inventaire physique et ne prouve pas le stock disponible réel : elle contrôle uniquement la cohérence des traces présentes dans la base locale. Les achats sans lien exact avec un produit restent hors de ce contrôle ciblé.
