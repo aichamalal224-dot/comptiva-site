@@ -619,9 +619,18 @@ function krediBuildShopMigrationPreview(){
  rows.payments.forEach(x=>{if(!x.debtId||!debtIds.has(x.debtId))missing.paymentDebt++});
  rows.purchases.forEach(x=>{if(x.stockProductId&&!productIds.has(x.stockProductId))missing.purchaseProduct++});
  const active=key=>rows[key].filter(x=>x.status!=='cancelled');
+ const numericFields={sales:'total',purchases:'amount',expenses:'amount',payments:'amount',products:'quantity'};
+ const numericIssues={sales:0,purchases:0,expenses:0,payments:0,products:0};
+ Object.entries(numericFields).forEach(([key,field])=>rows[key].forEach(row=>{
+  const raw=row[field];
+  if(raw!==undefined&&raw!==null&&raw!==''&&!Number.isFinite(Number(raw)))numericIssues[key]++;
+ }));
  const sum=(key,field)=>active(key).reduce((n,x)=>n+Number(x[field]||0),0);
  const orphanCount=Object.values(missing).reduce((n,x)=>n+x,0);
- return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals:{salesGNF:sum('sales','total'),purchasesGNF:sum('purchases','amount'),expensesGNF:sum('expenses','amount'),paymentsGNF:sum('payments','amount'),stockUnits:rows.products.reduce((n,x)=>n+Number(x.quantity||0),0)},missing,orphanCount,localCheckPassed:orphanCount===0,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
+ const numericIssueCount=Object.values(numericIssues).reduce((n,x)=>n+x,0);
+ const totals={salesGNF:sum('sales','total'),purchasesGNF:sum('purchases','amount'),expensesGNF:sum('expenses','amount'),paymentsGNF:sum('payments','amount'),stockUnits:rows.products.reduce((n,x)=>n+Number(x.quantity||0),0)};
+ const totalsFinite=Object.values(totals).every(Number.isFinite);
+ return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals,missing,orphanCount,numericIssues,numericIssueCount,totalsFinite,localCheckPassed:orphanCount===0&&numericIssueCount===0&&totalsFinite,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
 }
 function krediStableSnapshot(value){
  if(value===null)return 'null';
@@ -675,7 +684,9 @@ function krediShowShopMigrationPreview(){
   const labels={clients:'Clients',sales:'Ventes',debts:'Dettes',payments:'Remboursements',products:'Produits',purchases:'Achats',expenses:'Dépenses',auditLog:'Événements d’audit'};
   const counts=Object.entries(p.counts).map(([k,v])=>labels[k]+': '+v).join(' · ');
   const missing=Object.entries(p.missing).filter(([,v])=>v>0).map(([k,v])=>k+': '+v).join(' · ');
-  el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun lien manquant détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Liens à examiner : '+esc(missing):'Relations locales vérifiées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
+  const numeric=Object.entries(p.numericIssues).filter(([,v])=>v>0).map(([k,v])=>k+': '+v).join(' · ');
+  const totalsWarning=p.totalsFinite?'':' · totaux non finis';
+  el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun problème détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Liens à examiner : '+esc(missing):'Relations locales vérifiées.')+'<br>'+(numeric?'Valeurs numériques invalides : '+esc(numeric)+totalsWarning:'Valeurs numériques contrôlées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
  }catch(error){el.textContent='Analyse impossible : '+(error.message||'erreur inconnue')}
 }
 /* Présence vendeur : heartbeat Firestore, en ligne si signal serveur < 90 s. */
