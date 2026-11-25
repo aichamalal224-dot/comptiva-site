@@ -342,3 +342,15 @@ La ventilation d'un paiement mixte (espèces / Mobile Money) n'est affichée que
 Tests synthétiques : dette partiellement remboursée, dette absente, dettes multiples, vente sans crédit et ventilation mixte valide/invalide. Les trois blocs JavaScript intégrés compilent.
 
 Limites : aucun test d'impression réel sur Android, navigateur ou imprimante thermique n'a été effectué. Aucun contrôle de paiement Mobile Money réel ou synchronisation Firebase multi-appareil n'a été réalisé.
+
+
+### Audit des remboursements et du registre des dettes — 25 novembre 2026
+
+L'audit a confirmé que la saisie d'un remboursement vérifie la dette active, le lien client/vente, le montant entier positif et le solde disponible. La modification d'un remboursement vérifie aussi les autres paiements et empêche un cumul supérieur à la dette. L'annulation conserve le remboursement dans l'historique avec son statut annulé et un motif ; elle ne le compte plus dans le solde.
+
+Un renforcement a été appliqué à `paidFor` : les identifiants des remboursements actifs doivent être uniques à l'échelle du registre complet, et chaque remboursement actif lié à la dette doit porter une date ISO réelle et un montant entier strictement positif. Une anomalie entraîne un solde « À vérifier » au lieu d'un calcul silencieusement permissif. Les remboursements annulés sont exclus du calcul.
+
+Tests synthétiques ciblés : cumul partiel valide, paiement annulé exclu, date absente ou impossible, montant invalide, doublon d'identifiant sur la même dette, doublon d'identifiant entre deux dettes, surpaiement et dette soldée. Les trois blocs JavaScript intégrés compilent après correction.
+
+Limites : pas de rapprochement sur les comptes réels, pas de test navigateur ou Firebase Emulator, et pas de test d'impression physique. Les anomalies historiques ne sont pas corrigées automatiquement.
+
