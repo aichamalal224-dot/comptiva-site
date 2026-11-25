@@ -513,3 +513,75 @@ P1 — renforcer le journal d'audit (auteur, date serveur, type d'événement, c
 
 **État de cette passe**
 Aucune règle Firestore et aucun code applicatif n'ont été modifiés. Les constats et scénarios ont été ajoutés à cette documentation uniquement. Pas d'Emulator, pas de test réel de comptes, pas de déploiement, pas de changement de `main`. La migration vers les collections partagées reste non démontrée ; cette matrice décrit les autorisations prévues par le fichier du dépôt, pas le fonctionnement réel d'un mode multi-boutiques en production.
+
+
+
+## Plan de tests de sécurité Firebase Emulator — 25 novembre 2026
+
+### État de l'environnement
+
+- Vérification de la branche : aucun `firebase.json`, `.firebaserc`, `package.json`, fichier de verrouillage npm/yarn/pnpm, fichier de test Firestore aux emplacements usuels, ni workflow GitHub Actions Firebase Emulator n'a été trouvé aux chemins examinés.
+- Le dépôt ne fournit donc pas encore de configuration reproductible pour lancer les tests de règles.
+- Aucun SDK, dépendance, fichier de configuration ou workflow n'a été ajouté automatiquement : il faut d'abord choisir et valider l'environnement de test.
+- Les règles actuelles sont une proposition préparatoire. Aucun test Emulator ni test sur Firebase réel n'est déclaré comme exécuté.
+
+### Environnement de test à préparer
+
+1. Projet Firebase Emulator isolé, sans identifiants de production et sans connexion à la base réelle.
+2. Émulateurs Authentication et Firestore démarrés localement.
+3. Chargement explicite de `firestore.rules` dans l'émulateur.
+4. Jeu de données synthétique : Patron A, Vendeur A1, compte étranger B, boutique A, boutique B, abonnement actif, abonnement expiré et boutique suspendue.
+5. Tests automatisés avec le SDK de tests des règles Firestore (`@firebase/rules-unit-testing`) et le SDK Firebase compatible.
+6. Chaque test doit vérifier à la fois les lectures individuelles, les requêtes/listes et les écritures directes. Les tests doivent repartir d'un état de base propre.
+
+### Matrice minimale obligatoire
+
+| ID | Identité / état | Opération directe | Résultat attendu |
+|---|---|---|---|
+| AUTH-01 | Non authentifié | Lire/écrire `users/A/comptivaData/main` | Refus |
+| ISO-01 | Compte A | Lire ses propres données historiques | Autorisé si abonnement conforme aux règles d'écriture |
+| ISO-02 | Compte B | Lire/écrire les données historiques de A | Refus |
+| SHOP-01 | Patron A | Lire sa boutique A et ses collections | Autorisé |
+| SHOP-02 | Compte B non membre | Lire boutique A avec son identifiant connu | Refus |
+| SHOP-03 | Patron A | Lire ou modifier boutique B | Refus |
+| SELL-01 | Vendeur A1 actif | Lire ventes, clients, dettes et paiements de A | Autorisé selon la matrice métier |
+| SELL-02 | Vendeur A1 actif | Lire achats, dépenses et rapports de A | Refus |
+| SELL-03 | Vendeur A1 actif | Modifier/supprimer une vente validée | Refus |
+| SELL-04 | Vendeur A1 actif | Modifier/supprimer un produit ou son stock | Refus |
+| SELL-05 | Vendeur A1 actif | Créer une vente ou un remboursement avec un auteur falsifié | Refus |
+| SELL-06 | Vendeur suspendu | Lire et écrire les collections partagées | Refus |
+| SELL-07 | Membre actif dont le rôle n'est pas `seller` | Accéder aux données métier | Refus |
+| SELL-08 | Fiche membre dont `uid` ne correspond pas au chemin | Accéder aux données métier | Refus |
+| SELL-09 | Membre rattaché à un autre Patron | Accéder à la boutique A | Refus |
+| FIN-01 | Vendeur A1 actif | Créer dette avec client/vente d'une autre boutique | Refus |
+| FIN-02 | Vendeur A1 actif | Créer paiement sur dette inexistante ou étrangère | Refus |
+| FIN-03 | Vendeur A1 actif | Envoyer montant négatif, nul, texte ou montant incohérent | Refus |
+| FIN-04 | Vendeur A1 actif | Lire un produit contenant coût/marge/prix d'achat | À bloquer ou données privées séparées |
+| PATRON-01 | Patron A | Suspendre sa boutique | Autorisé selon procédure explicite |
+| PATRON-02 | Patron A après suspension | Réactiver sa boutique par une procédure sûre | À définir et tester ; ne pas laisser le Patron bloqué |
+| QUERY-01 | Compte non membre | Lister les documents d'une collection de A | Refus |
+| QUERY-02 | Vendeur A1 | Lister les données d'une autre boutique ou via collectionGroup | Refus |
+| AUDIT-01 | Vendeur A1 | Modifier/supprimer un événement d'audit | Refus |
+| AUDIT-02 | Vendeur A1 | Créer un événement avec acteur ou boutique falsifié | Refus |
+
+### Défauts connus que les tests doivent mettre en évidence
+
+- `isActiveShopMember(shopId)` ne vérifie pas explicitement le rôle `seller`, l'égalité entre l'UID du membre et l'UID authentifié, ni la concordance du Patron dans la fiche membre.
+- `isShopSeller(shopId)` existe mais n'est pas utilisé par `canUseShop` et `canWriteShop`.
+- Les règles autorisent la lecture complète des documents produits pour les membres actifs : les règles Firestore ne masquent pas certains champs d'un document. Les coûts et marges doivent être séparés dans des documents/collections réservés au Patron.
+- La création des ventes, dettes, clients et paiements ne vérifie pas encore toutes les références croisées ni les invariants financiers.
+- Les mises à jour Patron des ventes et paiements ne disposent pas encore d'une liste stricte de champs modifiables et de contrôles financiers complets.
+- La suspension de la boutique peut empêcher le Patron de la réactiver avec la règle de mise à jour actuelle, car `canWriteShop` exige déjà le statut actif.
+- Le journal d'audit est protégé contre modification/suppression, mais sa création n'est pas encore strictement validée et reste initiée par le client.
+
+### Critères d'acceptation avant activation
+
+- Tous les tests AUTH, ISO, SHOP, SELL, FIN, PATRON, QUERY et AUDIT passent dans l'émulateur.
+- Les tests négatifs échouent bien avec `permission-denied`, et aucun test ne passe simplement parce que les données de test sont absentes.
+- Les règles vérifient l'identité, le rôle, le statut, le Patron et les références métier depuis les documents faisant autorité.
+- Les documents contenant coûts, marges et informations financières réservées au Patron ne sont pas lisibles par un Vendeur.
+- Les lectures de listes, requêtes et sous-collections sont testées, pas seulement les lectures par identifiant.
+- La migration des données et le parcours opérationnel de l'application sont testés séparément des règles.
+- Aucun déploiement de règles en production avant validation complète et autorisation explicite.
+
+**Statut :** plan préparatoire documenté ; tests non exécutés ; règles non modifiées ; aucun déploiement.
