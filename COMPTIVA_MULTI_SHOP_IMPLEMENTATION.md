@@ -101,7 +101,7 @@ Chaque document métier doit inclure un `shopId` cohérent avec son chemin, un i
 ## Diagnostic d'accès partagé — ajout préparatoire
 
 - Un bouton « Tester l’accès à la boutique partagée » exécute désormais un contrôle **strictement en lecture seule** depuis l'application.
-- Pour un Vendeur, il lit côté serveur son index `userShopMemberships/{uid}/shops`, vérifie qu'une seule affectation active existe, puis compare l'identité du Patron, la boutique et la fiche membre.
+- Pour un Vendeur, il lit côté serveur l'ensemble de son index `userShopMemberships/{uid}/shops` (sans limite arbitraire), vérifie qu'une seule affectation active existe, puis compare l'identité du Patron, le statut actif de la boutique et la fiche membre.
 - Pour un Patron, il vérifie l'existence, le statut actif et la propriété de `shops/shop-{uid}`.
 - Dans les deux cas, il tente ensuite de lire au maximum cinq documents de `shops/{shopId}/sales`, vérifie le `shopId` des documents lus et compte ceux qui portent un UID d'auteur.
 - Le diagnostic ne crée, ne modifie, ne déplace et ne supprime aucun document. Il ne crée pas non plus une boutique manquante.
