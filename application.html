@@ -1160,30 +1160,55 @@ function copyReminder(){let msg=document.getElementById('reminderMessage').value
 function fallbackCopy(text){let t=document.getElementById('reminderMessage');t.focus();t.select();try{document.execCommand('copy');flash('Message sélectionné/copier si autorisé par le navigateur.')}catch(e){alert('Copiez le message manuellement.')}} 
 function startReminderForClient(cid){navigate('reminders');renderReminderOptions();document.getElementById('reminderClient').value=cid;updateDebtOptions()}
 
-function backupData(){try{const payload={app:'Comptiva',version:6,createdAt:new Date().toISOString(),data:db};const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='krediguinee-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);flash('Sauvegarde téléchargée. Garde ce fichier en lieu sûr.')}catch(e){alert('Impossible de créer la sauvegarde sur ce navigateur.')}}
+function backupData(){
+ try{
+  const ownerUid=krediUser&&krediUser.uid;
+  if(!ownerUid||!krediStoreMatchesActiveUser()){
+   alert('Sauvegarde refusée : connectez-vous au compte propriétaire des données avant de créer une sauvegarde.');
+   return;
+  }
+  const payload={app:'COMPTIVA',version:7,schemaVersion:1,scope:'account',ownerUid,createdAt:new Date().toISOString(),data:db};
+  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='comptiva-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  flash('Sauvegarde du compte téléchargée. Conservez ce fichier en lieu sûr.');
+ }catch(e){console.error('[COMPTIVA] Création de sauvegarde impossible',e);alert('Impossible de créer la sauvegarde sur ce navigateur.')}
+}
 function restoreData(event){
  const file=event.target.files&&event.target.files[0];if(!file)return;
+ const restoreUid=krediUser&&krediUser.uid;
+ if(!restoreUid||!krediStoreMatchesActiveUser()){
+  event.target.value='';
+  alert('Restauration refusée : connectez-vous au compte propriétaire des données.');
+  return;
+ }
  const reader=new FileReader();
  reader.onload=function(){
   const previousDb=JSON.stringify(db),previousIssue=window.krediDBStorageIssue||null;
   try{
-   const parsed=JSON.parse(reader.result),restored=parsed&&parsed.data?parsed.data:parsed;
+   if(!krediUser||krediUser.uid!==restoreUid||!krediStoreMatchesActiveUser())throw new Error('Le compte connecté a changé pendant la lecture. Recommencez la restauration.');
+   const parsed=JSON.parse(reader.result);
+   if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||parsed.app!=='COMPTIVA'||parsed.scope!=='account'||!Number.isInteger(parsed.version)||!parsed.data)throw new Error('Format de sauvegarde COMPTIVA invalide ou ancien.');
+   if(parsed.ownerUid!==restoreUid)throw new Error('Cette sauvegarde appartient à un autre compte. Aucune donnée n’a été importée.');
+   if(parsed.schemaVersion!==1)throw new Error('Version de structure non prise en charge. Contactez le support avant toute migration.');
+   const restored=parsed.data;
    if(!restored||!Array.isArray(restored.clients)||!Array.isArray(restored.sales)||!Array.isArray(restored.debts))throw new Error('Sauvegarde incomplète : clients, ventes et dettes doivent être des tableaux.');
    const shapeIssue=krediDatabaseShapeIssue(restored);if(shapeIssue)throw new Error('Structure de sauvegarde invalide : '+shapeIssue);
-   if(!confirm('Restaurer cette sauvegarde remplacera les données actuellement enregistrées sur cet appareil. As-tu déjà sauvegardé les données actuelles ?'))return;
+   if(!confirm('Cette sauvegarde appartient au compte connecté. Elle remplacera les données actuellement enregistrées sur cet appareil. As-tu déjà conservé une copie de sécurité ?'))return;
+   if(!krediUser||krediUser.uid!==restoreUid||!krediStoreMatchesActiveUser())throw new Error('Le compte connecté a changé. Restauration interrompue.');
    const current=krediSafeStorageGet(STORE);if(!current.ok)throw new Error('Lecture de la base actuelle impossible : restauration interrompue.');
    if(current.value!==null){const backupKey=STORE+'_pre_restore_'+Date.now();if(!krediSafeStorageSet(backupKey,current.value)||krediSafeStorageGet(backupKey).value!==current.value)throw new Error('Copie de sécurité préalable impossible : aucune donnée ne sera remplacée.');}
    const next={...restored,clients:restored.clients,sales:restored.sales,debts:restored.debts,payments:Array.isArray(restored.payments)?restored.payments:[],purchases:Array.isArray(restored.purchases)?restored.purchases:[],expenses:Array.isArray(restored.expenses)?restored.expenses:[],products:Array.isArray(restored.products)?restored.products:[],auditLog:Array.isArray(restored.auditLog)?restored.auditLog:[]};
    db=next;window.krediDBStorageIssue=null;
    if(!saveDB()){db=JSON.parse(previousDb);window.krediDBStorageIssue=previousIssue;renderAll();throw new Error('Enregistrement refusé : les données précédentes ont été restaurées en mémoire.');}
-   flash('Sauvegarde restaurée et enregistrement local confirmé.');
-  }catch(e){console.error('[COMPTIVA] Restauration de sauvegarde refusée :',e);alert('Restauration impossible : '+(e&&e.message?e.message:'fichier invalide')+' Aucune confirmation de réussite ne sera affichée.');}
+   flash('Sauvegarde du compte restaurée et enregistrement local confirmé.');
+  }catch(e){console.error('[COMPTIVA] Restauration de sauvegarde refusée :',e);alert('Restauration impossible : '+(e&&e.message?e.message:'fichier invalide')+' Aucune confirmation de réussite ne sera affichée.')}
   finally{event.target.value=''}
  };
  reader.onerror=function(){event.target.value='';alert('Lecture du fichier impossible. Aucune donnée n’a été modifiée.')};
  reader.readAsText(file);
 }
-
 function exportCSV(){let lines=[['Type','Article/Client','Quantité','Prix unitaire','Montant vente/dette','Mode de paiement','Encaissé à la vente','Crédit vente','Montant payé dette','Solde dette','Date','Échéance','Statut','Motif annulation']];const auditFields=x=>[x.status==='cancelled'?'Annulée':'Valide',x.status==='cancelled'?(x.cancelReason||''):''];db.sales.forEach(s=>lines.push(['Vente',s.product,s.quantity,s.unitPrice,s.total,s.method||'',paidOfSale(s),creditOfSale(s),'','',s.date,'',...auditFields(s)]));db.debts.forEach(d=>lines.push(['Dette',clientName(d.clientId),'','',d.amount,'', '', '',paidFor(d.id),balance(d),d.date,d.due||'',...auditFields(d)]));db.purchases.forEach(x=>lines.push(['Achat marchandise',x.item,x.quantity||'', '',x.amount,x.method||'', '', '', '', '',x.date,'',...auditFields(x)]));db.expenses.forEach(x=>lines.push(['Dépense: '+x.category,x.description,'','',x.amount,x.method||'','','','','',x.date,'',...auditFields(x)]));let csv=lines.map(r=>r.map(x=>'"'+String(x??'').replace(/"/g,'""')+'"').join(';')).join('\n');let blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='comptiva-export.csv';a.click();URL.revokeObjectURL(url);flash('Export préparé avec le statut des opérations.')}
 // Le rendu initial ne doit jamais empêcher le démarrage de Firebase Authentication.
 try {
