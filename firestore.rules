@@ -1,0 +1,211 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCreator() {
+      return signedIn()
+        && request.auth.uid == "ELopCSbMMrSTDEMCzNhchqonGci2";
+    }
+
+    function hasActiveSubscription(uid) {
+      let sub = get(/databases/$(database)/documents/merchantSubscriptions/$(uid));
+      return sub.exists()
+        && sub.data.keys().hasAll(['status'])
+        && (
+          (sub.data.status == 'trial'
+            && sub.data.keys().hasAll(['trialEnd'])
+            && sub.data.trialEnd is timestamp
+            && request.time < sub.data.trialEnd)
+          ||
+          (sub.data.status in ['active', 'paid']
+            && sub.data.keys().hasAll(['paidUntil'])
+            && sub.data.paidUntil is timestamp
+            && request.time < sub.data.paidUntil)
+        );
+    }
+
+    function shopExists(shopId) {
+      return exists(/databases/$(database)/documents/shops/$(shopId));
+    }
+
+    function shopData(shopId) {
+      return get(/databases/$(database)/documents/shops/$(shopId)).data;
+    }
+
+    function isShopPatron(shopId) {
+      return signedIn()
+        && shopExists(shopId)
+        && shopData(shopId).ownerUid == request.auth.uid
+        && shopData(shopId).patronUid == request.auth.uid;
+    }
+
+    function isActiveShopMember(shopId) {
+      let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+      return signedIn()
+        && shopExists(shopId)
+        && shopData(shopId).status == 'active'
+        && exists(memberPath)
+        && get(memberPath).data.active == true
+        && hasActiveSubscription(shopData(shopId).patronUid);
+    }
+
+    function isShopSeller(shopId) {
+      let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+      return isActiveShopMember(shopId)
+        && get(memberPath).data.role == 'seller';
+    }
+
+    function canUseShop(shopId) {
+      return isShopPatron(shopId) || isActiveShopMember(shopId);
+    }
+
+    // LEGACY: preserve each existing merchant's current private data path.
+    // This block must remain until the migration has been verified for every account.
+    match /users/{userId}/{document=**} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn()
+        && request.auth.uid == userId
+        && (isCreator() || hasActiveSubscription(userId));
+    }
+
+    match /merchantDirectory/{merchantUid} {
+      allow read, delete: if isCreator();
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid;
+      allow update: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['email', 'displayName', 'updatedAt'])
+        && request.resource.data.uid == merchantUid;
+    }
+
+    match /merchantSubscriptions/{merchantUid} {
+      allow read, write: if isCreator();
+      allow get: if signedIn() && request.auth.uid == merchantUid;
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'status', 'trialStart', 'trialEnd', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'status', 'trialStart', 'trialEnd', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid
+        && request.resource.data.status == 'trial'
+        && request.resource.data.trialStart == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.trialEnd is timestamp
+        && request.resource.data.trialEnd > request.time
+        && request.resource.data.trialEnd <= request.time + duration.value(14, 'd');
+      allow update, delete: if isCreator();
+    }
+
+    // NEW MULTI-SHOP MODEL. Do not activate before the application migration is ready.
+    match /shops/{shopId} {
+      allow get: if isCreator() || canUseShop(shopId);
+      allow list: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'patronUid', 'name', 'status', 'schemaVersion',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.patronUid == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.schemaVersion == 1
+        && hasActiveSubscription(request.auth.uid);
+      allow update: if isShopPatron(shopId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.patronUid == resource.data.patronUid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'status', 'updatedAt']);
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isCreator()
+          || (signedIn() && request.auth.uid == memberUid && isActiveShopMember(shopId))
+          || isShopPatron(shopId);
+        allow create, update: if isShopPatron(shopId)
+          && memberUid != request.auth.uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'role', 'active', 'firstName', 'lastName', 'email',
+            'createdAt', 'updatedAt', 'assignedBy'
+          ])
+          && request.resource.data.uid == memberUid
+          && request.resource.data.role == 'seller'
+          && request.resource.data.active is bool
+          && request.resource.data.assignedBy == request.auth.uid;
+        allow delete: if isShopPatron(shopId) && memberUid != request.auth.uid;
+      }
+
+      match /sales/{saleId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canUseShop(shopId)
+          && hasActiveSubscription(shopData(shopId).patronUid)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if isShopPatron(shopId)
+          && request.resource.data.shopId == resource.data.shopId
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if false;
+      }
+
+      match /clients/{clientId} {
+        allow read, create, update: if canUseShop(shopId)
+          && (request.method == 'get' || request.method == 'list'
+            || (request.resource.data.shopId == shopId));
+        allow delete: if isShopPatron(shopId);
+      }
+
+      match /debts/{debtId} {
+        allow read: if canUseShop(shopId);
+        allow create, update: if canUseShop(shopId)
+          && request.resource.data.shopId == shopId;
+        allow delete: if isShopPatron(shopId);
+      }
+
+      match /payments/{paymentId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canUseShop(shopId)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update, delete: if isShopPatron(shopId);
+      }
+
+      match /products/{productId} {
+        allow read: if canUseShop(shopId);
+        // Stock mutations are Patron-only until atomic sale/inventory operations
+        // have been migrated and verified. This intentionally blocks direct seller edits.
+        allow create, update, delete: if isShopPatron(shopId);
+      }
+
+      match /purchases/{purchaseId} {
+        allow read, write: if isShopPatron(shopId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read, write: if isShopPatron(shopId);
+      }
+
+      match /reports/{reportId} {
+        allow read, write: if isShopPatron(shopId);
+      }
+
+      match /auditLog/{eventId} {
+        allow read: if isShopPatron(shopId);
+        allow create: if canUseShop(shopId)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.actorUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
