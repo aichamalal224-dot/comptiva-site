@@ -1308,84 +1308,19 @@ function cancelDebt(debtId){
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dette annulée. Les soldes et indicateurs ont été recalculés ; historique conservé.');
 }
-function printDebtStatement(id,isDuplicate=false){let d=db.debts.find(x=>x.id===id);if(!d){alert('Dette introuvable.');return}let c=db.clients.find(x=>x.id===d.clientId),payments=db.payments.filter(x=>x.debtId===id),w=window.open('','_blank','width=600,height=750');if(!w){alert('Autorisez les fenêtres pop-up pour imprimer le relevé.');return}let lines=payments.map(p=>'<tr'+(p.status==='cancelled'?' style="color:#a11;text-decoration:line-through"':'')+'><td>'+dateFmt(p.date)+'</td><td>'+money(p.amount)+(p.status==='cancelled'?' — ANNULÉ':'')+'</td><td>'+esc(p.method||'—')+'</td></tr>').join('');w.document.write('<!doctype html><html lang="fr"><meta charset="utf-8"><title>Relevé COMPTIVA</title><style>body{font:14px Arial;padding:24px;color:#172b4d}h1{text-align:center}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}@media print{button{display:none}}</style>'+receiptMerchantHeader()+'<h1>RELEVÉ DE DETTE</h1>'+(isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':'')+'<p>Client : '+esc(c?c.name:'Client')+'</p><p>Téléphone : '+esc(c&&c.phone||'—')+'</p><p>Dette initiale : <b>'+money(d.amount)+'</b></p><p>Total payé : <b>'+money(paidFor(id))+'</b></p><p>Solde restant : <b>'+money(balance(d))+'</b></p><p>Date : '+dateFmt(d.date)+' · Échéance : '+dateFmt(d.due)+'</p><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th><th>Mode</th></tr>'+lines+'</table><p>Document généré par COMPTIVA.</p><script>window.onload=()=>window.print()<\/script></html>');w.document.close()}
-function renderPayments(){let rows=db.payments.slice().reverse().map(p=>{let d=db.debts.find(d=>d.id===p.debtId),cancelled=p.status==='cancelled';return '<tr><td>'+esc(d?clientName(d.clientId):'Dette inconnue')+(cancelled?' <span class="pill overdue">Annulé</span>':'')+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td><button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\''+p.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\''+p.id+'\')">Modifier</button> <button class="danger" onclick="cancelPayment(\''+p.id+'\')">Annuler</button>')+'</td></tr>'});document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)}
-function editPayment(paymentId){
- const payment=db.payments.find(p=>p.id===paymentId);
- if(!payment||payment.status==='cancelled'){alert('Ce remboursement est introuvable ou déjà annulé.');return}
- const debt=db.debts.find(d=>d.id===payment.debtId);
- if(!debt||debt.status==='cancelled'){alert('La dette liée est introuvable ou annulée.');return}
- const relationIssue=krediDebtRelationIssue(debt);if(relationIssue){alert('Correction bloquée : '+relationIssue);return}
- const currentPaid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(currentPaid)||currentPaid<0||currentPaid>debt.amount){alert('Correction bloquée : les données financières de cette dette sont incohérentes. Vérifiez les remboursements avant de continuer.');return}
- const amountText=prompt('Nouveau montant du remboursement (GNF) :',String(payment.amount));
- if(amountText===null)return;const amount=Number(amountText);
- if(!Number.isSafeInteger(amount)||amount<=0){alert('Le remboursement doit être un montant entier positif en GNF.');return}
- const date=prompt('Nouvelle date (AAAA-MM-JJ) :',payment.date||new Date().toISOString().slice(0,10));
- if(date===null)return;if(!isValidISODate(date)){alert('Date invalide. Utilisez le format AAAA-MM-JJ.');return}
- const method=prompt('Mode de paiement :',payment.method||'Espèces');
- if(method===null)return;if(!method.trim()){alert('Le mode de paiement est obligatoire.');return}
- const reason=prompt('Motif de cette correction :');if(reason===null)return;if(!reason.trim()){alert('Le motif est obligatoire.');return}
- const otherPayments=db.payments.filter(p=>p&&p.debtId===debt.id&&p.id!==payment.id&&p.status!=='cancelled');
- const otherIds=new Set();let otherPaid=0;for(const p of otherPayments){if(!p.id||otherIds.has(String(p.id))||!Number.isSafeInteger(p.amount)||p.amount<=0){alert('Correction bloquée : un autre remboursement lié à cette dette contient des données invalides ou un identifiant dupliqué.');return}otherIds.add(String(p.id));otherPaid+=p.amount;if(!Number.isSafeInteger(otherPaid)){alert('Correction bloquée : total des remboursements invalide.');return}}
- if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||otherPaid+amount>debt.amount){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return;}
- if(!confirm('Confirmer la correction de ce remboursement ?'))return;
- const before=JSON.stringify(db),previous={amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString();
- payment.amount=amount;payment.date=date;payment.method=method.trim();payment.updatedAt=now;
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{amount,date,method:method.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
- if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
- flash('Remboursement corrigé. Le solde de la dette a été recalculé.');
+function printDebtStatement(id,isDuplicate=false){
+ let d=db.debts.find(x=>x&&x.id===id);
+ if(!d){alert('Dette introuvable.');return}
+ let c=db.clients.find(x=>x&&x.id===d.clientId),payments=db.payments.filter(x=>x&&x.debtId===id);
+ let relationIssue=krediDebtRelationIssue(d),paid=paidFor(id);
+ let validLedger=!relationIssue&&Number.isSafeInteger(d.amount)&&d.amount>0&&Number.isSafeInteger(paid)&&paid>=0&&paid<=d.amount;
+ let paidDisplay=validLedger?money(paid):'À vérifier',balanceDisplay=validLedger?money(d.amount-paid):'À vérifier';
+ let w=window.open('','_blank','width=600,height=750');
+ if(!w){alert('Autorisez les fenêtres pop-up pour imprimer le relevé.');return}
+ let lines=payments.map(p=>'<tr'+(p.status==='cancelled'?' style="color:#a11;text-decoration:line-through"':'')+'><td>'+esc(isValidISODate(p.date)?dateFmt(p.date):'Date à vérifier')+'</td><td>'+money(p.amount)+(p.status==='cancelled'?' — ANNULÉ':'')+'</td><td>'+esc(p.method||'—')+'</td></tr>').join('');
+ w.document.write('<!doctype html><html lang="fr"><meta charset="utf-8"><title>Relevé COMPTIVA</title><style>body{font:14px Arial;padding:24px;color:#172b4d}h1{text-align:center}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px}.warning{padding:10px;background:#fff4db;color:#704e08;border:1px solid #f3dfa6;border-radius:8px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}@media print{button{display:none}}</style>'+receiptMerchantHeader()+'<h1>RELEVÉ DE DETTE</h1>'+(isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':'')+(!validLedger?'<p class="warning">Situation financière à vérifier : les totaux ne doivent pas être utilisés comme solde confirmé.</p>':'')+'<p>Client : '+esc(c?c.name:'Client')+'</p><p>Téléphone : '+esc(c&&c.phone||'—')+'</p><p>Dette initiale : <b>'+money(d.amount)+'</b></p><p>Total payé : <b>'+paidDisplay+'</b></p><p>Solde restant : <b>'+balanceDisplay+'</b></p><p>Date : '+dateFmt(d.date)+' · Échéance : '+dateFmt(d.due)+'</p><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th><th>Mode</th></tr>'+lines+'</table><p>Document généré par COMPTIVA.</p><script>window.onload=()=>window.print()<\/script></html>');
+ w.document.close()
 }
-function cancelPayment(paymentId){
- const payment=db.payments.find(p=>p.id===paymentId);
- if(!payment){alert('Remboursement introuvable.');return}
- if(payment.status==='cancelled'){flash('Ce remboursement est déjà annulé.');return}
- const debt=db.debts.find(d=>d.id===payment.debtId);
- if(!debt||debt.status==='cancelled'){alert('Cette dette est annulée ou introuvable. Aucune modification n’a été faite.');return}
- const relationIssue=krediDebtRelationIssue(debt);if(relationIssue){alert('Annulation bloquée : '+relationIssue);return}
- const reason=prompt('Indiquez la raison de l’annulation de ce remboursement :');
- if(reason===null)return;
- if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
- if(!confirm('Confirmer l’annulation du remboursement de '+money(payment.amount)+' ? Le solde de la dette sera recalculé.'))return;
- const before=JSON.stringify(db),now=new Date().toISOString();
- payment.status='cancelled';payment.cancelledAt=now;payment.cancelReason=reason.trim();payment.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
- if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
- flash('Remboursement annulé. Le solde de la dette a été recalculé et l’historique conservé.');
-}
-function printPaymentReceipt(paymentId,isDuplicate=false){
- const payment=db.payments.find(x=>x.id===paymentId);
- if(!payment){alert('Remboursement introuvable.');return}
- const debt=db.debts.find(x=>x.id===payment.debtId);
- if(!debt){alert('Dette introuvable.');return}
- const cancelled=payment.status==='cancelled';
- const ordered=db.payments.filter(x=>x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
- const paymentIndex=ordered.indexOf(payment);
- const paidThrough=cancelled?0:ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+Number(x.amount||0),0);
- const remaining=cancelled?null:Math.max(0,Number(debt.amount||0)-paidThrough);
- const customer=db.clients.find(x=>x.id===debt.clientId);const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const receiptNo=String(payment.id).slice(-8).toUpperCase();
- const w=window.open('','_blank','width=420,height=720');
- if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
- w.document.write(`<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reçu de remboursement ${esc(receiptNo)}</title>
- <style>*{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#172b4d;margin:0 auto;padding:18px;max-width:380px;font-size:13px}
- .merchant-head{text-align:center;border-bottom:1px dashed #8b98a8;padding-bottom:12px;margin-bottom:12px;line-height:1.5}.merchant-name{font-size:21px;font-weight:800;color:#0b3765}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px;border-radius:5px}
- .brand-mark{display:inline-block;margin-top:7px;padding:3px 9px;border:1px solid #1769d2;border-radius:5px;color:#1769d2;font-size:10px;font-weight:800;letter-spacing:1px}
- h2{text-align:center;font-size:15px;margin:12px 0}.meta p{margin:5px 0}.line{border-top:1px dashed #8b98a8;margin:12px 0}
- .item{display:flex;justify-content:space-between;gap:12px;margin:9px 0}.item span:last-child{text-align:right}.total{font-weight:800;font-size:16px}.small{font-size:11px;color:#53657b}
- @media print{body{padding:0;max-width:none}@page{margin:6mm}}</style></head><body>
- ${receiptMerchantHeader()}<h2>REÇU DE REMBOURSEMENT DE CRÉDIT</h2>${cancelled?'<div class="duplicate-mark" style="border-color:#b91c1c;color:#b91c1c">REMBOURSEMENT ANNULÉ — NON VALABLE</div>':''}${isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':''}
- <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
- <div class="line"></div><div class="item total"><span>Montant du remboursement</span><span>${money(payment.amount)}</span></div>
- <div class="item"><span>Mode de paiement</span><span>${esc(payment.method||'—')}</span></div>
- ${cancelled?'<p style="text-align:center;font-weight:800;color:#b91c1c">OPÉRATION ANNULÉE — CE DOCUMENT NE PROUVE AUCUN PAIEMENT.</p>':`<div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${money(paidThrough)}</b></div>
- <div class="item total"><span>Reste à payer</span><span>${money(remaining)}</span></div>
- <p style="text-align:center;font-weight:700">${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>`}
- <div class="line"></div><p style="text-align:center">${cancelled?'Document d’annulation conservé dans l’historique.':'Merci. Conservez ce reçu comme preuve de paiement.'}</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
- <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script>
-
-</body></html>`);
- w.document.close();
-}
-
 function field(name,label,type='text',opts={}){let req=opts.required?'required':'';let full=opts.full?' full':'';let value=opts.value??'';if(type==='select')return '<div class="field'+full+'"><label for="'+name+'">'+label+(opts.required?' *':'')+'</label><select id="'+name+'" name="'+name+'" '+req+'>'+opts.options.map(o=>'<option value="'+esc(o.value)+'">'+esc(o.label)+'</option>').join('')+'</select></div>';return '<div class="field'+full+'"><label for="'+name+'">'+label+(opts.required?' *':'')+'</label><input id="'+name+'" name="'+name+'" type="'+type+'" value="'+esc(value)+'" '+(opts.min!==undefined?'min="'+opts.min+'"':'')+' '+(opts.step?'step="'+opts.step+'"':'')+' '+req+' placeholder="'+esc(opts.placeholder||'')+'"></div>'}
 function openForm(kind,extra={}){currentForm=kind;let fields='',title='',desc='';if(kind==='product'){title='Ajouter un produit au stock';desc='Choisis une catégorie adaptée à ton commerce. Tu pourras vendre des articles avec ou sans suivi de stock.';fields=field('name','Nom du produit','text',{required:true,placeholder:'Ex. riz 25 kg, robe, crème...'})+field('category','Catégorie','select',{required:true,options:[{value:'Alimentation',label:'Alimentation'},{value:'Vêtements / chaussures',label:'Vêtements / chaussures'},{value:'Cosmétiques',label:'Cosmétiques'},{value:'Électronique',label:'Électronique'},{value:'Pièces détachées',label:'Pièces détachées'},{value:'Quincaillerie',label:'Quincaillerie'},{value:'Maison',label:'Maison'},{value:'Autre',label:'Autre'}]})+field('sku','Référence (facultatif)','text',{placeholder:'Code ou référence'})+field('quantity','Quantité disponible','number',{required:true,min:0,step:0.01,value:0})+field('purchasePrice','Prix d’achat unitaire (GNF)','number',{required:true,min:0,step:1,value:0})+field('salePrice','Prix de vente unitaire (GNF)','number',{required:true,min:0,step:1,value:0})+field('alertAt','Alerte lorsque le stock atteint','number',{required:true,min:0,step:0.01,value:2});}
 if(kind==='client'){title='Ajouter un client';desc='Pendant le test, privilégiez un code ou un prénom fictif.';fields=field('name','Nom ou code du client','text',{required:true,placeholder:'Ex. Client 01'})+field('phone','Téléphone (facultatif)','tel',{placeholder:'+224 ...'})+field('address','Adresse (facultatif)','text',{placeholder:'Quartier, ville...'})+field('note','Note (facultatif)','text',{placeholder:'Ex. boutique du marché'})}
