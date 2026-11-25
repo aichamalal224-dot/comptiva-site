@@ -1485,6 +1485,8 @@ function krediStockConsistencyAudit(){
   if(!sale.stockProductId&&!sale.stockDeductedAt&&!sale.stockRestoredAt)return;
   const product=products.get(String(sale.stockProductId||''));
   if(sale.stockProductId&&!product)addIssue('sale_product_missing','Vente '+String(sale.id)+' : produit de stock lié introuvable.');
+  if(sale.stockProductId&&!sale.stockDeductedAt)addIssue('sale_deduction_unproven','Vente '+String(sale.id)+' : produit lié, mais aucune preuve de déduction initiale du stock.');
+  if(sale.stockDeductedAt&&!sale.stockProductId)addIssue('sale_deduction_product_missing','Vente '+String(sale.id)+' : déduction marquée sans identifiant de produit.');
   const sold=Number(sale.quantity),deducted=Number(sale.stockDeductedQuantity);
   if(!Number.isFinite(sold)||sold<=0)addIssue('sale_quantity_invalid','Vente '+String(sale.id)+' : quantité vendue invalide.');
   if(sale.stockDeductedAt&&(!Number.isFinite(deducted)||deducted<=0||Math.abs(deducted-sold)>1e-9))addIssue('sale_deduction_quantity_mismatch','Vente '+String(sale.id)+' : quantité déduite différente de la quantité de vente.');
