@@ -633,14 +633,25 @@ function krediStopSellerPresence(){
 }
 async function krediStartSellerPresence(){
  krediStopSellerPresence();
+ const card=document.getElementById('patronPresenceCard');
+ if(card)card.classList.add('hidden');
  if(!krediUser||!krediStore||!navigator.onLine)return;
  let memberships;
  try{memberships=await krediStore.collection('userShopMemberships').doc(krediUser.uid).collection('shops').limit(2).get({source:'server'})}
  catch(error){console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
  const docs=memberships.docs.filter(d=>d.data()&&d.data().active===true&&d.data().role==='seller');
- if(docs.length!==1)return;
+ if(docs.length===1){
+  const uid=krediUser.uid,shopId=docs[0].id;
+  krediPresenceShopId=shopId;
+  if(card)card.classList.add('hidden');
+ }else{
+  try{
+   const ownShop=await krediStore.collection('shops').doc('shop-'+krediUser.uid).get({source:'server'});
+   if(ownShop.exists&&ownShop.data()&&ownShop.data().ownerUid===krediUser.uid&&card)card.classList.remove('hidden');
+  }catch(error){console.warn('[COMPTIVA] Vérification du rôle Patron indisponible.',error)}
+  return;
+ }
  const uid=krediUser.uid,shopId=docs[0].id;
- krediPresenceShopId=shopId;
  const send=async()=>{
   if(!krediUser||krediUser.uid!==uid||krediPresenceShopId!==shopId||document.visibilityState==='hidden')return;
   try{await krediStore.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
