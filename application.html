@@ -392,6 +392,12 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
         </form>
         <p class="footer">Le profil est enregistré avec les données de votre compte et synchronisé selon l’état de votre connexion Firebase.</p>
       </div>
+      <div class="card" style="margin-top:16px">
+        <h3>Préparation des boutiques multiples</h3>
+        <p>Analyse locale de vos données avant leur future migration vers une boutique principale. Cette vérification ne déplace, ne modifie et ne supprime aucune donnée.</p>
+        <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button></div>
+        <div id="shopMigrationPreflight" class="footer" aria-live="polite">Aucune analyse lancée.</div>
+      </div>
     </section>
     <section id="page-sales" class="hidden">
       <div class="pagehead"><div><h2>Ventes</h2><p>Enregistrez chaque article vendu, en espèces/mobile money ou à crédit.</p></div><div class="actions"><button class="soft" onclick="printLatestSale()">🖨 Dernier reçu</button><button class="primary" onclick="openForm('sale')">+ Enregistrer une vente</button></div></div>
@@ -586,6 +592,33 @@ function krediExpectedStoreForUser(user){return user&&user.uid?'comptiva_user_v1
 function krediStoreMatchesActiveUser(){return STORE===krediExpectedStoreForUser(krediUser)}
 // Métadonnées d'auteur pour les nouvelles opérations. Les anciennes lignes restent inchangées : aucun auteur historique n'est inventé.
 function krediActorStamp(){const user=krediUser||null;const uid=user&&user.uid?String(user.uid):'';const name=String(user&&user.displayName||user&&user.email&&user.email.split('@')[0]||'Commerçant').trim();const at=new Date().toISOString();return{createdByUid:uid,createdByName:name||'Commerçant',createdAt:at,updatedAt:at}}
+// Pré-contrôle non destructif : prépare la migration multi-boutiques sans écrire dans Firestore ni modifier la base.
+function krediBuildShopMigrationPreview(){
+ if(!krediUser||!krediUser.uid||!krediStoreMatchesActiveUser())throw new Error('Connectez-vous au compte propriétaire des données avant cette analyse.');
+ const issue=krediDatabaseShapeIssue(db);if(issue)throw new Error('Base locale à vérifier : '+issue);
+ const rows={clients:db.clients||[],sales:db.sales||[],debts:db.debts||[],payments:db.payments||[],products:db.products||[],purchases:db.purchases||[],expenses:db.expenses||[],auditLog:db.auditLog||[]};
+ const ids=key=>new Set(rows[key].map(x=>x.id));
+ const clientIds=ids('clients'),saleIds=ids('sales'),debtIds=ids('debts'),productIds=ids('products');
+ const missing={saleClient:0,saleProduct:0,debtClient:0,debtSale:0,paymentDebt:0,purchaseProduct:0};
+ rows.sales.forEach(x=>{if(x.clientId&&!clientIds.has(x.clientId))missing.saleClient++;if(x.stockProductId&&!productIds.has(x.stockProductId))missing.saleProduct++});
+ rows.debts.forEach(x=>{if(x.clientId&&!clientIds.has(x.clientId))missing.debtClient++;if(x.saleId&&!saleIds.has(x.saleId))missing.debtSale++});
+ rows.payments.forEach(x=>{if(!x.debtId||!debtIds.has(x.debtId))missing.paymentDebt++});
+ rows.purchases.forEach(x=>{if(x.stockProductId&&!productIds.has(x.stockProductId))missing.purchaseProduct++});
+ const active=key=>rows[key].filter(x=>x.status!=='cancelled');
+ const sum=(key,field)=>active(key).reduce((n,x)=>n+Number(x[field]||0),0);
+ const orphanCount=Object.values(missing).reduce((n,x)=>n+x,0);
+ return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals:{salesGNF:sum('sales','total'),purchasesGNF:sum('purchases','amount'),expensesGNF:sum('expenses','amount'),paymentsGNF:sum('payments','amount'),stockUnits:rows.products.reduce((n,x)=>n+Number(x.quantity||0),0)},missing,orphanCount,localCheckPassed:orphanCount===0,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
+}
+function krediShowShopMigrationPreview(){
+ const el=document.getElementById('shopMigrationPreflight');if(!el)return;
+ try{
+  const p=krediBuildShopMigrationPreview();
+  const labels={clients:'Clients',sales:'Ventes',debts:'Dettes',payments:'Remboursements',products:'Produits',purchases:'Achats',expenses:'Dépenses',auditLog:'Événements d’audit'};
+  const counts=Object.entries(p.counts).map(([k,v])=>labels[k]+': '+v).join(' · ');
+  const missing=Object.entries(p.missing).filter(([,v])=>v>0).map(([k,v])=>k+': '+v).join(' · ');
+  el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun lien manquant détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Liens à examiner : '+esc(missing):'Relations locales vérifiées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
+ }catch(error){el.textContent='Analyse impossible : '+(error.message||'erreur inconnue')}
+}
 function saveDB(){if(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()){krediStatus('COMPTIVA est verrouillé : déverrouillez la session avant toute sauvegarde.');return false}if(!krediStoreMatchesActiveUser()){krediCloudReady=false;krediStatus('Sécurité des comptes : sauvegarde bloquée car l’espace de stockage ne correspond pas au compte connecté. Reconnectez-vous avant toute modification.');return false}if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){krediStatus('Sécurité des données : la base locale est illisible. Aucune sauvegarde ni synchronisation ne sera effectuée. '+(window.krediDBStorageIssue.backupSaved?'Une copie de secours a été conservée.':'La copie de secours n’a pas pu être créée.'));flash('Données protégées : récupération nécessaire avant toute modification.',6500);return false}if(krediUser&&!krediIsCreator()&&!krediCanUseMerchantApp()){db=loadDB();renderAll();flash('Accès suspendu : vérifiez ou renouvelez votre abonnement avant de modifier les données.');return false}try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return false}renderAll();krediQueueCloudSave();return true}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
