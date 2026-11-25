@@ -1106,6 +1106,7 @@ async function krediSetSellerActive(sellerUid,active){
  const status=document.getElementById('sellerManagementStatus');
  const say=message=>{if(status)status.textContent=message};
  if(!krediUser||!krediStore||!krediStoreMatchesActiveUser()){say('Connectez-vous au compte Patron avant de modifier une affectation.');return}
+ if(!krediRequirePatron('modifier une affectation vendeur')){say('Modification réservée au Patron confirmé.');return}
  if(!/^[A-Za-z0-9_-]{1,128}$/.test(String(sellerUid||''))||sellerUid===krediUser.uid||typeof active!=='boolean'){say('Identifiant vendeur ou statut invalide.');return}
  if(!krediCanUseMerchantApp()&&!krediIsCreator()){say('Abonnement non confirmé : modification bloquée.');return}
  const shopId='shop-'+krediUser.uid,shop=krediStore.collection('shops').doc(shopId);
