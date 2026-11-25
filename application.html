@@ -743,15 +743,51 @@ async function krediCheckSharedSaleIdCollisions(){
   if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé pendant le contrôle des doublons.');
   const batch=sales.slice(offset,offset+20);
   const snapshots=await Promise.all(batch.map(sale=>shopRef.collection('sales').doc(sale.id).get({source:'server'})));
-  snapshots.forEach((snap,index)=>{
-   if(!snap.exists)return;
+  for(let index=0;index<snapshots.length;index++){
+   const snap=snapshots[index];if(!snap.exists)continue;
    const localSale=batch[index],remoteSale=snap.data()||{};
    const comparison=krediCompareSharedSaleContent(localSale,remoteSale,shopId);
    if(comparison.status==='same')same++;
    else if(comparison.status==='different')different++;
    else insufficient++;
-   collisions.push({id:localSale.id,status:comparison.status,fields:comparison.fields.slice(0,8)});
-  });
+   const relationIssues=[];
+   const checkShopRef=(data,label)=>{
+    if(!data){relationIssues.push(label+':absent');return}
+    if(data.shopId!==shopId)relationIssues.push(label+':shopId');
+   };
+   const clientId=String(remoteSale.clientId||'');
+   if(String(localSale.clientId||'')!==clientId)relationIssues.push('clientId:différent');
+   if(clientId){
+    const clientSnap=await shopRef.collection('clients').doc(clientId).get({source:'server'});
+    checkShopRef(clientSnap.exists?clientSnap.data():null,'client');
+   }
+   const productId=String(remoteSale.stockProductId||'');
+   if(String(localSale.stockProductId||'')!==productId)relationIssues.push('stockProductId:différent');
+   if(productId){
+    const productSnap=await shopRef.collection('products').doc(productId).get({source:'server'});
+    checkShopRef(productSnap.exists?productSnap.data():null,'produit');
+   }
+   const debtSnap=await shopRef.collection('debts').where('saleId','==',localSale.id).get({source:'server'});
+   const localDebts=(Array.isArray(db.debts)?db.debts:[]).filter(debt=>debt.saleId===localSale.id);
+   const remoteDebts=debtSnap.docs;
+   const localDebtIds=localDebts.map(debt=>String(debt.id)).sort();
+   const remoteDebtIds=remoteDebts.map(debt=>String(debt.id)).sort();
+   if(krediStableSnapshot(localDebtIds)!==krediStableSnapshot(remoteDebtIds))relationIssues.push('dettes:identifiants différents');
+   for(const debtDoc of remoteDebts){
+    const debt=debtDoc.data()||{};
+    checkShopRef(debt,'dette');
+    if(debt.saleId!==localSale.id)relationIssues.push('dette.saleId');
+    if(String(debt.clientId||'')!==String(remoteSale.clientId||''))relationIssues.push('dette.clientId');
+    const paymentsSnap=await shopRef.collection('payments').where('debtId','==',debtDoc.id).get({source:'server'});
+    paymentsSnap.docs.forEach(paymentDoc=>{
+     const payment=paymentDoc.data()||{};
+     checkShopRef(payment,'remboursement');
+     if(payment.debtId!==debtDoc.id)relationIssues.push('remboursement.debtId');
+    });
+   }
+   if(relationIssues.length)different++;
+   collisions.push({id:localSale.id,status:comparison.status,fields:comparison.fields.slice(0,8),relationIssues:relationIssues.slice(0,10)});
+  }
  }
  if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé après le contrôle des doublons.');
  return{shopExists:true,checked:sales.length,collisions,same,different,insufficient};
@@ -777,8 +813,9 @@ async function krediVerifyShopMigrationBackup(){
   if(localSnapshot!==remoteSnapshot){say('Sauvegarde cloud trouvée, mais elle ne correspond pas exactement aux données locales. Synchronisez ou résolvez le conflit avant toute migration.');return false}
   const collisions=await krediCheckSharedSaleIdCollisions();
   if(collisions.collisions.length){
-   const examples=collisions.collisions.slice(0,6).map(x=>x.id+' ['+(x.status==='same'?'contenu concordant':x.status==='different'?'contenu différent':'comparaison incomplète')+(x.fields.length?' : '+x.fields.join('/'):'')+']').join(' · ');
-   say('Migration bloquée : '+collisions.collisions.length+' ID de vente déjà présents. Comparaison métier : '+collisions.same+' concordant(s), '+collisions.different+' différent(s), '+collisions.insufficient+' non vérifiable(s). Exemples : '+examples+(collisions.collisions.length>6?'…':'')+'. Même si le contenu concorde, aucun doublon n’est automatiquement ignoré ou écrasé. Vérification manuelle requise.');
+   const examples=collisions.collisions.slice(0,6).map(x=>x.id+' ['+(x.status==='same'?'contenu concordant':x.status==='different'?'contenu différent': 'comparaison incomplète')+(x.fields.length?' : '+x.fields.join('/'):'')+(x.relationIssues.length?' ; liens : '+x.relationIssues.join('/'):'')+']').join(' · ');
+   const relationCount=collisions.collisions.filter(x=>x.relationIssues.length).length;
+   say('Migration bloquée : '+collisions.collisions.length+' ID de vente déjà présents. Comparaison métier : '+collisions.same+' concordant(s), '+collisions.different+' différent(s), '+collisions.insufficient+' non vérifiable(s). Relations incohérentes ou absentes : '+relationCount+'. Exemples : '+examples+(collisions.collisions.length>6?'…':'')+'. Même si le contenu concorde, aucun doublon n’est automatiquement ignoré ou écrasé. Vérification manuelle requise.');
    return false;
   }
   const stamp=remote.updatedAt&&typeof remote.updatedAt.toDate==='function'?remote.updatedAt.toDate().toLocaleString('fr-FR'):'date non disponible';
