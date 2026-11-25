@@ -159,17 +159,23 @@ service cloud.firestore {
       }
 
       match /clients/{clientId} {
-        allow read, create, update: if canUseShop(shopId)
-          && (request.method == 'get' || request.method == 'list'
-            || (request.resource.data.shopId == shopId));
+        allow read: if canUseShop(shopId);
+        allow create: if canUseShop(shopId)
+          && request.resource.data.shopId == shopId;
+        allow update: if canUseShop(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
         allow delete: if isShopPatron(shopId);
       }
 
       match /debts/{debtId} {
         allow read: if canUseShop(shopId);
-        allow create, update: if canUseShop(shopId)
+        allow create: if canUseShop(shopId)
           && request.resource.data.shopId == shopId;
-        allow delete: if isShopPatron(shopId);
+        allow update: if isShopPatron(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
       }
 
       match /payments/{paymentId} {
@@ -177,7 +183,10 @@ service cloud.firestore {
         allow create: if canUseShop(shopId)
           && request.resource.data.shopId == shopId
           && request.resource.data.createdBy == request.auth.uid;
-        allow update, delete: if isShopPatron(shopId);
+        allow update: if isShopPatron(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
       }
 
       match /products/{productId} {
@@ -188,15 +197,22 @@ service cloud.firestore {
       }
 
       match /purchases/{purchaseId} {
-        allow read, write: if isShopPatron(shopId);
+        allow read: if isShopPatron(shopId);
+        allow create, update: if isShopPatron(shopId)
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
       }
 
       match /expenses/{expenseId} {
-        allow read, write: if isShopPatron(shopId);
+        allow read: if isShopPatron(shopId);
+        allow create, update: if isShopPatron(shopId)
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
       }
 
       match /reports/{reportId} {
-        allow read, write: if isShopPatron(shopId);
+        allow read: if isShopPatron(shopId);
+        allow write: if false;
       }
 
       match /auditLog/{eventId} {
