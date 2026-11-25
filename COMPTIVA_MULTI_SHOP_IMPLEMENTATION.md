@@ -98,6 +98,16 @@ Chaque document métier doit inclure un `shopId` cohérent avec son chemin, un i
 
 **Conséquence :** l'affichage fiable des ventes du Vendeur dans l'espace Patron exige la migration vers les collections par boutique, avec attribution serveur vérifiée et règles Firestore testées. Jusqu'à cette migration, le suivi de présence peut fonctionner, mais le partage des opérations commerciales n'est pas encore opérationnel.
 
+## Diagnostic d'accès partagé — ajout préparatoire
+
+- Un bouton « Tester l’accès à la boutique partagée » exécute désormais un contrôle **strictement en lecture seule** depuis l'application.
+- Pour un Vendeur, il lit côté serveur son index `userShopMemberships/{uid}/shops`, vérifie qu'une seule affectation active existe, puis compare l'identité du Patron, la boutique et la fiche membre.
+- Pour un Patron, il vérifie l'existence, le statut actif et la propriété de `shops/shop-{uid}`.
+- Dans les deux cas, il tente ensuite de lire au maximum cinq documents de `shops/{shopId}/sales`, vérifie le `shopId` des documents lus et compte ceux qui portent un UID d'auteur.
+- Le diagnostic ne crée, ne modifie, ne déplace et ne supprime aucun document. Il ne crée pas non plus une boutique manquante.
+- Une erreur de permission, une appartenance ambiguë ou une incohérence interrompt le test et affiche un résultat non validé.
+- **Limite :** la lecture réussie d'un échantillon prouve seulement que le compte peut lire cette collection au moment du test. Elle ne prouve ni que toutes les ventes sont migrées, ni que les écritures, les règles de stock, les dettes et les remboursements sont sûrs. Aucun test Firebase Emulator ni test réel de production n'a été effectué par ce changement.
+
 ## Migration sans perte — étapes obligatoires
 
 1. Inventorier les documents locaux et cloud et vérifier leur propriétaire UID.
