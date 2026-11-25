@@ -319,3 +319,14 @@ Le rapport valide également la date choisie et détecte toute vente active port
 Tests synthétiques ciblés : dette sans paiement, remboursement partiel, remboursement annulé, paiement orphelin, identifiant de paiement dupliqué, surpaiement, date de paiement impossible et identifiant de dette dupliqué — 10/10 résultats attendus, avec rejet supplémentaire des enregistrements dette/paiement nuls. Les compteurs de périodes signalent également la présence d'une vente active à date invalide. Les trois blocs JavaScript intégrés compilent après modification.
 
 Limites : ces contrôles sont exécutés sur les données locales chargées dans l'application. Aucun test navigateur, Firebase Emulator, multi-appareil, rapprochement de caisse ou vérification de transactions Mobile Money réelles n'a été effectué. Les anomalies historiques ne sont pas corrigées automatiquement.
+
+
+### Audit ventes et reçus — 25 novembre 2026
+
+Le reçu de vente distingue désormais le crédit initial accordé au moment de la vente du solde actuel de la dette. Pour afficher le solde actuel, l'application exige une dette active unique liée à cette vente, une relation client/vente cohérente et un solde calculable ; sinon le montant est marqué « À vérifier » au lieu de présenter le crédit initial comme un solde courant. Les ventes annulées conservent leur marqueur d'annulation.
+
+La ventilation d'un paiement mixte (espèces / Mobile Money) n'est affichée que si les deux parts sont des entiers non négatifs et si leur somme correspond exactement au montant encaissé à la vente. Une ventilation incohérente est signalée « À vérifier ».
+
+Tests synthétiques : dette partiellement remboursée, dette absente, dettes multiples, vente sans crédit et ventilation mixte valide/invalide. Les trois blocs JavaScript intégrés compilent.
+
+Limites : aucun test d'impression réel sur Android, navigateur ou imprimante thermique n'a été effectué. Aucun contrôle de paiement Mobile Money réel ou synchronisation Firebase multi-appareil n'a été réalisé.
