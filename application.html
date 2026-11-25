@@ -1670,8 +1670,8 @@ function renderExpenses(){
  let el=document.getElementById('expensesTable');if(!el)return;
  const active=db.expenses.filter(x=>x.status!=='cancelled');
  let today=dayKey(new Date()),month=today.slice(0,7);
- document.getElementById('expenseDayTotal').textContent=money(active.filter(x=>x.date===today).reduce((n,x)=>n+Number(x.amount||0),0));
- document.getElementById('expenseMonthTotal').textContent=money(active.filter(x=>(x.date||'').slice(0,7)===month).reduce((n,x)=>n+Number(x.amount||0),0));
+ document.getElementById('expenseDayTotal').textContent=money(sumValidDatedAmounts(db.expenses,today));
+ document.getElementById('expenseMonthTotal').textContent=money(sumValidDatedAmounts(db.expenses,month));
  let rows=db.expenses.slice().sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(x=>{
   const cancelled=x.status==='cancelled';
   const actions=cancelled?'<span class="pill overdue">Annulée</span>':'<button class="soft" onclick="editExpense(\''+x.id+'\')">Modifier</button> <button class="soft" onclick="cancelExpense(\''+x.id+'\')">Annuler</button>';
