@@ -1484,11 +1484,22 @@ function krediStockConsistencyAudit(){
   const sold=Number(sale.quantity),deducted=Number(sale.stockDeductedQuantity);
   if(!Number.isFinite(sold)||sold<=0)addIssue('sale_quantity_invalid','Vente '+String(sale.id)+' : quantité vendue invalide.');
   if(sale.stockDeductedAt&&(!Number.isFinite(deducted)||deducted<=0||Math.abs(deducted-sold)>1e-9))addIssue('sale_deduction_quantity_mismatch','Vente '+String(sale.id)+' : quantité déduite différente de la quantité de vente.');
+  let effectiveDeducted=deducted;
   if(sale.stockDeductedAt){
    const found=movements.filter(m=>m.action==='sale_deduction'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
    if(found.length===0)addIssue('sale_movement_missing','Vente '+String(sale.id)+' : trace de déduction du stock manquante.');
    if(found.length>1)addIssue('sale_movement_repeated','Vente '+String(sale.id)+' : plusieurs traces de déduction.');
-   if(found.length===1&&Math.abs(Number(found[0].quantity)-deducted)>1e-9)addIssue('sale_movement_quantity_mismatch','Vente '+String(sale.id)+' : trace de déduction avec quantité différente.');
+   if(found.length===1){
+    effectiveDeducted=Number(found[0].quantity);
+    if(!Number.isFinite(effectiveDeducted)||effectiveDeducted<=0)addIssue('sale_movement_quantity_invalid','Vente '+String(sale.id)+' : quantité initiale déduite invalide.');
+   }
+   const adjustments=movements.filter(m=>m.action==='sale_edit_adjustment'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId)).sort((a,b)=>String(a.at||'').localeCompare(String(b.at||'')));
+   adjustments.forEach(m=>{
+    const previous=Number(m.previousQuantity),next=Number(m.newQuantity);
+    if(!Number.isFinite(previous)||!Number.isFinite(next)||previous<=0||next<=0||Math.abs(previous-effectiveDeducted)>1e-9)addIssue('sale_adjustment_chain','Vente '+String(sale.id)+' : historique des ajustements de quantité discontinu ou invalide.');
+    if(Number.isFinite(next)&&next>0)effectiveDeducted=next;
+   });
+   if(Math.abs(effectiveDeducted-deducted)>1e-9||Math.abs(effectiveDeducted-sold)>1e-9)addIssue('sale_deduction_quantity_mismatch','Vente '+String(sale.id)+' : quantité finale issue des mouvements différente de la vente.');
   }
   const restored=!!(sale.stockRestoredAt||sale.stockRestored===true);
   if(sale.status==='cancelled'&&sale.stockDeductedAt&&!restored)addIssue('sale_restoration_not_marked','Vente annulée '+String(sale.id)+' : réintégration du stock non marquée.');
@@ -1496,10 +1507,10 @@ function krediStockConsistencyAudit(){
   if(restored){
    if(!sale.stockRestoredAt||sale.stockRestored!==true)addIssue('sale_restoration_flags','Vente '+String(sale.id)+' : indicateurs de réintégration incohérents.');
    if(String(sale.stockRestoredProductId||'')!==String(sale.stockProductId||''))addIssue('sale_restoration_product_mismatch','Vente '+String(sale.id)+' : produit de réintégration différent du produit déduit.');
-   if(!Number.isFinite(Number(sale.stockRestoredQuantity))||Math.abs(Number(sale.stockRestoredQuantity)-deducted)>1e-9)addIssue('sale_restoration_quantity_mismatch','Vente '+String(sale.id)+' : quantité réintégrée différente de la quantité déduite.');
+   if(!Number.isFinite(Number(sale.stockRestoredQuantity))||Math.abs(Number(sale.stockRestoredQuantity)-effectiveDeducted)>1e-9)addIssue('sale_restoration_quantity_mismatch','Vente '+String(sale.id)+' : quantité réintégrée différente de la quantité déduite.');
    const matches=movements.filter(m=>m.action==='sale_cancellation_restoration'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
    if(matches.length!==1)addIssue('sale_restoration_trace_count','Vente '+String(sale.id)+' : nombre de traces de réintégration incorrect ('+matches.length+').');
-   else if(Math.abs(Number(matches[0].quantity)-Number(sale.stockRestoredQuantity))>1e-9)addIssue('sale_restoration_trace_quantity','Vente '+String(sale.id)+' : trace de réintégration avec quantité différente.');
+   else if(Math.abs(Number(matches[0].quantity)-effectiveDeducted)>1e-9)addIssue('sale_restoration_trace_quantity','Vente '+String(sale.id)+' : trace de réintégration avec quantité différente.');
   }
  });
  db.purchases.forEach(purchase=>{
