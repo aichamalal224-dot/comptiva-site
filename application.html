@@ -1443,18 +1443,29 @@ function krediStockConsistencyAudit(){
  const keys=new Map();
  let valid=0;
  const addIssue=(code,message)=>issues.push({code,message});
+ db.products.forEach(product=>{
+  const quantity=Number(product.quantity);
+  if(!Number.isFinite(quantity)||quantity<0)addIssue('product_quantity_invalid','Produit '+String(product.name||product.id)+' : quantité de stock invalide ou négative.');
+ });
  movements.forEach(m=>{
   const product=products.get(String(m.entityId||''));
   if(!product){addIssue('movement_product_missing','Mouvement '+String(m.id||'sans ID')+' : produit introuvable.');return}
   const qty=Number(m.quantity),before=Number(m.before),after=Number(m.after),adjustment=['sale_edit_adjustment','purchase_edit_adjustment'].includes(m.action),delta=Number(m.delta);
-  if((!adjustment&&(!Number.isFinite(qty)||qty<=0))||(adjustment&&!Number.isFinite(delta))||!Number.isFinite(before)||before<0||!Number.isFinite(after)||after<0){
+  if((!adjustment&&(!Number.isFinite(qty)||qty<0||(qty===0&&m.action!=='purchase_cancellation_removal')))||(adjustment&&(!Number.isFinite(delta)||!Number.isFinite(Number(m.previousQuantity))||!Number.isFinite(Number(m.newQuantity))))||!Number.isFinite(before)||before<0||!Number.isFinite(after)||after<0){
    addIssue('movement_invalid_values','Mouvement '+String(m.id||'sans ID')+' : quantité ou valeurs avant/après invalides.');return;
   }
   let expected=null;
   if(m.action==='sale_deduction'||m.action==='purchase_cancellation_removal')expected=before-qty;
   if(m.action==='sale_cancellation_restoration')expected=before+qty;
   if(m.action==='purchase_addition')expected=before+qty;
-  if(m.action==='sale_edit_adjustment'||m.action==='purchase_edit_adjustment'){const delta=Number(m.delta);if(!Number.isFinite(delta))expected=NaN;else expected=before+delta;}
+  if(m.action==='sale_edit_adjustment'){
+   if(Math.abs(delta-(Number(m.previousQuantity)-Number(m.newQuantity)))>1e-9)addIssue('sale_adjustment_delta','Mouvement '+String(m.id||'sans ID')+' : delta incompatible avec les quantités avant/après vente.');
+   expected=before+delta;
+  }
+  if(m.action==='purchase_edit_adjustment'){
+   if(Math.abs(delta-(Number(m.newQuantity)-Number(m.previousQuantity)))>1e-9)addIssue('purchase_adjustment_delta','Mouvement '+String(m.id||'sans ID')+' : delta incompatible avec les quantités avant/après achat.');
+   expected=before+delta;
+  }
   if(expected!==null&&(!Number.isFinite(expected)||Math.abs(expected-after)>1e-9)){
    addIssue('movement_arithmetic','Mouvement '+String(m.id||'sans ID')+' : calcul avant/après incohérent.');return;
   }
@@ -1467,21 +1478,43 @@ function krediStockConsistencyAudit(){
  });
  keys.forEach((count,key)=>{if(count>1)addIssue('duplicate_movement','Mouvement répété ('+key+'), '+count+' occurrences.')});
  db.sales.forEach(sale=>{
-  if(!sale.stockProductId||!sale.stockDeductedAt)return;
-  const found=movements.filter(m=>m.action==='sale_deduction'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
-  if(found.length===0)addIssue('sale_movement_missing','Vente '+String(sale.id)+' : trace de déduction du stock manquante.');
-  if(found.length>1)addIssue('sale_movement_repeated','Vente '+String(sale.id)+' : plusieurs traces de déduction.');
-  if(sale.stockRestoredAt){
-   const restored=movements.filter(m=>m.action==='sale_cancellation_restoration'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockRestoredProductId||sale.stockProductId));
-   if(restored.length===0)addIssue('restoration_missing','Vente '+String(sale.id)+' : restauration marquée mais trace absente.');
-   if(restored.length>1)addIssue('restoration_repeated','Vente '+String(sale.id)+' : plusieurs traces de restauration.');
+  if(!sale.stockProductId&&!sale.stockDeductedAt&&!sale.stockRestoredAt)return;
+  const product=products.get(String(sale.stockProductId||''));
+  if(sale.stockProductId&&!product)addIssue('sale_product_missing','Vente '+String(sale.id)+' : produit de stock lié introuvable.');
+  const sold=Number(sale.quantity),deducted=Number(sale.stockDeductedQuantity);
+  if(!Number.isFinite(sold)||sold<=0)addIssue('sale_quantity_invalid','Vente '+String(sale.id)+' : quantité vendue invalide.');
+  if(sale.stockDeductedAt&&(!Number.isFinite(deducted)||deducted<=0||Math.abs(deducted-sold)>1e-9))addIssue('sale_deduction_quantity_mismatch','Vente '+String(sale.id)+' : quantité déduite différente de la quantité de vente.');
+  if(sale.stockDeductedAt){
+   const found=movements.filter(m=>m.action==='sale_deduction'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
+   if(found.length===0)addIssue('sale_movement_missing','Vente '+String(sale.id)+' : trace de déduction du stock manquante.');
+   if(found.length>1)addIssue('sale_movement_repeated','Vente '+String(sale.id)+' : plusieurs traces de déduction.');
+   if(found.length===1&&Math.abs(Number(found[0].quantity)-deducted)>1e-9)addIssue('sale_movement_quantity_mismatch','Vente '+String(sale.id)+' : trace de déduction avec quantité différente.');
+  }
+  const restored=!!(sale.stockRestoredAt||sale.stockRestored===true);
+  if(sale.status==='cancelled'&&sale.stockDeductedAt&&!restored)addIssue('sale_restoration_not_marked','Vente annulée '+String(sale.id)+' : réintégration du stock non marquée.');
+  if(sale.status!=='cancelled'&&restored)addIssue('sale_restoration_active_sale','Vente '+String(sale.id)+' : stock marqué comme réintégré alors que la vente n’est pas annulée.');
+  if(restored){
+   if(!sale.stockRestoredAt||sale.stockRestored!==true)addIssue('sale_restoration_flags','Vente '+String(sale.id)+' : indicateurs de réintégration incohérents.');
+   if(String(sale.stockRestoredProductId||'')!==String(sale.stockProductId||''))addIssue('sale_restoration_product_mismatch','Vente '+String(sale.id)+' : produit de réintégration différent du produit déduit.');
+   if(!Number.isFinite(Number(sale.stockRestoredQuantity))||Math.abs(Number(sale.stockRestoredQuantity)-deducted)>1e-9)addIssue('sale_restoration_quantity_mismatch','Vente '+String(sale.id)+' : quantité réintégrée différente de la quantité déduite.');
+   const matches=movements.filter(m=>m.action==='sale_cancellation_restoration'&&m.relatedSaleId===sale.id&&String(m.entityId)===String(sale.stockProductId));
+   if(matches.length!==1)addIssue('sale_restoration_trace_count','Vente '+String(sale.id)+' : nombre de traces de réintégration incorrect ('+matches.length+').');
+   else if(Math.abs(Number(matches[0].quantity)-Number(sale.stockRestoredQuantity))>1e-9)addIssue('sale_restoration_trace_quantity','Vente '+String(sale.id)+' : trace de réintégration avec quantité différente.');
   }
  });
  db.purchases.forEach(purchase=>{
-  if(!purchase.stockProductId||!purchase.stockAddedAt)return;
-  const found=movements.filter(m=>m.action==='purchase_addition'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));
-  if(found.length===0)addIssue('purchase_movement_missing','Achat '+String(purchase.id)+' : trace d’ajout au stock manquante.');
-  if(found.length>1)addIssue('purchase_movement_repeated','Achat '+String(purchase.id)+' : plusieurs traces d’ajout.');
+  if(!purchase.stockProductId&&!purchase.stockAddedAt)return;
+  if(!products.has(String(purchase.stockProductId||'')))addIssue('purchase_product_missing','Achat '+String(purchase.id)+' : produit de stock lié introuvable.');
+  if(purchase.stockAddedAt){
+   const found=movements.filter(m=>m.action==='purchase_addition'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));
+   if(found.length===0)addIssue('purchase_movement_missing','Achat '+String(purchase.id)+' : trace d’ajout au stock manquante.');
+   if(found.length>1)addIssue('purchase_movement_repeated','Achat '+String(purchase.id)+' : plusieurs traces d’ajout.');
+  }
+  if(purchase.status==='cancelled'&&Number(purchase.quantity||0)>0&&purchase.stockProductId){
+   const removals=movements.filter(m=>m.action==='purchase_cancellation_removal'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));
+   if(removals.length!==1)addIssue('purchase_cancellation_trace_count','Achat annulé '+String(purchase.id)+' : nombre de traces de retrait incorrect ('+removals.length+').');
+   else if(Math.abs(Number(removals[0].quantity)-Number(purchase.quantity))>1e-9)addIssue('purchase_cancellation_quantity_mismatch','Achat annulé '+String(purchase.id)+' : quantité retirée différente de la quantité achetée.');
+  }
  });
  return {valid,issues};
 }
