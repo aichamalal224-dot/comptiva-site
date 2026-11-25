@@ -1128,7 +1128,7 @@ async function krediSetSellerActive(sellerUid,active){
   try{
    await index.set({uid:sellerUid,shopId:shopId,role:'seller',active:active,patronUid:krediUser.uid,updatedAt:now});
   }catch(indexError){
-   console.error('[COMPTIVA] Index vendeur non actualisé ; tentative de retour à l'état précédent.',indexError);
+   console.error('[COMPTIVA] Index vendeur non actualisé ; tentative de retour au statut précédent.',indexError);
    try{
     await member.update({active:previousActive,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
     say('Modification annulée : l’index n’a pas été actualisé et le statut précédent du vendeur a été rétabli.');
