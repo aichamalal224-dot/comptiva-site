@@ -202,3 +202,6 @@ La fonctionnalité ne sera considérée comme terminée que si :
 - les anciennes données et totaux sont conservés après migration ;
 - les règles Firestore passent les tests Emulator ;
 - les fonctions de base restent opérationnelles après migration.
+
+
+L'audit de cohérence du stock vérifie désormais aussi les quantités actuelles de chaque produit, le lien vente-produit, l'égalité entre quantité vendue et quantité déduite, les indicateurs et la quantité de réintégration lors d'une annulation, ainsi que les traces de retrait lors de l'annulation d'un achat. Les ajustements de vente et d'achat sont contrôlés séparément à partir de leurs quantités précédente/nouvelle et de leur delta. L'audit reste consultatif et en lecture seule : il signale les écarts sans recalculer ni modifier les quantités, car les historiques anciens peuvent ne pas contenir de stock initial.
