@@ -362,7 +362,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
         <div class="card dashboard-clients-card"><div class="dashboard-card-heading"><h3>Derniers clients</h3><button class="text-action" onclick="navigate('clients')">Voir tout ›</button></div><div id="dashboardRecentClients"></div><button class="primary add-client-dashboard" onclick="openForm('client')">＋ Ajouter un client</button></div>
         <div class="card dashboard-due-card"><div class="dashboard-card-heading"><h3>Prochaines échéances</h3><button class="green" onclick="openForm('debt')">＋ Ajouter une dette</button></div><div id="dashboardUpcomingDebts"></div></div>
       </div>
-      <p class="footer dashboard-accounting-note">L’indicateur « CA − achats − dépenses » est une estimation simplifiée : il ne tient pas compte du stock restant, des dettes fournisseurs ni de tous les ajustements comptables. Ce n’est pas le bénéfice comptable exact.</p>
+      <p class="footer dashboard-accounting-note">L’indicateur « CA − achats − dépenses » est une estimation simplifiée, pas un solde de trésorerie ni un bénéfice comptable. Il déduit le montant total de chaque achat enregistré, y compris les achats marqués « Crédit fournisseur », sans distinguer les sommes déjà payées des montants restant dus. Il ne tient pas compte du stock restant ni de tous les ajustements comptables.</p>
       <div class="layout dashboard-lower-layout">
         <div class="card"><h3>Dernières dettes</h3><div class="table-wrap" id="recentDebts"></div></div>
         <div class="card"><h3>Actions rapides</h3><div class="quick">
