@@ -945,3 +945,27 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 - Les règles Firestore n'ont pas été modifiées ; les données réelles ne sont pas touchées ; `main` reste intacte.
 
 **Statut :** garde UI Patron renforcée pour les affectations. La synchronisation des deux documents reste non atomique et constitue un risque connu, explicitement reporté jusqu'à adaptation des règles et tests Emulator.
+
+
+## Correction de cohérence des affectations vendeurs — 26 novembre 2026
+
+### Changement applicatif
+
+- Avant suspension/réactivation, l'application lit maintenant côté serveur le document membre et l'index d'appartenance.
+- Elle vérifie leur existence, leur UID, leur boutique, leur rôle, leur Patron assignant et la concordance de leur état `active`.
+- Si les deux documents sont absents ou incohérents, l'opération s'arrête avant toute écriture et demande une réparation contrôlée.
+- Après mise à jour du membre, si l'écriture de l'index échoue, l'application tente de restaurer l'état `active` initial du membre.
+- Si le retour arrière échoue aussi, un message d'alerte explicite demande de ne pas réessayer et de vérifier les deux documents.
+- Le garde de rôle Patron reste obligatoire.
+
+### Limites
+
+- Les écritures membre et index restent deux opérations distinctes, car la règle actuelle de l'index vérifie le membre déjà persisté via `get()`. Une solution atomique exige une adaptation de règle utilisant `getAfter()` ou un backend fiable, puis des tests Emulator.
+- Le retour arrière est une compensation applicative, pas une transaction distribuée. Une panne réseau prolongée peut empêcher la compensation ; l'alerte et la vérification serveur restent nécessaires.
+- L'écriture de l'événement d'audit se produit après la mise à jour des deux documents. Si elle échoue, le changement d'état reste appliqué et l'interface l'indique ; l'événement manquant devra être réconcilié.
+
+### Vérifications
+
+- Vérification statique du précontrôle des deux documents, de la concordance des champs et du retour arrière après échec de l'index.
+- Compilation des trois blocs JavaScript de `application.html` à effectuer après relecture du fichier modifié.
+- Aucun test Firebase Emulator ou compte réel dans cette passe ; aucune règle Firestore ni donnée réelle modifiée ; aucun déploiement ; `main` intacte.
