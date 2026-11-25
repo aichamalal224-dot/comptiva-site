@@ -1313,7 +1313,7 @@ function printLatestPayment(){const item=db.payments.slice().reverse().sort((a,b
 // Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
 // COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
 const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
-let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false,krediSaveInFlightUid='',krediNeedsSubscriptionRecheck=typeof navigator!=='undefined'&&!navigator.onLine;
+let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediSessionEpoch=0,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false,krediSaveInFlightUid='',krediNeedsSubscriptionRecheck=typeof navigator!=='undefined'&&!navigator.onLine;
 const krediEmptyDB=()=>({clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[],auditLog:[],businessProfile:{}});
 function krediStatus(t){if(/^Persistance SESSION prête · Firebase Auth disponible\.?$/.test(String(t||''))){console.info('[COMPTIVA Auth] Persistance SESSION prête · Firebase Auth disponible.');return}['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t})}
 function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
@@ -1633,6 +1633,8 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
+    const sessionEpoch=++krediSessionEpoch;
+    const isCurrentSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===activeUser?.uid&&STORE===(activeUser?'comptiva_user_v1_'+activeUser.uid:'comptiva_guest_v1');
     if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
     try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=!!activeUser;console.warn('[COMPTIVA] Marqueur local illisible : prudence, les données locales seront traitées comme potentiellement non synchronisées.',storageError)}
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
@@ -1643,7 +1645,7 @@ async function krediInitFirebase(){try{
       const firestoreReady=await window.__comptivaFirestoreSdkReady;
       // Si le compte a changé pendant le chargement asynchrone de Firestore,
       // abandonner cette ancienne initialisation avant d'ouvrir un écouteur.
-      if(!krediUser||krediUser.uid!==activeUser.uid)return;
+      if(!isCurrentSession())return;
       if(!firestoreReady){if(!krediIsCreator()&&!krediUseCachedSubscriptionOffline(activeUser.uid)){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('COMPTIVA ne peut pas vérifier votre abonnement sans Firebase. Les fonctions commerciales restent bloquées jusqu’au retour de la connexion. Vos données restent conservées sur cet appareil.');navigate('subscription')}krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
     }
     if(!krediStore && firebase.firestore){
@@ -1663,30 +1665,30 @@ async function krediInitFirebase(){try{
     }
     if(krediIsCreator()){krediSubscriptionAccess='active';loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);await krediLoadMerchantSubscription();}
     // Ne pas poursuivre le chargement cloud si une autre session a pris la place.
-    if(!krediUser||krediUser.uid!==activeUser.uid)return;
+    if(!isCurrentSession())return;
     krediStatus('Compte connecté. Vérification des données en ligne…');
     const activeUid=activeUser.uid;
     const ref=krediStore.collection('users').doc(activeUid).collection('comptivaData').doc('main');
     let serverProbeFinished=false;
     const serverProbeTimer=setTimeout(()=>{
-      if(!krediUser||krediUser.uid!==activeUid||krediServerReady||serverProbeFinished)return;
+      if(!isCurrentSession()||krediServerReady||serverProbeFinished)return;
       krediCloudReady=false;
       krediStatus('Compte connecté, mais Firestore ne confirme pas encore le serveur. Données locales conservées. Vérifiez Internet et les règles Firestore.');
     },12000);
     ref.get({source:'server'}).then(()=>{
       serverProbeFinished=true;clearTimeout(serverProbeTimer);
-      if(krediUser&&krediUser.uid===activeUid&&!krediServerReady){
+      if(isCurrentSession()&&!krediServerReady){
         krediStatus('Serveur Firestore joignable. Vérification de la synchronisation…');
       }
     }).catch(err=>{
       serverProbeFinished=true;clearTimeout(serverProbeTimer);
-      if(krediUser&&krediUser.uid===activeUid&&!krediServerReady){
+      if(isCurrentSession()&&!krediServerReady){
         krediCloudReady=false;
         krediShowDiagnostic(err,'LECTURE SERVEUR users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'));
       }
     });
     krediUnsubscribe=ref.onSnapshot({includeMetadataChanges:true},async snap=>{
-      if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;
+      if(!isCurrentSession())return;
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
@@ -1728,14 +1730,15 @@ async function krediInitFirebase(){try{
         if(!krediIsCreator()&&(krediNeedsSubscriptionRecheck||!krediCanUseMerchantApp())){krediStatus('Données locales conservées : vérification obligatoire de l’abonnement avant toute synchronisation cloud.');return}
         krediLocalDirty=true;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediCloudReady=false;krediStatus('Données locales conservées : le navigateur ne peut pas mémoriser la synchronisation en attente. Libérez de l’espace avant de réessayer.');return}
         krediStatus('Envoi des données locales vers Firebase…');
-        try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===activeUid)krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
-        catch(e){if(!krediUser||krediUser.uid!==activeUid||STORE!=='comptiva_user_v1_'+activeUid)return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
+        try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
+        catch(e){if(!isCurrentSession())return;krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
       krediCloudReady=true;krediLocalDirty=false;krediSafeStorageRemove('comptiva_pending_'+activeUid);
       krediStatus(navigator.onLine?'Connecté · données synchronisées':'Hors connexion · données locales disponibles');renderAll();
-    },err=>{clearTimeout(serverProbeTimer);if(!krediUser||krediUser.uid!==activeUid)return;krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
+    },err=>{clearTimeout(serverProbeTimer);if(!isCurrentSession())return;krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
   },err=>{
+    krediSessionEpoch++;
     krediAuthStateReceived=true;
     clearTimeout(krediAuthWaitTimer);
     krediShowDiagnostic(err,'ERREUR AUTHENTICATION');
