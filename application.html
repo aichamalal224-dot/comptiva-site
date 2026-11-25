@@ -681,7 +681,16 @@ function krediBuildShopMigrationPreview(){
  const authoredCollections=['clients','sales','debts','payments','products','purchases','expenses'];
  const authorMetadata={total:0,complete:0,partial:0,absent:0};
  authoredCollections.forEach(key=>rows[key].forEach(row=>{authorMetadata.total++;const hasUid=typeof row.createdByUid==='string'&&row.createdByUid.trim().length>0;const hasName=typeof row.createdByName==='string'&&row.createdByName.trim().length>0;if(hasUid&&hasName)authorMetadata.complete++;else if(hasUid||hasName)authorMetadata.partial++;else authorMetadata.absent++}));
- return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals,missing,orphanCount,relationshipIssues,relationshipIssueCount,repaymentIssues,repaymentIssueCount,numericIssues,numericIssueCount,authorMetadata,totalsFinite,localCheckPassed:orphanCount===0&&relationshipIssueCount===0&&repaymentIssueCount===0&&numericIssueCount===0&&totalsFinite,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
+ // Contrôle ciblé des ventes : createdBy ne sera jamais déduit d'un nom seul ni inventé.
+ const salesAuthorMetadata={total:rows.sales.length,uidPresent:0,uidMatchesOwner:0,uidDifferentFromOwner:0,uidAbsent:0,nameAbsent:0};
+ rows.sales.forEach(sale=>{
+  const authorUid=typeof sale.createdByUid==='string'?sale.createdByUid.trim():'';
+  const authorName=typeof sale.createdByName==='string'?sale.createdByName.trim():'';
+  if(authorUid){salesAuthorMetadata.uidPresent++;if(authorUid===krediUser.uid)salesAuthorMetadata.uidMatchesOwner++;else salesAuthorMetadata.uidDifferentFromOwner++;}
+  else salesAuthorMetadata.uidAbsent++;
+  if(!authorName)salesAuthorMetadata.nameAbsent++;
+ });
+ return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals,missing,orphanCount,relationshipIssues,relationshipIssueCount,repaymentIssues,repaymentIssueCount,numericIssues,numericIssueCount,authorMetadata,salesAuthorMetadata,totalsFinite,localCheckPassed:orphanCount===0&&relationshipIssueCount===0&&repaymentIssueCount===0&&numericIssueCount===0&&totalsFinite,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
 }
 function krediStableSnapshot(value){
  if(value===null)return 'null';
@@ -739,11 +748,13 @@ function krediShowShopMigrationPreview(){
   const repayments=Object.entries(p.repaymentIssues).filter(([,v])=>v>0).map(([k,v])=>k+': '+v).join(' · ');
   const numeric=Object.entries(p.numericIssues).filter(([,v])=>v>0).map(([k,v])=>k+': '+v).join(' · ');
   const authors=p.authorMetadata;
-  const authorLabel='Traçabilité des auteurs : '+authors.complete+' complets · '+authors.partial+' partiels · '+authors.absent+' sans métadonnées sur '+authors.total+' enregistrements. Les auteurs historiques inconnus ne sont pas inventés.';
+  const authorLabel='Traçabilité générale : '+authors.complete+' complets · '+authors.partial+' partiels · '+authors.absent+' absents sur '+authors.total+' enregistrements. Les auteurs historiques inconnus ne sont pas inventés.';
+  const saleAuthors=p.salesAuthorMetadata;
+  const saleAuthorLabel='Auteurs des ventes : '+saleAuthors.uidPresent+'/'+saleAuthors.total+' UID présents · '+saleAuthors.uidMatchesOwner+' UID du compte propriétaire · '+saleAuthors.uidDifferentFromOwner+' UID différents · '+saleAuthors.uidAbsent+' sans UID · '+saleAuthors.nameAbsent+' sans nom. Les UID différents nécessitent une vérification d’appartenance avant conversion vers createdBy.';
   const totalsWarning=p.totalsFinite?'':' · totaux non finis';
   const relationLabel=relations?'Incohérences ventes/crédits/dettes/clients : '+esc(relations):'Liens ventes/crédits/dettes/clients et répartition des paiements contrôlés.';
   const repaymentLabel=repayments?'Anomalies de remboursement : '+esc(repayments):'Soldes des dettes et remboursements contrôlés.';
-  el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun problème détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Références absentes : '+esc(missing):'Références locales présentes.')+'<br>'+relationLabel+'<br>'+repaymentLabel+'<br>'+esc(authorLabel)+'<br>'+(numeric?'Valeurs numériques invalides : '+esc(numeric)+totalsWarning:'Valeurs numériques contrôlées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
+  el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun problème détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Références absentes : '+esc(missing):'Références locales présentes.')+'<br>'+relationLabel+'<br>'+repaymentLabel+'<br>'+esc(authorLabel)+'<br>'+esc(saleAuthorLabel)+'<br>'+(numeric?'Valeurs numériques invalides : '+esc(numeric)+totalsWarning:'Valeurs numériques contrôlées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
  }catch(error){el.textContent='Analyse impossible : '+(error.message||'erreur inconnue')}
 }
 /* Diagnostic en lecture seule : vérifie l'appartenance serveur et l'accès à un échantillon de ventes partagées. Aucun document n'est créé/modifié. */
