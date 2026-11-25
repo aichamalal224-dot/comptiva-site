@@ -758,7 +758,7 @@ async function krediDiagnoseSharedShopAccess(){
  try{
   let shopId='',role='',shopData=null,memberData=null;
   const indexRef=krediStore.collection('userShopMemberships').doc(uid).collection('shops');
-  const indexSnap=await indexRef.limit(3).get({source:'server'});
+  const indexSnap=await indexRef.get({source:'server'});
   const activeSellerLinks=indexSnap.docs.filter(doc=>{const d=doc.data()||{};return d.active===true&&d.role==='seller'});
   if(activeSellerLinks.length>1)throw new Error('Plusieurs affectations vendeur actives détectées : sélection ambiguë, accès non testé.');
   if(activeSellerLinks.length===1){
@@ -770,7 +770,7 @@ async function krediDiagnoseSharedShopAccess(){
    const [shopSnap,memberSnap]=await Promise.all([shopRef.get({source:'server'}),memberRef.get({source:'server'})]);
    if(!shopSnap.exists||!memberSnap.exists)throw new Error('Boutique ou fiche membre introuvable côté serveur.');
    shopData=shopSnap.data()||{};memberData=memberSnap.data()||{};
-   if(shopData.ownerUid!==link.patronUid||shopData.patronUid!==link.patronUid||memberData.uid!==uid||memberData.role!=='seller'||memberData.active!==true)throw new Error('Les informations d’appartenance ne concordent pas : accès partagé non validé.');
+   if(shopData.ownerUid!==link.patronUid||shopData.patronUid!==link.patronUid||shopData.status!=='active'||memberData.uid!==uid||memberData.role!=='seller'||memberData.active!==true)throw new Error('Les informations d’appartenance ou le statut actif de la boutique ne concordent pas : accès partagé non validé.');
   }else{
    shopId='shop-'+uid;role='Patron';
    const shopSnap=await krediStore.collection('shops').doc(shopId).get({source:'server'});
