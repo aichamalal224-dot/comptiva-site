@@ -2223,7 +2223,7 @@ async function krediResolveShopRole(uid){
   if(link.uid!==uid||link.shopId!==shopId||!link.patronUid)throw new Error('Index d’affectation vendeur incohérent.');
   const shopRef=krediStore.collection('shops').doc(shopId);
   const [shopSnap,memberSnap]=await Promise.all([shopRef.get({source:'server'}),shopRef.collection('members').doc(uid).get({source:'server'})]);
-  const shop=shopSnap.exists?shopSnap.data()||{}:{},member=memberSnap.exists?memberSnap.data()||:{};
+  const shop=shopSnap.exists?(shopSnap.data()||{}):{},member=memberSnap.exists?(memberSnap.data()||{}):{};
   if(!shopSnap.exists||!memberSnap.exists||shop.ownerUid!==link.patronUid||shop.patronUid!==link.patronUid||shop.status!=='active'||member.uid!==uid||member.role!=='seller'||member.active!==true||member.assignedBy!==shop.patronUid)throw new Error('Affectation vendeur non confirmée par les documents de la boutique.');
   krediShopRole={status:'verified',role:'seller',uid,shopId,patronUid:shop.patronUid};
   return krediShopRole;
