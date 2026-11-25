@@ -826,3 +826,55 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 - `main` n'a pas été modifiée.
 
 **Statut :** risque confirmé ; correction intégrée bloquée par l'absence du parcours applicatif multi-boutiques. Ne pas déclarer les coûts protégés côté serveur avant implémentation et tests de la séparation physique des documents.
+
+## Cartographie des dépendances avant migration des produits — 26 novembre 2026
+
+### Flux de création d'un produit
+
+- `openForm('product')` présente nom, catégorie, référence, quantité initiale, `purchasePrice`, `salePrice` et seuil d'alerte.
+- `saveForm()` valide les deux prix comme entiers GNF, puis ajoute un objet contenant les deux champs dans `db.products`.
+- L'enregistrement passe par le mécanisme général `saveDB()` : stockage local du compte, puis synchronisation cloud historique selon l'état de session et de synchronisation.
+- Aucun identifiant de boutique partagée n'est associé au produit dans ce flux historique.
+
+### Flux de vente et lien produit
+
+- La vente saisit un nom d'article, une quantité et un prix unitaire manuellement.
+- Le total est calculé par quantité × prix unitaire ; les contrôles espèces/mobile/crédit s'appliquent au total.
+- Le lien de stock est recherché par correspondance du nom normalisé du produit. Si trouvé, la quantité est décrémentée, `stockProductId`, la date et la quantité déduite sont inscrits dans la vente et un mouvement `sale_deduction` est ajouté au journal.
+- Le prix de vente catalogue `product.salePrice` n'est pas automatiquement utilisé comme prix unitaire de la vente dans le flux inspecté. Il faut préserver ce comportement ou définir explicitement une future règle de prix avant toute refonte.
+- La vente conserve son propre `unitPrice` et son total historique ; ces valeurs ne doivent jamais être recalculées depuis le prix catalogue courant lors d'une migration.
+
+### Flux d'achat et coût unitaire
+
+- L'achat saisit une description, une quantité et un montant total.
+- Le lien vers un produit de stock se fait par égalité du nom de l'article (insensible à la casse) ; si trouvé et quantité positive, le stock est augmenté et le mouvement `purchase_addition` est journalisé.
+- Le document d'achat conserve `amount` (montant total) et `quantity`, mais le flux inspecté ne calcule pas de coût unitaire moyen et ne met pas à jour `product.purchasePrice`.
+- Par conséquent, `purchasePrice` du produit représente le coût renseigné lors de la création/édition du produit, et ne doit pas être interprété sans vérification comme le coût moyen réel du stock courant.
+- Les achats, leurs montants et leurs traces de stock constituent un historique financier distinct ; ils ne doivent pas être déplacés ou fusionnés dans le document public du produit.
+
+### Rapports, stock et journal
+
+- `renderStock()` lit `db.products` ; le Patron voit `purchasePrice` et une marge théorique `salePrice - purchasePrice`, le vendeur ne voit pas ces colonnes dans l'interface.
+- Cette marge est une différence entre deux valeurs catalogue actuelles, pas un bénéfice comptable réalisé sur les ventes.
+- `renderPurchases()` agrège les montants des achats et conserve les détails d'achat ; les rapports de ventes utilisent les prix réellement saisis dans chaque vente.
+- `krediStockConsistencyAudit()` contrôle les liens produit/vente/achat et les mouvements horodatés (déduction, ajout, ajustement, restauration et retrait à l'annulation). Les traces historiques absentes ne doivent pas être inventées ou reconstituées automatiquement.
+- Les rapports financiers et exports doivent rester Patron-only et continuer à utiliser les montants historiques des ventes, achats et dépenses.
+
+### Contrat de migration à respecter
+
+1. Migrer les produits par identifiant stable et conserver `name`, `category`, `sku`, `quantity`, `alertAt` et le prix catalogue autorisé dans le document public.
+2. Migrer `purchasePrice` dans le document financier Patron-only, avec provenance indiquant qu'il s'agit du coût catalogue historique, et non d'un coût moyen calculé.
+3. Conserver `sales.unitPrice`, `sales.total`, `purchases.amount`, `purchases.quantity`, les IDs, les statuts et les références de stock historiques sans recalcul.
+4. Conserver séparément le journal de mouvements de stock et les relations `stockProductId`, `relatedSaleId`, `relatedPurchaseId`. Les identifiants de produits doivent rester stables.
+5. Ne pas recalculer `purchasePrice` à partir de `purchases.amount / purchases.quantity` sans décision métier explicite : l'achat peut concerner plusieurs articles, contenir des frais, ou ne pas être lié à un seul produit.
+6. Prévoir une décision produit sur l'évolution future du coût : coût catalogue manuel, dernier coût d'achat, ou coût moyen pondéré. Aucun de ces modèles ne doit être choisi implicitement.
+7. Tester qu'une migration répétée ne crée ni double produit ni double mouvement, et qu'une annulation de vente/achat après migration garde les mêmes invariants de stock.
+
+### Vérifications et limites
+
+- Relecture ciblée des flux `openForm`, `saveForm`, vente, achat, `renderStock`, `renderPurchases`, `renderReports` et audit de cohérence du stock dans `application.html`.
+- Aucune modification de `application.html` ni de `firestore.rules` dans cette passe.
+- Aucune donnée réelle consultée ou modifiée ; aucun test Emulator ou navigateur ; aucune migration ou publication.
+- Cette cartographie est fondée sur le code actuel de la branche et ne prouve pas le comportement d'un compte Firebase réel.
+
+**Statut :** dépendances principales identifiées. La séparation technique peut maintenant être conçue sans confondre coût catalogue, montant d'achat et prix réel d'une vente.
