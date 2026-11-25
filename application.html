@@ -1948,8 +1948,11 @@ function krediHandleLoginClick(){
   if(krediAuthMode==='signup')krediSignUp();else krediSignIn();
 }
 let krediSignInInFlight=false;
+// Une demande Auth peut continuer après le délai d'affichage de 20 s.
+// Garder un verrou jusqu'à sa résolution réelle pour éviter deux connexions concurrentes.
+let krediSignInRequestPending=false;
 async function krediSignIn(){
-  if(krediSignInInFlight)return;
+  if(krediSignInInFlight||krediSignInRequestPending){krediAuthMessage('Une demande de connexion précédente est toujours en cours auprès de Firebase. Attendez sa réponse avant de réessayer.');return;}
   if(!krediAuth){krediAuthMessage('Le service de connexion n’est pas encore prêt. Attendez le message de connexion sécurisée puis réessayez.');return}
   const emailInput=document.getElementById('cloudEmail'),passwordInput=document.getElementById('cloudPassword');
   const email=emailInput?emailInput.value.trim().toLowerCase():'',password=passwordInput?passwordInput.value:'';
@@ -1964,6 +1967,8 @@ async function krediSignIn(){
     // les identifiants : ne pas lancer deux opérations Auth en concurrence.
     if(window.krediAuthPersistencePromise)await window.krediAuthPersistencePromise;
     const authRequest=krediAuth.signInWithEmailAndPassword(email,password);
+    krediSignInRequestPending=true;
+    authRequest.then(()=>{krediSignInRequestPending=false},()=>{krediSignInRequestPending=false});
     let authRequestTimer;
     const credential=await Promise.race([
       authRequest,
