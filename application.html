@@ -652,30 +652,43 @@ async function krediStartSellerPresence(){
 function krediEscapePresence(value){
  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
 }
+let krediPresenceMembersUnsub=null,krediPresenceDataUnsub=null,krediPresenceRenderTimer=null;
 async function krediRefreshSellerPresence(){
  const target=document.getElementById('sellerPresenceList');
  if(!target)return;
  if(!krediUser||!krediStore){target.textContent='Connectez-vous et vérifiez la connexion Firebase.';return}
- const shopId='shop-'+krediUser.uid;
- target.textContent='Lecture des vendeurs…';
- try{
-  const base=krediStore.collection('shops').doc(shopId);
-  const members=await base.collection('members').get({source:'server'});
-  if(!members.size){target.textContent='Aucun vendeur attribué à cette boutique pour le moment.';return}
-  const presence=await base.collection('presence').get({source:'server'});
-  const seen=new Map();presence.forEach(doc=>seen.set(doc.id,doc.data()||{}));
+ if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}
+ if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}
+ if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}
+ const patronUid=krediUser.uid,shopId='shop-'+patronUid,base=krediStore.collection('shops').doc(shopId);
+ let members=[],presence=new Map(),gotMembers=false,gotPresence=false;
+ target.textContent='Connexion au suivi des présences…';
+ const render=()=>{
+  if(!krediUser||krediUser.uid!==patronUid||!gotMembers||!gotPresence)return;
+  if(!members.length){target.textContent='Aucun vendeur attribué à cette boutique pour le moment.';return}
   const now=Date.now();
-  target.innerHTML=members.docs.map(doc=>{
-   const m=doc.data()||{},p=seen.get(doc.id)||{};
+  target.innerHTML=members.map(doc=>{
+   const m=doc.data()||{},p=presence.get(doc.id)||{};
    const stamp=p.lastSeen&&typeof p.lastSeen.toMillis==='function'?p.lastSeen.toMillis():0;
    const online=!!(m.active===true&&stamp&&now-stamp<=90000);
    const name=[m.firstName,m.lastName].filter(Boolean).join(' ').trim()||m.email||('Vendeur '+doc.id.slice(0,6));
-   const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Aucune connexion enregistrée';
+   const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Pas encore connecté';
    return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small></span><span class="pill '+(online?'':'pending')+'">'+(online?'Connecté':'Pas encore connecté / hors ligne')+'</span></div>';
   }).join('');
+ };
+ try{
+  krediPresenceMembersUnsub=base.collection('members').onSnapshot(snap=>{
+   if(!krediUser||krediUser.uid!==patronUid)return;
+   members=snap.docs.filter(doc=>(doc.data()||{}).role==='seller');gotMembers=true;render();
+  },error=>{console.warn('[COMPTIVA] Liste vendeurs indisponible.',error);target.textContent='Liste des vendeurs indisponible : vérifiez les règles Firestore.'});
+  krediPresenceDataUnsub=base.collection('presence').onSnapshot(snap=>{
+   if(!krediUser||krediUser.uid!==patronUid)return;
+   presence=new Map();snap.forEach(doc=>presence.set(doc.id,doc.data()||{}));gotPresence=true;render();
+  },error=>{console.warn('[COMPTIVA] Signaux de présence indisponibles.',error);target.textContent='Présences indisponibles : vérifiez les règles Firestore.'});
+  krediPresenceRenderTimer=setInterval(render,15000);
  }catch(error){
-  console.warn('[COMPTIVA] Lecture de présence indisponible.',error);
-  target.textContent='Présence indisponible : boutique multi-vendeurs non configurée ou règles Firestore non publiées.';
+  console.warn('[COMPTIVA] Abonnement aux présences impossible.',error);
+  target.textContent='Suivi en direct indisponible. Réessayez après vérification de la connexion.';
  }
 }
 
@@ -1776,7 +1789,7 @@ async function krediInitFirebase(){try{
     krediShowConflictRecoveryButton();
     try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=!!activeUser;console.warn('[COMPTIVA] Marqueur local illisible : prudence, les données locales seront traitées comme potentiellement non synchronisées.',storageError)}
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
-    if(!activeUser){krediStopSellerPresence();krediIdleStop();krediIdleHideOverlay();STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
+    if(!activeUser){krediStopSellerPresence();if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}krediIdleStop();krediIdleHideOverlay();STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
     krediIdleHideOverlay();krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();krediIdleSchedule();
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
