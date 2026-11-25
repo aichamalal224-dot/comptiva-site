@@ -780,3 +780,49 @@ Le document historique users/{uid}/comptivaData/main reste limité à son propre
 - Aucun changement des règles Firestore, aucune migration ni donnée réelle modifiée. Aucun déploiement et aucune modification de main.
 
 **Statut :** première barrière UI Patron/Vendeur ajoutée. À valider ensuite avec Emulator et tests de non-régression ; ne pas considérer cette correction comme une autorisation serveur ni comme l’activation du multi-boutiques.
+
+## Porte de sécurité avant séparation effective des coûts produits — 26 novembre 2026
+
+### Décision technique après relecture du code et des règles
+
+La séparation des coûts et marges ne doit pas être implémentée par une simple création de collection Firestore ou par un changement isolé de règle.
+
+Constats vérifiés sur la branche de travail :
+
+- Le formulaire Produit et `saveForm()` enregistrent actuellement `purchasePrice` et `salePrice` dans le même objet `db.products`.
+- `db.products` est conservé dans le modèle local historique chargé depuis le stockage du compte ; l'application continue d'utiliser ce modèle pour le stock, les ventes, les achats et les contrôles de cohérence.
+- Aucun parcours applicatif d'écriture vers `shops/{shopId}/products` ni vers `shops/{shopId}/productFinancials` n'a été trouvé.
+- Les règles partagées actuelles autorisent la lecture des documents `shops/{shopId}/products/{productId}` à tout membre autorisé de la boutique. Firestore renvoie le document entier : il ne filtre pas les champs individuels.
+- Les règles partagées bloquent déjà les écritures directes vendeur dans `products`, mais cela ne protège pas un champ financier qui serait présent dans un document produit lisible.
+- Le modèle multi-boutiques reste explicitement non activé dans l'application. Les chemins historiques `users/{uid}/comptivaData/main` doivent être préservés.
+
+### Pourquoi aucune règle partielle n'est ajoutée maintenant
+
+1. Ajouter `productFinancials` sans écrire ni lire cette collection dans l'application créerait une séparation fictive : le coût continuerait à être enregistré dans l'objet produit historique.
+2. Interdire immédiatement la lecture vendeur des documents produits qui contiennent un champ sensible pourrait rendre les lectures/listes de stock impossibles pour des documents existants. Les règles Firestore ne filtrent pas automatiquement les documents d'une requête.
+3. Autoriser simplement la lecture vendeur des produits sans migration préalable laisserait fuiter les coûts si un document partagé contenait encore `purchasePrice` ou un autre champ financier.
+4. Supprimer `purchasePrice` des objets historiques risquerait de casser les rapports Patron, les calculs de marge, les achats et les contrôles de stock ; aucune suppression ou conversion automatique n'est autorisée.
+
+**Conclusion :** la modification isolée des règles serait soit insuffisante pour la confidentialité, soit susceptible de casser le stock vendeur. Aucune règle, aucun document Firestore et aucune donnée produit ne sont modifiés dans cette passe.
+
+### Correction intégrée obligatoire avant activation du partage des produits
+
+La prochaine implémentation doit former un seul ensemble cohérent :
+
+1. Définir un document public `shops/{shopId}/products/{productId}` avec une liste blanche de champs non financiers : identifiant, nom, catégorie, référence, quantité, seuil d'alerte, prix de vente si la politique le permet, et métadonnées non sensibles strictement nécessaires.
+2. Définir `shops/{shopId}/productFinancials/{productId}`, accessible au Patron uniquement, pour le coût d'achat et les autres données financières nécessaires. La marge doit être calculée à partir des valeurs autorisées plutôt que copiée dans le document public.
+3. Adapter le formulaire Produit, `saveForm()`, le rendu Stock, les ventes, les achats, les corrections de stock, les rapports et les exports pour lire/écrire les deux documents selon le rôle. Le vendeur ne doit jamais recevoir le document financier.
+4. Prévoir une migration idempotente par ID produit depuis les données historiques, avec sauvegarde, vérification des doublons et correspondances, conservation des valeurs d'origine et signalement des valeurs manquantes. Ne jamais inventer un coût.
+5. Préserver le mode historique par UID jusqu'à validation de la migration et des tests ; ne pas basculer automatiquement les comptes existants.
+6. Ajouter les tests Firebase Emulator : Patron lit/écrit les deux documents ; vendeur lit le document public mais reçoit un refus sur `productFinancials` ; vendeur ne peut pas injecter un champ financier dans le document public ; compte extérieur refusé ; documents historiques non migrés traités sans fuite ; requêtes de liste du stock autorisées uniquement sur le schéma public migré.
+7. Rejouer les tests de non-régression sur ventes, achats, annulations, remboursements, stock, rapports, export et synchronisation hors ligne avant toute activation.
+
+### Vérifications de cette passe
+
+- Relecture de `application.html`, `firestore.rules` et de la documentation de migration sur la branche de travail.
+- Champs `purchasePrice` / `salePrice`, écriture locale de produit et rendu stock identifiés.
+- Aucune écriture applicative vers les collections partagées `products` ou `productFinancials` trouvée.
+- Aucune modification de code ou de règles Firestore ; aucune migration, lecture ou écriture de données réelles, aucun test Emulator ou navigateur, aucun déploiement.
+- `main` n'a pas été modifiée.
+
+**Statut :** risque confirmé ; correction intégrée bloquée par l'absence du parcours applicatif multi-boutiques. Ne pas déclarer les coûts protégés côté serveur avant implémentation et tests de la séparation physique des documents.
