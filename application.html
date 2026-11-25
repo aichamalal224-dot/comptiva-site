@@ -1308,7 +1308,19 @@ function cancelDebt(debtId){
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dette annulée. Les soldes et indicateurs ont été recalculés ; historique conservé.');
 }
-function printDebtStatement(id,isDuplicate=false){let d=db.debts.find(x=>x.id===id);if(!d){alert('Dette introuvable.');return}let c=db.clients.find(x=>x.id===d.clientId),payments=db.payments.filter(x=>x.debtId===id),w=window.open('','_blank','width=600,height=750');if(!w){alert('Autorisez les fenêtres pop-up pour imprimer le relevé.');return}let lines=payments.map(p=>'<tr'+(p.status==='cancelled'?' style="color:#a11;text-decoration:line-through"':'')+'><td>'+dateFmt(p.date)+'</td><td>'+money(p.amount)+(p.status==='cancelled'?' — ANNULÉ':'')+'</td><td>'+esc(p.method||'—')+'</td></tr>').join('');w.document.write('<!doctype html><html lang="fr"><meta charset="utf-8"><title>Relevé COMPTIVA</title><style>body{font:14px Arial;padding:24px;color:#172b4d}h1{text-align:center}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}@media print{button{display:none}}</style>'+receiptMerchantHeader()+'<h1>RELEVÉ DE DETTE</h1>'+(isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':'')+'<p>Client : '+esc(c?c.name:'Client')+'</p><p>Téléphone : '+esc(c&&c.phone||'—')+'</p><p>Dette initiale : <b>'+money(d.amount)+'</b></p><p>Total payé : <b>'+money(paidFor(id))+'</b></p><p>Solde restant : <b>'+money(balance(d))+'</b></p><p>Date : '+dateFmt(d.date)+' · Échéance : '+dateFmt(d.due)+'</p><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th><th>Mode</th></tr>'+lines+'</table><p>Document généré par COMPTIVA.</p><script>window.onload=()=>window.print()<\/script></html>');w.document.close()}
+function printDebtStatement(id,isDuplicate=false){
+ let d=db.debts.find(x=>x&&x.id===id);
+ if(!d){alert('Dette introuvable.');return}
+ let c=db.clients.find(x=>x&&x.id===d.clientId),payments=db.payments.filter(x=>x&&x.debtId===id);
+ let relationIssue=krediDebtRelationIssue(d),paid=paidFor(id);
+ let validLedger=!relationIssue&&Number.isSafeInteger(d.amount)&&d.amount>0&&Number.isSafeInteger(paid)&&paid>=0&&paid<=d.amount;
+ let paidDisplay=validLedger?money(paid):'À vérifier',balanceDisplay=validLedger?money(d.amount-paid):'À vérifier';
+ let w=window.open('','_blank','width=600,height=750');
+ if(!w){alert('Autorisez les fenêtres pop-up pour imprimer le relevé.');return}
+ let lines=payments.map(p=>'<tr'+(p.status==='cancelled'?' style="color:#a11;text-decoration:line-through"':'')+'><td>'+esc(isValidISODate(p.date)?dateFmt(p.date):'Date à vérifier')+'</td><td>'+money(p.amount)+(p.status==='cancelled'?' — ANNULÉ':'')+'</td><td>'+esc(p.method||'—')+'</td></tr>').join('');
+ w.document.write('<!doctype html><html lang="fr"><meta charset="utf-8"><title>Relevé COMPTIVA</title><style>body{font:14px Arial;padding:24px;color:#172b4d}h1{text-align:center}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px}.warning{padding:10px;background:#fff4db;color:#704e08;border:1px solid #f3dfa6;border-radius:8px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}@media print{button{display:none}}</style>'+receiptMerchantHeader()+'<h1>RELEVÉ DE DETTE</h1>'+(isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':'')+(!validLedger?'<p class="warning">Situation financière à vérifier : les totaux ne doivent pas être utilisés comme solde confirmé.</p>':'')+'<p>Client : '+esc(c?c.name:'Client')+'</p><p>Téléphone : '+esc(c&&c.phone||'—')+'</p><p>Dette initiale : <b>'+money(d.amount)+'</b></p><p>Total payé : <b>'+paidDisplay+'</b></p><p>Solde restant : <b>'+balanceDisplay+'</b></p><p>Date : '+dateFmt(d.date)+' · Échéance : '+dateFmt(d.due)+'</p><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th><th>Mode</th></tr>'+lines+'</table><p>Document généré par COMPTIVA.</p><script>window.onload=()=>window.print()<\/script></html>');
+ w.document.close()
+}
 function renderPayments(){let rows=db.payments.slice().reverse().map(p=>{let d=db.debts.find(d=>d.id===p.debtId),cancelled=p.status==='cancelled';return '<tr><td>'+esc(d?clientName(d.clientId):'Dette inconnue')+(cancelled?' <span class="pill overdue">Annulé</span>':'')+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td><button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\''+p.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\''+p.id+'\')">Modifier</button> <button class="danger" onclick="cancelPayment(\''+p.id+'\')">Annuler</button>')+'</td></tr>'});document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)}
 function editPayment(paymentId){
  const payment=db.payments.find(p=>p.id===paymentId);
@@ -1358,10 +1370,18 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  const debt=db.debts.find(x=>x.id===payment.debtId);
  if(!debt){alert('Dette introuvable.');return}
  const cancelled=payment.status==='cancelled';
- const ordered=db.payments.filter(x=>x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>new Date(a.date||0)-new Date(b.date||0));
+ const relationIssue=krediDebtRelationIssue(debt);
+ const paymentValid=!!payment.id&&isValidISODate(payment.date)&&Number.isSafeInteger(payment.amount)&&payment.amount>0;
+ const ordered=db.payments.filter(x=>x&&x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>a.date.localeCompare(b.date));
  const paymentIndex=ordered.indexOf(payment);
- const paidThrough=cancelled?0:ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+Number(x.amount||0),0);
- const remaining=cancelled?null:Math.max(0,Number(debt.amount||0)-paidThrough);
+ const registeredPaid=paidFor(debt.id);
+ let paidThrough=NaN,remaining=NaN,ledgerValid=false;
+ if(!cancelled&&!relationIssue&&paymentValid&&Number.isSafeInteger(debt.amount)&&debt.amount>0&&Number.isSafeInteger(registeredPaid)&&registeredPaid>=0&&registeredPaid<=debt.amount&&paymentIndex>=0){
+  paidThrough=ordered.slice(0,paymentIndex+1).reduce((sum,x)=>sum+x.amount,0);
+  ledgerValid=Number.isSafeInteger(paidThrough)&&paidThrough>0&&paidThrough<=debt.amount&&paidThrough<=registeredPaid;
+  if(ledgerValid)remaining=debt.amount-paidThrough;
+ }
+ if(cancelled){paidThrough=null;remaining=null}
  const customer=db.clients.find(x=>x.id===debt.clientId);const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const receiptNo=String(payment.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
@@ -1376,9 +1396,9 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
  <div class="line"></div><div class="item total"><span>Montant du remboursement</span><span>${money(payment.amount)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(payment.method||'—')}</span></div>
- ${cancelled?'<p style="text-align:center;font-weight:800;color:#b91c1c">OPÉRATION ANNULÉE — CE DOCUMENT NE PROUVE AUCUN PAIEMENT.</p>':`<div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${money(paidThrough)}</b></div>
- <div class="item total"><span>Reste à payer</span><span>${money(remaining)}</span></div>
- <p style="text-align:center;font-weight:700">${remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>`}
+ ${cancelled?'<p style="text-align:center;font-weight:800;color:#b91c1c">OPÉRATION ANNULÉE — CE DOCUMENT NE PROUVE AUCUN PAIEMENT.</p>':`<div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${ledgerValid?money(paidThrough):'À vérifier'}</b></div>
+ <div class="item total"><span>Reste à payer</span><span>${ledgerValid?money(remaining):'À vérifier'}</span></div>
+ <p style="text-align:center;font-weight:700">${!ledgerValid?'SITUATION À VÉRIFIER':remaining===0?'CRÉDIT ENTIÈREMENT REMBOURSÉ':'REMBOURSEMENT PARTIEL'}</p>`}
  <div class="line"></div><p style="text-align:center">${cancelled?'Document d’annulation conservé dans l’historique.':'Merci. Conservez ce reçu comme preuve de paiement.'}</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script>
 
