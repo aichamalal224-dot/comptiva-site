@@ -1129,7 +1129,7 @@ function editSale(saleId){
  if(stockProduct){const current=Number(stockProduct.quantity),oldQty=Number(sale.quantity);if(!Number.isFinite(current)||current<0||!Number.isFinite(oldQty)||oldQty<=0){alert('Modification bloquée : quantité de stock ou quantité initiale de vente incohérente.');return}const availableAfterRestore=current+oldQty;if(!Number.isFinite(availableAfterRestore)||availableAfterRestore<quantity){alert('Stock insuffisant après rétablissement de l’ancienne quantité.');return}}
  if(!confirm('Confirmer la correction de cette vente de '+money(total)+' ? Le stock et la dette liée seront recalculés.'))return;
  const before=JSON.stringify(db),previous={product:sale.product,quantity:sale.quantity,unitPrice:sale.unitPrice,total:sale.total,date:sale.date,method:sale.method,clientId:sale.clientId,paidAmount:sale.paidAmount,creditAmount:sale.creditAmount,cashPart:sale.cashPart,mobilePart:sale.mobilePart},now=new Date().toISOString();
- if(stockProduct){const adjusted=Number(stockProduct.quantity)+Number(sale.quantity)-quantity;if(!Number.isFinite(adjusted)||adjusted<0){db=JSON.parse(before);alert('Correction bloquée : le nouveau stock serait invalide ou négatif.');return}stockProduct.quantity=adjusted;}
+ if(stockProduct){const stockBefore=Number(stockProduct.quantity),oldQuantity=Number(sale.quantity),adjusted=stockBefore+oldQuantity-quantity;if(!Number.isFinite(stockBefore)||stockBefore<0||!Number.isFinite(oldQuantity)||oldQuantity<=0||!Number.isFinite(adjusted)||adjusted<0){db=JSON.parse(before);alert('Correction bloquée : le nouveau stock serait invalide ou négatif.');return}stockProduct.quantity=adjusted;sale.stockDeductedAt=now;sale.stockDeductedQuantity=quantity;db.auditLog.push({id:id('AUD'),entityType:'stock',entityId:stockProduct.id,action:'sale_edit_adjustment',relatedSaleId:sale.id,previousQuantity:oldQuantity,newQuantity:quantity,delta:oldQuantity-quantity,before:stockBefore,after:adjusted,at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});}
  Object.assign(sale,{product:product.trim(),quantity,unitPrice,total,date,saleType:isCredit?'credit':'paid',clientId,method:isMixed?'Paiement mixte':(isCredit?'Crédit client':mode.trim()),paidAmount,creditAmount,cashPart,mobilePart,updatedAt:now});
  let debt=linked[0];
  if(isCredit){
@@ -1188,12 +1188,14 @@ function krediStockConsistencyAudit(){
    addIssue('movement_invalid_values','Mouvement '+String(m.id||'sans ID')+' : quantité ou valeurs avant/après invalides.');return;
   }
   let expected=null;
-  if(m.action==='sale_deduction'||m.action==='sale_cancellation_restoration')expected=before-qty;
+  if(m.action==='sale_deduction'||m.action==='purchase_cancellation_removal')expected=before-qty;
+  if(m.action==='sale_cancellation_restoration')expected=before+qty;
   if(m.action==='purchase_addition')expected=before+qty;
+  if(m.action==='sale_edit_adjustment'||m.action==='purchase_edit_adjustment'){const delta=Number(m.delta);if(!Number.isFinite(delta))expected=NaN;else expected=before+delta;}
   if(expected!==null&&(!Number.isFinite(expected)||Math.abs(expected-after)>1e-9)){
    addIssue('movement_arithmetic','Mouvement '+String(m.id||'sans ID')+' : calcul avant/après incohérent.');return;
   }
-  if(!['sale_deduction','purchase_addition','sale_cancellation_restoration'].includes(m.action)){
+  if(!['sale_deduction','purchase_addition','sale_cancellation_restoration','sale_edit_adjustment','purchase_edit_adjustment','purchase_cancellation_removal'].includes(m.action)){
    addIssue('movement_unknown_action','Mouvement '+String(m.id||'sans ID')+' : type non reconnu ('+String(m.action||'absent')+').');return;
   }
   const relation=m.relatedSaleId||m.relatedPurchaseId||'';
@@ -1261,7 +1263,7 @@ function editPurchase(purchaseId){
  if(stockProduct&&Number(stockProduct.quantity||0)+oldQty<quantity){alert('Modification impossible : le stock disponible ne permet pas d’appliquer la nouvelle quantité après retour de l’ancien achat.');return}
  if(!confirm('Confirmer la correction de cet achat ? Le stock lié sera recalculé.'))return;
  const before=JSON.stringify(db),previous={item:purchase.item,quantity:purchase.quantity,amount:purchase.amount,supplier:purchase.supplier,date:purchase.date,method:purchase.method,note:purchase.note,stockProductId:purchase.stockProductId||null},now=new Date().toISOString();
- if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)-oldQty+quantity;
+ if(stockProduct){const stockBefore=Number(stockProduct.quantity),adjusted=stockBefore-oldQty+quantity;if(!Number.isFinite(stockBefore)||stockBefore<0||!Number.isFinite(oldQty)||oldQty<0||!Number.isFinite(quantity)||quantity<0||!Number.isFinite(adjusted)||adjusted<0){db=JSON.parse(before);alert('Correction bloquée : le calcul du stock est invalide ou négatif.');return}stockProduct.quantity=adjusted;db.auditLog.push({id:id('AUD'),entityType:'stock',entityId:stockProduct.id,action:'purchase_edit_adjustment',relatedPurchaseId:purchase.id,previousQuantity:oldQty,newQuantity:quantity,delta:quantity-oldQty,before:stockBefore,after:adjusted,at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});}
  Object.assign(purchase,{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim(),updatedAt:now});
  if(stockProduct)purchase.stockProductId=stockProduct.id;
  db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'updated',reason:reason.trim(),before:previous,after:{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
@@ -1280,7 +1282,7 @@ function cancelPurchase(purchaseId){
  if(stockProduct&&Number(stockProduct.quantity||0)<Number(purchase.quantity||0)){alert('Annulation bloquée : le stock actuel est inférieur à la quantité de cet achat. Une partie a peut-être déjà été vendue ou ajustée. Vérifiez le stock avant de continuer.');return}
  const reason=prompt('Indiquez la raison de l’annulation de cet achat :');if(reason===null)return;if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cet achat de '+money(purchase.amount)+' ? Le montant sera retiré des totaux et la quantité sera déduite du stock lié.'))return;
- const before=JSON.stringify(db),now=new Date().toISOString();if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)-Number(purchase.quantity||0);
+ const before=JSON.stringify(db),now=new Date().toISOString();if(stockProduct){const stockBefore=Number(stockProduct.quantity),removed=Number(purchase.quantity||0),adjusted=stockBefore-removed;if(!Number.isFinite(stockBefore)||stockBefore<0||!Number.isFinite(removed)||removed<0||!Number.isFinite(adjusted)||adjusted<0){alert('Annulation bloquée : le stock résultant serait invalide.');return}stockProduct.quantity=adjusted;db.auditLog.push({id:id('AUD'),entityType:'stock',entityId:stockProduct.id,action:'purchase_cancellation_removal',relatedPurchaseId:purchase.id,quantity:removed,delta:-removed,before:stockBefore,after:adjusted,at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});}
  purchase.status='cancelled';purchase.cancelledAt=now;purchase.cancelReason=reason.trim();purchase.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
  db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
