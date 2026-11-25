@@ -1372,7 +1372,7 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  const cancelled=payment.status==='cancelled';
  const relationIssue=krediDebtRelationIssue(debt);
  const paymentValid=!!payment.id&&isValidISODate(payment.date)&&Number.isSafeInteger(payment.amount)&&payment.amount>0;
- const ordered=db.payments.filter(x=>x&&x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>a.date.localeCompare(b.date));
+ const ordered=db.payments.filter(x=>x&&x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
  const paymentIndex=ordered.indexOf(payment);
  const registeredPaid=paidFor(debt.id);
  let paidThrough=NaN,remaining=NaN,ledgerValid=false;
@@ -1393,7 +1393,7 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  .item{display:flex;justify-content:space-between;gap:12px;margin:9px 0}.item span:last-child{text-align:right}.total{font-weight:800;font-size:16px}.small{font-size:11px;color:#53657b}
  @media print{body{padding:0;max-width:none}@page{margin:6mm}}</style></head><body>
  ${receiptMerchantHeader()}<h2>REÇU DE REMBOURSEMENT DE CRÉDIT</h2>${cancelled?'<div class="duplicate-mark" style="border-color:#b91c1c;color:#b91c1c">REMBOURSEMENT ANNULÉ — NON VALABLE</div>':''}${isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':''}
- <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(dateFmt(payment.date))}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
+ <div class="meta"><p><b>N° reçu :</b> ${esc(receiptNo)}</p><p><b>Date :</b> ${esc(isValidISODate(payment.date)?dateFmt(payment.date):'Date à vérifier')}</p><p><b>Client :</b> ${esc(clientName(debt.clientId))}</p>${customerContact}<p><b>Dette initiale :</b> ${money(debt.amount)}</p></div>
  <div class="line"></div><div class="item total"><span>Montant du remboursement</span><span>${money(payment.amount)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(payment.method||'—')}</span></div>
  ${cancelled?'<p style="text-align:center;font-weight:800;color:#b91c1c">OPÉRATION ANNULÉE — CE DOCUMENT NE PROUVE AUCUN PAIEMENT.</p>':`<div class="line"></div><div class="item"><span>Total payé à cette date</span><b>${ledgerValid?money(paidThrough):'À vérifier'}</b></div>
