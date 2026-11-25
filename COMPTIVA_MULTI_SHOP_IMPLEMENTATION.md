@@ -246,3 +246,10 @@ Vérifications prévues : compilation JavaScript et tests synthétiques du chemi
 ### Protection contre plusieurs dettes actives sur une vente — 25 novembre 2026
 
 L'audit a relevé une asymétrie : la modification d'une vente bloquait déjà plusieurs dettes actives liées à la même vente, mais son annulation ne le faisait pas. L'annulation bloque désormais également ce cas ambigu avant toute modification du stock, de la vente ou des dettes. Une seule dette active liée reste traitée selon les contrôles de remboursement existants ; plusieurs dettes nécessitent une régularisation manuelle.
+
+
+### Contrôle d'intégrité des dettes et remboursements — 25 novembre 2026
+
+Les calculs de remboursements actifs et de solde refusent désormais de produire un montant exploitable lorsque le registre d'une dette contient un remboursement non entier, nul/négatif, un identifiant de remboursement absent ou dupliqué, un total qui dépasse la capacité entière sûre de JavaScript, une dette avec montant invalide ou un total remboursé supérieur au montant de la dette. La création d'un remboursement vérifie explicitement que le solde est un entier sûr non négatif avant de comparer le montant saisi. La correction d'un remboursement contrôle les autres remboursements actifs et le montant initial de la dette. La modification et l'annulation d'une dette, ainsi que la modification/annulation d'une vente liée à une dette, bloquent en présence d'un registre financier incohérent au lieu de traiter une valeur invalide comme zéro.
+
+Vérifications synthétiques du calcul : registre valide (30 payés sur 100, solde 70) accepté ; montant négatif, valeur non numérique, identifiant dupliqué et surpaiement refusés (résultat non exploitable). Les trois blocs JavaScript intégrés compilent après les changements. Ces contrôles ne constituent pas encore un audit exhaustif de toutes les relations client/vente/dette ni un test navigateur/Firebase Emulator. Aucune donnée historique n'est corrigée automatiquement.
