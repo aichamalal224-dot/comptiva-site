@@ -1607,6 +1607,42 @@ async function krediInitFirebase(){try{
   }else{
     window.krediAuthPersistence='DEFAULT';
   }
+  // Verrouillage automatique après 2 minutes d'inactivité.
+  // Le déverrouillage réauthentifie le compte Firebase courant sans changer d'UID.
+  let krediIdleLockTimer=null,krediIdleLocked=false,krediIdleUnlockBusy=false,krediIdleOverlay=null;
+  const KREDI_IDLE_LIMIT=120000;
+  function krediIdleStop(){if(krediIdleLockTimer){clearTimeout(krediIdleLockTimer);krediIdleLockTimer=null}}
+  function krediIdleHideOverlay(){if(krediIdleOverlay){krediIdleOverlay.remove();krediIdleOverlay=null}krediIdleLocked=false;krediIdleUnlockBusy=false}
+  function krediIdleLock(){
+    krediIdleStop();if(!krediUser||krediIdleLocked)return;krediIdleLocked=true;
+    const overlay=document.createElement('div');overlay.id='comptivaIdleLock';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','comptivaIdleTitle');
+    overlay.style.cssText='position:fixed;inset:0;z-index:2147483000;background:rgba(8,25,45,.94);display:flex;align-items:center;justify-content:center;padding:20px';
+    const panel=document.createElement('form');panel.style.cssText='width:min(100%,390px);background:#fff;border-radius:18px;padding:25px;box-shadow:0 20px 60px #0005;color:#172b4d';
+    panel.innerHTML='<div style="font-size:38px;text-align:center" aria-hidden="true">🔒</div><h2 id="comptivaIdleTitle" style="text-align:center;margin:8px 0">COMPTIVA est verrouillé</h2><p style="text-align:center;color:#66758a">Aucune activité depuis 2 minutes. Saisissez le mot de passe de votre compte pour reprendre.</p><label for="comptivaIdlePassword" style="display:block;font-weight:700;margin:16px 0 6px">Mot de passe</label><input id="comptivaIdlePassword" type="password" autocomplete="current-password" required style="width:100%;padding:13px;border:1px solid #cbd7e4;border-radius:10px;font:inherit"><p id="comptivaIdleMessage" role="status" aria-live="polite" style="min-height:22px;color:#b42318;font-size:13px"></p><button id="comptivaIdleUnlock" type="submit" style="width:100%;background:#1769e0;color:#fff;padding:13px;border-radius:10px;font-weight:800">Déverrouiller</button>';
+    overlay.appendChild(panel);document.body.appendChild(overlay);krediIdleOverlay=overlay;
+    panel.addEventListener('submit',async event=>{
+      event.preventDefault();if(krediIdleUnlockBusy)return;
+      const currentUser=krediUser,uid=currentUser&&currentUser.uid,password=panel.querySelector('#comptivaIdlePassword').value;
+      const message=panel.querySelector('#comptivaIdleMessage'),button=panel.querySelector('#comptivaIdleUnlock');
+      if(!currentUser||!uid||!password){message.textContent='Saisissez votre mot de passe.';return}
+      if(!currentUser.email||!firebase.auth.EmailAuthProvider){message.textContent='Ce compte ne permet pas ce mode de déverrouillage. Contactez le Créateur pour assistance.';return}
+      krediIdleUnlockBusy=true;button.disabled=true;button.textContent='Vérification…';message.textContent='';
+      try{
+        const credential=firebase.auth.EmailAuthProvider.credential(currentUser.email,password);
+        await currentUser.reauthenticateWithCredential(credential);
+        if(!krediUser||krediUser.uid!==uid)return;
+        krediIdleHideOverlay();krediIdleSchedule();
+      }catch(error){
+        message.textContent='Mot de passe incorrect ou vérification impossible. Réessayez.';
+        panel.querySelector('#comptivaIdlePassword').value='';krediIdleUnlockBusy=false;button.disabled=false;button.textContent='Déverrouiller';panel.querySelector('#comptivaIdlePassword').focus();
+      }
+    });
+    setTimeout(()=>{const input=overlay.querySelector('#comptivaIdlePassword');if(input)input.focus()},0);
+  }
+  function krediIdleSchedule(){krediIdleStop();if(!krediUser||krediIdleLocked)return;krediIdleLockTimer=setTimeout(krediIdleLock,KREDI_IDLE_LIMIT)}
+  function krediIdleActivity(){if(krediUser&&!krediIdleLocked)krediIdleSchedule()}
+  ['pointerdown','keydown','touchstart','scroll','click'].forEach(type=>document.addEventListener(type,krediIdleActivity,{passive:true,capture:true}));
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&krediUser)krediIdleLock();else if(document.visibilityState==='visible'&&krediUser&&!krediIdleLocked)krediIdleSchedule()});
   let krediAuthStateReceived=false;
   const krediAuthWaitTimer=setTimeout(()=>{
     if(!krediAuthStateReceived){
@@ -1641,8 +1677,8 @@ async function krediInitFirebase(){try{
     krediShowConflictRecoveryButton();
     try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=!!activeUser;console.warn('[COMPTIVA] Marqueur local illisible : prudence, les données locales seront traitées comme potentiellement non synchronisées.',storageError)}
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
-    if(!activeUser){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
-    krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();
+    if(!activeUser){krediIdleStop();krediIdleHideOverlay();STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
+    krediIdleHideOverlay();krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();krediIdleSchedule();
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
       const firestoreReady=await window.__comptivaFirestoreSdkReady;
