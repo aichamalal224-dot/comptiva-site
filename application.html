@@ -646,7 +646,7 @@ function editDebt(debtId){
  if(!confirm('Confirmer la correction de cette dette de '+money(amount)+' ?'))return;
  const before=JSON.stringify(db),previous={clientId:debt.clientId,amount:debt.amount,date:debt.date,due:debt.due,description:debt.description},now=new Date().toISOString();
  Object.assign(debt,{clientId:client.id,amount,date,due,description:description.trim(),updatedAt:now});
- db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'updated',reason:reason.trim(),before:previous,after:{clientId:client.id,amount,date,due,description:description.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'updated',reason:reason.trim(),before:previous,after:{clientId:client.id,amount,date,due,description:description.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dette corrigée. Les soldes et indicateurs ont été recalculés.');
 }
@@ -660,7 +660,7 @@ function cancelDebt(debtId){
  if(!confirm('Confirmer l’annulation de cette dette de '+money(debt.amount)+' ? Elle sera retirée des soldes, mais son historique sera conservé.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();
  debt.status='cancelled';debt.cancelledAt=now;debt.cancelReason=reason.trim();debt.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dette annulée. Les soldes et indicateurs ont été recalculés ; historique conservé.');
 }
@@ -684,7 +684,7 @@ function editPayment(paymentId){
  if(!confirm('Confirmer la correction de ce remboursement ?'))return;
  const before=JSON.stringify(db),previous={amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString();
  payment.amount=amount;payment.date=date;payment.method=method.trim();payment.updatedAt=now;
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{amount,date,method:method.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{amount,date,method:method.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Remboursement corrigé. Le solde de la dette a été recalculé.');
 }
@@ -700,7 +700,7 @@ function cancelPayment(paymentId){
  if(!confirm('Confirmer l’annulation du remboursement de '+money(payment.amount)+' ? Le solde de la dette sera recalculé.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();
  payment.status='cancelled';payment.cancelledAt=now;payment.cancelReason=reason.trim();payment.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Remboursement annulé. Le solde de la dette a été recalculé et l’historique conservé.');
 }
@@ -791,7 +791,7 @@ function editSale(saleId){
   if(debt)Object.assign(debt,{clientId,amount:total,date,description:'Vente à crédit : '+product.trim()});
   else db.debts.push({id:id('D'),clientId,amount:total,date,due:'',description:'Vente à crédit : '+product.trim(),saleId:sale.id});
  }else if(debt){debt.status='cancelled';debt.cancelledAt=now;debt.cancelReason='Dette ajustée suite à la correction de la vente';}
- db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'updated',reason:reason.trim(),before:previous,after:{product:product.trim(),quantity,unitPrice,total,date,method:sale.method,clientId,paidAmount,creditAmount,cashPart,mobilePart},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'updated',reason:reason.trim(),before:previous,after:{product:product.trim(),quantity,unitPrice,total,date,method:sale.method,clientId,paidAmount,creditAmount,cashPart,mobilePart},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Vente corrigée. Le stock, les indicateurs et la dette liée ont été recalculés.');
 }
@@ -821,7 +821,7 @@ function cancelSale(saleId){
  if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)+Number(sale.quantity||0);
  sale.status='cancelled';sale.cancelledAt=now;sale.cancelReason=reason.trim();sale.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
  linkedDebts.forEach(d=>{d.status='cancelled';d.cancelledAt=now;d.cancelReason='Annulation de la vente liée : '+reason.trim();});
- db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Vente annulée. Historique conservé, chiffres recalculés'+(stockProduct?' et stock restauré.':'.'));
 }
@@ -866,7 +866,7 @@ function editPurchase(purchaseId){
  if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)-oldQty+quantity;
  Object.assign(purchase,{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim(),updatedAt:now});
  if(stockProduct)purchase.stockProductId=stockProduct.id;
- db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'updated',reason:reason.trim(),before:previous,after:{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'updated',reason:reason.trim(),before:previous,after:{item:item.trim(),quantity,amount,supplier:supplier.trim(),date,method:method.trim(),note:note.trim()},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Achat corrigé. Le stock et les totaux ont été recalculés.');
 }
@@ -884,7 +884,7 @@ function cancelPurchase(purchaseId){
  if(!confirm('Confirmer l’annulation de cet achat de '+money(purchase.amount)+' ? Le montant sera retiré des totaux et la quantité sera déduite du stock lié.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();if(stockProduct)stockProduct.quantity=Number(stockProduct.quantity||0)-Number(purchase.quantity||0);
  purchase.status='cancelled';purchase.cancelledAt=now;purchase.cancelReason=reason.trim();purchase.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'purchase',entityId:purchase.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Achat annulé. Historique conservé'+(stockProduct?' et stock corrigé.':'.'));
 }
@@ -920,7 +920,7 @@ function editExpense(expenseId){
  const before=JSON.stringify(db),now=new Date().toISOString();
  const previous={category:expense.category,description:expense.description,amount:expense.amount,date:expense.date,method:expense.method,note:expense.note};
  Object.assign(expense,{category:category.trim(),description:description.trim(),amount,date,method:method.trim(),note:note.trim(),updatedAt:now});
- db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'updated',reason:reason.trim(),before:previous,after:{category:expense.category,description:expense.description,amount,date,method:expense.method,note:expense.note},at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'updated',reason:reason.trim(),before:previous,after:{category:expense.category,description:expense.description,amount,date,method:expense.method,note:expense.note},at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dépense corrigée. Les totaux ont été recalculés.');
 }
@@ -933,7 +933,7 @@ function cancelExpense(expenseId){
  if(!confirm('Confirmer l’annulation de cette dépense de '+money(expense.amount)+' ? Elle sera exclue des totaux, mais conservée dans l’historique.'))return;
  const before=JSON.stringify(db),now=new Date().toISOString();
  expense.status='cancelled';expense.cancelledAt=now;expense.cancelReason=reason.trim();expense.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant'});
+ db.auditLog.push({id:id('AUD'),entityType:'expense',entityId:expense.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dépense annulée. Historique conservé et totaux recalculés.');
 }
