@@ -227,3 +227,10 @@ Les opérations de modification et d'annulation d'une vente qui porte un `stockP
 - Les protections de modification et d'annulation refusent ce cas avant toute réintégration automatique.
 - Les écarts entre le modèle legacy de l'application et les prérequis des règles multi-boutiques ont été confirmés par lecture du code et des règles de la branche.
 - Aucun test Firebase réel, test Emulator, test navigateur multi-appareils, déploiement de règles, migration de données, fusion ou publication n'a été effectué.
+
+
+### Contrôle complémentaire des achats et des retraits de stock — 25 novembre 2026
+
+La correction et l’annulation d’un achat qui augmente le stock exigent désormais une preuve vérifiable de l’ajout initial : horodatage `stockAddedAt` et exactement une trace `purchase_addition` associée au même achat et au même produit, avec une quantité identique à celle de l’achat. Si cette preuve manque, est dupliquée ou présente une quantité différente, l’opération est bloquée avant toute modification du stock. Cela évite de retirer ou de recalculer une quantité qui n’a peut-être jamais été ajoutée. Les achats sans quantité suivie (`quantity` nulle) ne sont pas concernés par cette barrière.
+
+Vérifications synthétiques du contrôle : preuve correcte acceptée ; horodatage absent, trace absente, trace dupliquée et quantité divergente refusés. Les trois blocs JavaScript de l’application compilent après modification. Ces tests ne remplacent pas un essai dans le navigateur ni un test Firebase Emulator.
