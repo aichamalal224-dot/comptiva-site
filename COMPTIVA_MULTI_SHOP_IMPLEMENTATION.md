@@ -698,3 +698,51 @@ Inspection de `firestore.rules` :
 - Aucun déploiement, migration ou changement de `main` effectué.
 
 **Statut :** contrôles locaux utiles, mais validation serveur des références et montants insuffisante ; incompatibilité de contrat entre code actuel et règles multi-boutiques identifiée. La migration ne doit pas être activée avant définition du schéma, correction du contrat et tests Emulator.
+
+
+## Audit des rôles Patron / Vendeur dans l’interface — 26 novembre 2026
+
+### Périmètre relu
+
+- application.html : navigation latérale et mobile, navigate(), rendu des pages, actions de modification/annulation des ventes, dettes, remboursements, achats et dépenses, export CSV, gestion des vendeurs et diagnostics de rôle.
+- firestore.rules : règles du modèle historique par UID et du modèle partagé shops/{shopId}.
+- Références relues : application.html blob SHA 9e1a18c2b778f08a232f394f0a887bb4ee521713 ; firestore.rules blob SHA f1ec4e215cd74b0ee82f21923f5fba276ed28906.
+
+### Constat sur l’interface actuelle
+
+1. Navigation sans séparation Patron/Vendeur : les menus présentent Ventes, Profil, Stock, Chiffres, Clients, Dettes, Remboursements, Achats, Dépenses et Rappels. navigate(page) bloque l’Espace Créateur pour les autres comptes et applique le verrou d’abonnement, mais ne résout pas le rôle Patron/Vendeur et n’interdit pas les pages réservées au Patron.
+2. Aucun état de rôle global établi : l’application contient des contrôles ponctuels dans le diagnostic de boutique et la présence vendeur, mais l’audit n’a pas trouvé de rôle métier global exploité par la navigation et les actions de l’application.
+3. Actions directement appelables : editSale, cancelSale, editDebt, cancelDebt, editPayment, cancelPayment, editPurchase, cancelPurchase, editExpense et cancelExpense ne montrent pas de contrôle explicite du rôle Patron avant leurs opérations locales. Elles contiennent des validations métier et certaines vérifications de session/sauvegarde, mais celles-ci ne constituent pas une autorisation par rôle.
+4. Export de données : exportCSV() n’effectue pas de vérification de rôle visible et inclut ventes, dettes, achats et dépenses. Un vendeur qui disposerait de ces données dans son état local pourrait déclencher directement l’export.
+5. Données financières dans l’interface : les vues des chiffres, achats, dépenses et stock ne sont pas filtrées par rôle dans la navigation actuelle. Le stock affiche aussi prix d’achat et marge théorique dans le modèle local.
+6. Gestion des vendeurs : les fonctions d’affectation et de suspension vérifient plusieurs conditions de propriété Patron côté client. Ces contrôles utiles ne remplacent pas les règles Firestore et ne constituent pas un système général de permissions UI.
+
+### Ce que les règles Firestore du modèle partagé imposent actuellement
+
+- Vendeur actif : lecture des ventes, clients, dettes, paiements et produits ; création de ventes, clients, dettes et paiements selon les conditions actuelles.
+- Patron uniquement : modification des ventes, dettes et paiements ; suppression des clients ; écriture des produits/stock ; lecture et écriture des achats et dépenses ; lecture des rapports ; lecture du journal d’audit.
+- Les écritures de vente et de paiement restent soumises à des champs obligatoires shopId et/ou createdBy que le modèle local actuel ne renseigne pas systématiquement. Les défauts de validation financière et de références croisées sont documentés dans l’audit financier précédent.
+- Les règles du modèle partagé ne protègent que les opérations réellement dirigées vers shops/{shopId}/... .
+
+### Limite majeure : modèle partagé non activé dans l’application
+
+Le document historique users/{uid}/comptivaData/main reste limité à son propre UID. Le code applicatif conserve son modèle de base local par compte ; l’audit n’a pas établi de parcours complet qui charge les données d’une boutique partagée selon le rôle du vendeur. Il ne faut donc ni conclure qu’un vendeur réel accède aux données du Patron, ni présenter la séparation multi-boutiques comme déjà opérationnelle. Un compte vendeur connecté avec son propre UID reste dans son périmètre historique tant qu’une migration partagée n’est pas effectivement réalisée.
+
+### Décision et corrections nécessaires avant migration
+
+1. Construire un résolveur de rôle serveur vérifié après connexion : Patron propriétaire ou Vendeur actif, avec vérification concordante de l’index, de la boutique et du document membre. En cas d’ambiguïté ou d’échec réseau, refuser par défaut les fonctions réservées au Patron.
+2. Définir une matrice de permissions unique : le Vendeur ne voit pas les bénéfices/marges, achats, dépenses, rapports ni gestion des vendeurs ; il ne peut ni modifier/annuler une vente validée, ni modifier/annuler dette ou remboursement si la politique retenue les réserve au Patron. Les actions autorisées au Vendeur doivent être nommées précisément.
+3. Appliquer ces permissions à la navigation, au rendu, aux boutons, à chaque fonction globale appelable directement et à chaque ouverture de formulaire. Le masquage visuel seul ne suffit pas.
+4. Maintenir Firestore Rules comme autorité finale : tests négatifs directs sur les chemins partagés pour chaque collection, y compris get/list, création, update et delete.
+5. Séparer les coûts, marges et bénéfices dans des documents Patron-only avant de partager les documents produits ; ne pas compter sur un filtrage JavaScript pour cacher les champs.
+6. Ne pas changer le modèle historique UID ni migrer les données avant contrat de schéma, migration idempotente, sauvegarde et tests Emulator.
+
+### Vérifications et limites de cette passe
+
+- Contrôle statique des entrées de navigation, de navigate(), des actions métier et des règles Firestore.
+- Les trois blocs JavaScript de application.html compilent avec new Function : 3/3 réussis.
+- Aucun code applicatif ni règle Firestore modifié pendant cette passe ; seule cette note d’audit est ajoutée.
+- Aucun test Firebase Emulator, navigateur, connexion réelle Patron/Vendeur ou appel direct Firestore exécuté.
+- Aucune migration, écriture de données réelles, publication ou modification de main.
+
+**Statut :** défaut d’autorisation par rôle dans l’interface confirmé par lecture statique. La séparation serveur du futur modèle partagé est partiellement décrite dans les règles, mais le contrat applicatif et la migration ne sont pas prêts. Ne pas activer le multi-boutiques avant la mise en place de la matrice de permissions et les tests Emulator.
