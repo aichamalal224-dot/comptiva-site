@@ -113,6 +113,29 @@ La migration doit être idempotente : la relancer ne doit ni dupliquer les enreg
 - Le calcul d'expiration de l'essai ne doit pas dépendre uniquement de l'horloge du téléphone.
 - Les règles existantes publiées dans Firebase doivent être récupérées et comparées avant tout remplacement. La proposition actuelle n'est pas une preuve de l'état des règles en production.
 
+## Diagnostic de concurrence — synchronisation et stock
+
+### Protection actuellement présente
+
+- Les sauvegardes du document historique sont sérialisées dans une même session navigateur.
+- Avant une écriture, une transaction Firestore relit le document et compare son contenu à la dernière version cloud connue.
+- Si un autre appareil a modifié le document, l'écriture est refusée avec un conflit de version. Cela évite l'écrasement silencieux, mais ne fusionne pas les opérations.
+- La seconde session conserve sa copie locale et doit passer par la récupération de conflit. Il ne faut pas ajouter de nouvelle tentative automatique aveugle : elle pourrait réécrire une ancienne base ou écraser des opérations concurrentes.
+
+### Limite importante
+
+Le stock est encore modifié dans le tableau local `db.products`, puis envoyé avec tout le document `users/{uid}/comptivaData/main`. Cette méthode ne constitue pas une réservation atomique par produit entre plusieurs vendeurs. Les protections actuelles sont une barrière anti-écrasement, pas une garantie de débit simultané sans conflit.
+
+### Conception obligatoire avant ouverture du stock aux Vendeurs
+
+1. Migrer les produits et opérations vers les chemins `shops/{shopId}/products/{productId}`, `sales` et `auditLog`, sans supprimer l'ancien document.
+2. Donner à chaque commande un `operationId` unique et stable, réutilisé lors d'une reprise réseau ; le serveur doit refuser de traiter deux fois le même identifiant.
+3. Dans une transaction Firestore unique, lire le produit, vérifier le membre actif et le stock disponible, puis écrire le nouveau stock, la vente et l'événement d'audit. Toutes les lectures doivent précéder les écritures.
+4. Vérifier côté règles Firestore que le mouvement est autorisé, lié au bon `shopId`, à l'auteur connecté et à l'opération ; les règles doivent aussi empêcher les modifications directes de quantité hors de ce flux.
+5. Traiter les annulations et corrections comme des opérations compensatoires idempotentes, avec contrôle de l'état initial et trace liée à l'opération d'origine.
+6. Ajouter des tests Emulator concurrents : deux vendeurs tentent de vendre la dernière unité ; une seule vente doit réussir. Tester aussi double clic, reprise après coupure réseau, annulation répétée, vendeur suspendu pendant l'opération et tentative d'écriture directe du stock.
+7. Tant que ces étapes ne sont pas terminées et testées, conserver le stock en écriture Patron uniquement dans le futur modèle multi-boutiques. Ne pas annoncer la gestion simultanée du stock comme opérationnelle.
+
 ## Plan d'intégration
 
 ### Phase A — modèle et autorisations
