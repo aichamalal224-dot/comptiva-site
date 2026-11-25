@@ -571,6 +571,8 @@ let subscription=loadSubscription();
 let krediSubscriptionAccess='checking';
 let krediSubscriptionEndMillis=0;
 function krediCanUseMerchantApp(){return !krediUser||krediIsCreator()||krediSubscriptionAccess==='active'}
+let krediResumeSubscriptionCheck=false;
+async function krediRecheckSubscriptionOnResume(){if(!krediUser||krediIsCreator()||!navigator.onLine||krediResumeSubscriptionCheck)return false;krediResumeSubscriptionCheck=true;try{return await krediLoadMerchantSubscription()}finally{krediResumeSubscriptionCheck=false}}
 function krediSubscriptionDateMillis(value){if(value&&typeof value.toDate==='function')return value.toDate().getTime();const date=value?new Date(value):null;return date&&!isNaN(date.getTime())?date.getTime():0}
 function krediSetSubscriptionNotice(message){const el=document.getElementById('subscriptionNotice');if(el){el.textContent=message;el.classList.remove('hidden')}}
 function krediShowSubscriptionMessage(message){krediSetSubscriptionNotice(message);flash(message,7000)}
@@ -1631,7 +1633,7 @@ async function krediInitFirebase(){try{
         const credential=firebase.auth.EmailAuthProvider.credential(currentUser.email,password);
         await currentUser.reauthenticateWithCredential(credential);
         if(!krediUser||krediUser.uid!==uid)return;
-        krediIdleHideOverlay();krediIdleSchedule();
+        krediIdleHideOverlay();krediIdleSchedule();krediRecheckSubscriptionOnResume();
       }catch(error){
         message.textContent='Mot de passe incorrect ou vérification impossible. Réessayez.';
         panel.querySelector('#comptivaIdlePassword').value='';krediIdleUnlockBusy=false;button.disabled=false;button.textContent='Déverrouiller';panel.querySelector('#comptivaIdlePassword').focus();
@@ -1644,7 +1646,7 @@ async function krediInitFirebase(){try{
   window.comptivaIsIdleLocked=()=>krediIdleLocked;
   function krediIdleActivity(){if(krediUser&&!krediIdleLocked)krediIdleSchedule()}
   ['pointerdown','keydown','touchstart','scroll','click'].forEach(type=>document.addEventListener(type,krediIdleActivity,{passive:true,capture:true}));
-  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&krediUser)krediIdleLock();else if(document.visibilityState==='visible'&&krediUser&&!krediIdleLocked)krediIdleSchedule()});
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&krediUser)krediIdleLock();else if(document.visibilityState==='visible'&&krediUser&&!krediIdleLocked){krediIdleSchedule();krediRecheckSubscriptionOnResume()}});
   let krediAuthStateReceived=false;
   const krediAuthWaitTimer=setTimeout(()=>{
     if(!krediAuthStateReceived){
