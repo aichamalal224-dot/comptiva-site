@@ -599,3 +599,46 @@ Aucune règle Firestore et aucun code applicatif n'ont été modifiés. Les cons
 - Aucun test Firebase Emulator, aucune écriture Firestore réelle, aucun déploiement de règles et aucun test navigateur n'ont été exécutés.
 
 **Statut :** correction source enregistrée sur la branche de travail uniquement ; à valider dans Firebase Emulator avant toute publication.
+
+
+## Audit des données financières des produits — 26 novembre 2026
+
+### Schéma produit actuellement utilisé
+
+Inspection de `application.html` sur la branche de travail (blob `application.html` SHA `9e1a18c2b778f08a232f394f0a887bb4ee521713`) :
+
+- Le formulaire de création de produit demande `name`, `category`, `sku`, `quantity`, `purchasePrice`, `salePrice` et `alertAt`.
+- `saveForm()` enregistre `purchasePrice` et `salePrice` directement dans chaque objet de `db.products`, avec les métadonnées d'auteur.
+- `renderStock()` affiche actuellement au même endroit le prix d'achat, le prix de vente et la marge théorique calculée comme `salePrice - purchasePrice`.
+- Le modèle de données local et le document cloud historique conservent la base complète `db` ; les données historiques des produits peuvent donc contenir ces champs financiers.
+- Les occurrences de `purchasePrice` et `salePrice` dans l'application examinée sont limitées au formulaire, à l'enregistrement du produit et à l'affichage du stock. Aucune migration de ces champs vers une collection privée n'est implémentée.
+
+### Portée réelle de l'exposition
+
+- Les données historiques sont enregistrées dans le document privé `users/{uid}/comptivaData/main`. La règle héritée du fichier `firestore.rules` limite sa lecture au compte dont l'UID correspond au chemin. L'audit statique ne révèle donc pas d'ouverture de ce document historique aux autres UID.
+- Le nouveau modèle prévoit `shops/{shopId}/products/{productId}`. La règle actuelle `allow read: if canUseShop(shopId)` autorise le Patron et le Vendeur reconnu à lire le document produit entier ; Firestore Rules ne peut pas cacher `purchasePrice` ou d'autres champs à l'intérieur d'un document déjà lisible.
+- Dans `application.html`, la lecture directe de `shops/{shopId}/products/{productId}` repérée appartient au contrôle de relation en lecture seule. L'audit n'a trouvé aucune écriture opérationnelle directe vers `shops/{shopId}/products`. Le modèle multi-boutiques demeure non migré et non démontré en production : l'exposition des champs financiers dans les collections partagées est donc un risque de conception à traiter avant l'activation, et non la preuve qu'un Vendeur les lit actuellement.
+- Les produits restent aussi dans le magasin local et le document cloud historique propre à chaque UID. Ne pas confondre ces données privées historiques avec les futures collections partagées.
+
+### Décision de sécurité et migration recommandée
+
+Ne pas retirer ou renommer immédiatement `purchasePrice` dans la base historique : cela casserait l'affichage actuel de la marge et pourrait faire perdre l'information de coût nécessaire aux rapports du Patron.
+
+Avant toute migration multi-boutiques :
+1. Garder dans `shops/{shopId}/products/{productId}` uniquement les informations que le Vendeur est autorisé à lire : identifiant, nom, catégorie, référence, quantité, seuil d'alerte et prix de vente si la politique commerciale l'autorise.
+2. Placer le coût d'achat unitaire, la marge, le bénéfice et toute autre donnée financière réservée au Patron dans un document séparé, par exemple `shops/{shopId}/productFinancials/{productId}`, avec lecture réservée au Patron. Ne jamais recopier ces champs dans le document produit partagé.
+3. Ajouter des contrôles de rôle côté interface pour masquer les écrans et calculs financiers au Vendeur, sans considérer l'interface comme une protection suffisante.
+4. Définir une migration idempotente qui conserve les valeurs historiques, vérifie les correspondances par ID produit et signale les données manquantes ou ambiguës sans inventer de coût.
+5. Tester avec Firebase Emulator les lectures directes, listes et requêtes : Vendeur autorisé sur le document produit public mais refusé sur `productFinancials` ; Patron autorisé sur les deux ; compte extérieur refusé sur les deux.
+6. Ne lancer aucune migration ni publication avant sauvegarde, tests Emulator et autorisation explicite.
+
+### Vérifications réalisées pour cette passe
+
+- Champs sensibles repérés dans le formulaire, l'objet enregistré et le rendu du stock.
+- Règle de lecture des produits partagés vérifiée statiquement : `canUseShop(shopId)`.
+- Aucune écriture applicative directe vers la collection partagée `products` trouvée ; la lecture directe observée est dans un contrôle de relation en lecture seule.
+- Les trois blocs JavaScript de `application.html` compilent avec `new Function` : 3/3 réussis.
+- Aucune donnée Firestore réelle consultée ou modifiée ; aucun test Emulator, test navigateur ou test avec comptes Patron/Vendeur réalisé.
+- Aucun changement de code, aucune migration, aucun déploiement et aucun changement de `main` effectués pendant cette passe.
+
+**Statut :** risque de conception identifié et documenté ; séparation financière non implémentée. La correction doit être intégrée au moment de la migration multi-boutiques, avec séparation physique des documents et validation Emulator.
