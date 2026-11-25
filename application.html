@@ -395,7 +395,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
       <div class="card" style="margin-top:16px">
         <h3>Préparation des boutiques multiples</h3>
         <p>Analyse locale de vos données avant leur future migration vers une boutique principale. Cette vérification ne déplace, ne modifie et ne supprime aucune donnée.</p>
-        <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button><button class="soft" type="button" onclick="krediVerifyShopMigrationBackup()">Vérifier la sauvegarde cloud</button></div>
+        <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button><button class="soft" type="button" onclick="krediVerifyShopMigrationBackup()">Vérifier la sauvegarde cloud</button><button class="soft" type="button" onclick="krediDiagnoseSharedShopAccess()">Tester l’accès à la boutique partagée</button></div>
         <div id="shopMigrationPreflight" class="footer" aria-live="polite">Aucune analyse lancée.</div>
       </div>
       <div class="card" style="margin-top:16px" id="patronPresenceCard">
@@ -745,6 +745,54 @@ function krediShowShopMigrationPreview(){
   const repaymentLabel=repayments?'Anomalies de remboursement : '+esc(repayments):'Soldes des dettes et remboursements contrôlés.';
   el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun problème détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Références absentes : '+esc(missing):'Références locales présentes.')+'<br>'+relationLabel+'<br>'+repaymentLabel+'<br>'+esc(authorLabel)+'<br>'+(numeric?'Valeurs numériques invalides : '+esc(numeric)+totalsWarning:'Valeurs numériques contrôlées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
  }catch(error){el.textContent='Analyse impossible : '+(error.message||'erreur inconnue')}
+}
+/* Diagnostic en lecture seule : vérifie l'appartenance serveur et l'accès à un échantillon de ventes partagées. Aucun document n'est créé/modifié. */
+async function krediDiagnoseSharedShopAccess(){
+ const el=document.getElementById('shopMigrationPreflight');
+ const say=message=>{if(el)el.textContent=message};
+ const uid=krediUser&&krediUser.uid;
+ if(!uid||!krediStore||!krediStoreMatchesActiveUser()){say('Diagnostic refusé : connectez-vous au compte correspondant à son espace local.');return}
+ if(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()){say('Session verrouillée : déverrouillez-la avant le diagnostic.');return}
+ if(!navigator.onLine){say('Diagnostic impossible hors connexion. Aucune donnée locale n’a été modifiée.');return}
+ say('Vérification serveur en lecture seule en cours…');
+ try{
+  let shopId='',role='',shopData=null,memberData=null;
+  const indexRef=krediStore.collection('userShopMemberships').doc(uid).collection('shops');
+  const indexSnap=await indexRef.limit(3).get({source:'server'});
+  const activeSellerLinks=indexSnap.docs.filter(doc=>{const d=doc.data()||{};return d.active===true&&d.role==='seller'});
+  if(activeSellerLinks.length>1)throw new Error('Plusieurs affectations vendeur actives détectées : sélection ambiguë, accès non testé.');
+  if(activeSellerLinks.length===1){
+   const link=activeSellerLinks[0].data()||{};
+   shopId=activeSellerLinks[0].id;role='Vendeur';
+   if(link.uid!==uid||link.shopId!==shopId||!link.patronUid)throw new Error('Index vendeur incohérent : vérification interrompue.');
+   const shopRef=krediStore.collection('shops').doc(shopId);
+   const memberRef=shopRef.collection('members').doc(uid);
+   const [shopSnap,memberSnap]=await Promise.all([shopRef.get({source:'server'}),memberRef.get({source:'server'})]);
+   if(!shopSnap.exists||!memberSnap.exists)throw new Error('Boutique ou fiche membre introuvable côté serveur.');
+   shopData=shopSnap.data()||{};memberData=memberSnap.data()||{};
+   if(shopData.ownerUid!==link.patronUid||shopData.patronUid!==link.patronUid||memberData.uid!==uid||memberData.role!=='seller'||memberData.active!==true)throw new Error('Les informations d’appartenance ne concordent pas : accès partagé non validé.');
+  }else{
+   shopId='shop-'+uid;role='Patron';
+   const shopSnap=await krediStore.collection('shops').doc(shopId).get({source:'server'});
+   if(!shopSnap.exists)throw new Error('Aucune boutique principale existante pour ce compte. Le diagnostic n’en crée pas.');
+   shopData=shopSnap.data()||{};
+   if(shopData.ownerUid!==uid||shopData.patronUid!==uid||shopData.status!=='active')throw new Error('Propriété ou statut de la boutique non confirmé.');
+  }
+  const salesSnap=await krediStore.collection('shops').doc(shopId).collection('sales').limit(5).get({source:'server'});
+  let inconsistent=0,withAuthor=0;
+  salesSnap.forEach(doc=>{
+   const sale=doc.data()||{};
+   if(sale.shopId!==shopId)inconsistent++;
+   if(typeof sale.createdBy==='string'&&sale.createdBy)withAuthor++;
+  });
+  if(inconsistent)throw new Error('Des ventes échantillonnées portent un shopId incohérent : '+inconsistent+'. Aucun changement effectué.');
+  say('Diagnostic serveur réussi — rôle : '+role+' · boutique : '+shopId+' · accès à la collection Ventes confirmé · échantillon lu : '+salesSnap.size+' document(s) · auteurs UID présents : '+withAuthor+'. Test strictement en lecture seule : aucune donnée créée, modifiée, déplacée ou supprimée. Ce test ne valide pas encore la migration ni les opérations d’écriture.');
+ }catch(error){
+  console.warn('[COMPTIVA] Diagnostic de boutique partagée non validé.',error);
+  const code=error&&error.code?String(error.code):'';
+  const reason=code==='permission-denied'?'lecture refusée par les règles Firestore':(error&&error.message?error.message:'erreur serveur inconnue');
+  say('Diagnostic non validé : '+reason+'. Aucune migration ni écriture effectuée.');
+ }
 }
 /* Présence vendeur : heartbeat Firestore, en ligne si signal serveur < 90 s. */
 let krediPresenceHeartbeat=null,krediPresenceShopId='';
