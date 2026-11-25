@@ -1941,10 +1941,23 @@ function dayKey(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,
 function isActiveSale(s){return !!s&&s.status!=='cancelled'}
 function saleFinancialAmounts(s){
  if(!isActiveSale(s))return {total:0,paid:0,credit:0};
+ if(!s||typeof s!=='object')return null;
  const total=s.total;
  const paid=s.paidAmount!==undefined?s.paidAmount:(s.saleType==='credit'?0:total);
  const credit=s.creditAmount!==undefined?s.creditAmount:(s.saleType==='credit'?total:0);
  if(!Number.isSafeInteger(total)||total<=0||!Number.isSafeInteger(paid)||paid<0||!Number.isSafeInteger(credit)||credit<0||paid+credit!==total)return null;
+ // Les ventes historiques sans quantité/prix unitaire restent évaluables avec leurs montants enregistrés.
+ // Dès que l'un des deux champs existe, les deux doivent être valides et reproduire le total arrondi utilisé à la saisie.
+ const hasQuantity=Object.prototype.hasOwnProperty.call(s,'quantity');
+ const hasUnitPrice=Object.prototype.hasOwnProperty.call(s,'unitPrice');
+ if(hasQuantity||hasUnitPrice){
+  if(!hasQuantity||!hasUnitPrice||typeof s.quantity!=='number'||!Number.isFinite(s.quantity)||s.quantity<=0||!Number.isSafeInteger(s.unitPrice)||s.unitPrice<=0)return null;
+  const calculated=Math.round(s.quantity*s.unitPrice);
+  if(!Number.isSafeInteger(calculated)||calculated!==total)return null;
+ }
+ if(s.method==='Paiement mixte'){
+  if(!Number.isSafeInteger(s.cashPart)||s.cashPart<0||!Number.isSafeInteger(s.mobilePart)||s.mobilePart<0||s.cashPart+s.mobilePart!==paid)return null;
+ }
  return {total,paid,credit};
 }
 function sumSales(arr){let total=0;for(const sale of arr){const amounts=saleFinancialAmounts(sale);if(!amounts)return NaN;total+=amounts.total;if(!Number.isSafeInteger(total))return NaN;}return total}
