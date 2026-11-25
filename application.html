@@ -756,7 +756,25 @@ async function krediSetSellerActive(sellerUid,active){
    krediRefreshSellerPresence();
    return;
   }
-  say(active?'Vendeur réactivé. Il pourra reprendre sa connexion avec son compte.':'Vendeur suspendu. Son accès aux opérations de la boutique est bloqué par les règles Firestore. Son historique est conservé.');
+  try{
+   const actorName=String(krediUser.displayName||krediUser.email||'Patron').trim().slice(0,120);
+   await shop.collection('auditLog').add({
+    shopId:shopId,
+    type:active?'seller_reactivated':'seller_suspended',
+    action:active?'Réactivation vendeur':'Suspension vendeur',
+    sellerUid:sellerUid,
+    sellerName:[data.firstName,data.lastName].filter(Boolean).join(' ').trim().slice(0,140),
+    actorUid:krediUser.uid,
+    actorName:actorName,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+   });
+  }catch(auditError){
+   console.error('[COMPTIVA] Statut vendeur appliqué mais événement audit non enregistré.',auditError);
+   say('Statut vendeur modifié et index synchronisé, mais la trace d’audit n’a pas été enregistrée. Vérifiez les règles Firestore avant de considérer le contrôle terminé.');
+   krediRefreshSellerPresence();
+   return;
+  }
+  say(active?'Vendeur réactivé. La modification est enregistrée dans l’audit.':'Vendeur suspendu. Son accès aux opérations protégées est bloqué par les règles Firestore. La modification est enregistrée dans l’audit et son historique est conservé.');
   krediRefreshSellerPresence();
  }catch(error){
   console.error('[COMPTIVA] Modification statut vendeur refusée.',error);
