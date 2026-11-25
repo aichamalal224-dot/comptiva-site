@@ -1183,8 +1183,8 @@ function krediStockConsistencyAudit(){
  movements.forEach(m=>{
   const product=products.get(String(m.entityId||''));
   if(!product){addIssue('movement_product_missing','Mouvement '+String(m.id||'sans ID')+' : produit introuvable.');return}
-  const qty=Number(m.quantity),before=Number(m.before),after=Number(m.after);
-  if(!Number.isFinite(qty)||qty<=0||!Number.isFinite(before)||before<0||!Number.isFinite(after)||after<0){
+  const qty=Number(m.quantity),before=Number(m.before),after=Number(m.after),adjustment=['sale_edit_adjustment','purchase_edit_adjustment'].includes(m.action),delta=Number(m.delta);
+  if((!adjustment&&(!Number.isFinite(qty)||qty<=0))||(adjustment&&!Number.isFinite(delta))||!Number.isFinite(before)||before<0||!Number.isFinite(after)||after<0){
    addIssue('movement_invalid_values','Mouvement '+String(m.id||'sans ID')+' : quantité ou valeurs avant/après invalides.');return;
   }
   let expected=null;
@@ -1199,8 +1199,7 @@ function krediStockConsistencyAudit(){
    addIssue('movement_unknown_action','Mouvement '+String(m.id||'sans ID')+' : type non reconnu ('+String(m.action||'absent')+').');return;
   }
   const relation=m.relatedSaleId||m.relatedPurchaseId||'';
-  const key=m.action+'|'+relation+'|'+m.entityId;
-  keys.set(key,(keys.get(key)||0)+1);
+  if(['sale_deduction','purchase_addition','sale_cancellation_restoration','purchase_cancellation_removal'].includes(m.action)){const key=m.action+'|'+relation+'|'+m.entityId;keys.set(key,(keys.get(key)||0)+1)}
   valid++;
  });
  keys.forEach((count,key)=>{if(count>1)addIssue('duplicate_movement','Mouvement répété ('+key+'), '+count+' occurrences.')});
