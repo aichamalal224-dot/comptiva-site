@@ -354,3 +354,12 @@ Tests synthétiques ciblés : cumul partiel valide, paiement annulé exclu, date
 
 Limites : pas de rapprochement sur les comptes réels, pas de test navigateur ou Firebase Emulator, et pas de test d'impression physique. Les anomalies historiques ne sont pas corrigées automatiquement.
 
+
+
+### Cohérence des reçus de remboursement et relevés de dettes — 25 novembre 2026
+
+Le reçu d'un remboursement actif vérifie désormais la relation de la dette, son montant, l'identifiant/date/montant du remboursement, le registre actif via `paidFor`, la présence du paiement dans l'ordre chronologique et l'absence de dépassement. Si une condition échoue, les totaux affichent « À vérifier » et le reçu ne prétend plus que le crédit est partiellement ou entièrement remboursé. Le reçu d'un remboursement annulé reste explicitement non valable comme preuve de paiement. Le tri reste sûr même si une date est absente, puis le registre invalide est signalé au lieu de provoquer une exception ; la date imprimée est également signalée comme à vérifier.
+
+Le relevé de dette valide également la relation client/vente et le registre des remboursements avant d'afficher un total payé ou un solde confirmé. En cas d'anomalie, les montants affichent « À vérifier » avec un avertissement. Les lignes historiques annulées sont conservées ; les dates non valides sont signalées. Aucune donnée historique n'est modifiée ou supprimée.
+
+Tests synthétiques ciblés du calcul du reçu : deux remboursements chronologiques, relation incohérente, date impossible, date absente, identifiant dupliqué entre dettes, surpaiement, paiement absent du registre et remboursement annulé — 9/9 résultats attendus. Les trois blocs JavaScript intégrés compilent après correction. Aucun test d'impression réel dans un navigateur, sur Android ou avec une imprimante thermique, ni test Firebase Emulator ou multi-appareil n'a été effectué.
