@@ -316,6 +316,6 @@ Le calcul du solde global et des remboursements du jour s'appuie désormais sur 
 
 Le rapport valide également la date choisie et détecte toute vente active portant une date invalide. Dans ce cas, les totaux de ventes des périodes ne sont pas présentés comme fiables ; les lignes détaillées ne retiennent que les ventes dont la date est valide.
 
-Tests synthétiques ciblés : dette sans paiement, remboursement partiel, remboursement annulé, paiement orphelin, identifiant de paiement dupliqué, surpaiement, date de paiement impossible et identifiant de dette dupliqué — 8/8 résultats attendus. Les trois blocs JavaScript intégrés compilent après modification.
+Tests synthétiques ciblés : dette sans paiement, remboursement partiel, remboursement annulé, paiement orphelin, identifiant de paiement dupliqué, surpaiement, date de paiement impossible et identifiant de dette dupliqué — 10/10 résultats attendus, avec rejet supplémentaire des enregistrements dette/paiement nuls. Les compteurs de périodes signalent également la présence d'une vente active à date invalide. Les trois blocs JavaScript intégrés compilent après modification.
 
 Limites : ces contrôles sont exécutés sur les données locales chargées dans l'application. Aucun test navigateur, Firebase Emulator, multi-appareil, rapprochement de caisse ou vérification de transactions Mobile Money réelles n'a été effectué. Les anomalies historiques ne sont pas corrigées automatiquement.
