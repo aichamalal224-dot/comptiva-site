@@ -269,3 +269,10 @@ Les fonctions de calcul du chiffre d'affaires, des encaissements à la vente et 
 Tests synthétiques exécutés : vente espèces, vente entièrement à crédit, paiement mixte 40/60 et vente annulée acceptés avec les totaux attendus ; surpaiement, montant textuel et montant négatif refusés comme données non calculables. Ces tests portent sur les fonctions isolées et ne remplacent pas une compilation complète du fichier, un test navigateur ou Firebase Emulator.
 
 Limites encore à auditer : validation des montants des remboursements et achats/dépenses dans les agrégats de période ; traitement des dates invalides ; distinction entre achats de marchandises, variation de stock et coût des marchandises effectivement vendues. L'indicateur CA − achats − dépenses reste une estimation simplifiée, pas un bénéfice net comptable.
+
+
+### Contrôle des agrégats datés — remboursements, achats et dépenses — 25 novembre 2026
+
+Ajout de `sumValidDatedAmounts` pour les agrégats de période du tableau de bord et du rapport : les remboursements reçus le jour choisi ainsi que les achats et dépenses du mois vérifient désormais chaque enregistrement actif. La date doit être une date ISO réelle et le montant un entier sûr strictement positif. Les opérations annulées sont exclues. Une date ou un montant incohérent rend l'agrégat non calculable (« À vérifier » via l'affichage monétaire), au lieu d'être silencieusement ignoré ou converti en zéro.
+
+Tests synthétiques exécutés : remboursement valide, opération annulée, achat mensuel, date impossible, montant textuel, montant négatif et opération hors période — 7/7 résultats attendus. Les trois blocs JavaScript du fichier ont été compilés avec `new Function` — 3/3 réussis. Aucun test navigateur, multi-appareil ou Firebase Emulator n'a été réalisé.
