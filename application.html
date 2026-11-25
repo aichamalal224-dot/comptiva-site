@@ -1552,6 +1552,8 @@ function editPurchase(purchaseId){
   if(!purchase.stockProductId){alert('Modification bloquée : cet ancien achat ne possède pas de lien exact vers le produit de stock. Pour éviter une erreur de stock, vérifiez-le manuellement.');return}
   stockProduct=db.products.find(p=>p.id===purchase.stockProductId);
   if(!stockProduct){alert('Modification bloquée : le produit lié est introuvable.');return}
+  const additionProof=db.auditLog.filter(m=>m&&m.entityType==='stock'&&m.action==='purchase_addition'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));
+  if(!purchase.stockAddedAt||additionProof.length!==1||Math.abs(Number(additionProof[0].quantity)-oldQty)>1e-9){alert('Modification bloquée : aucune preuve unique et cohérente de l’ajout initial de cet achat au stock. Vérifiez manuellement le stock avant toute correction.');return}
   if(Number(stockProduct.quantity||0)<0){alert('Quantité de stock incohérente.');return}
  }
  const item=prompt('Marchandise :',purchase.item||'');if(item===null)return;if(!item.trim()){alert('La marchandise est obligatoire.');return}
@@ -1588,7 +1590,7 @@ function cancelPurchase(purchaseId){
  if(purchase.status==='cancelled'){flash('Cet achat est déjà annulé.');return}
  let stockProduct=null;
  if(Number(purchase.quantity||0)>0){
-  if(purchase.stockProductId){stockProduct=db.products.find(p=>p.id===purchase.stockProductId);if(!stockProduct){alert('Annulation bloquée : le produit lié à cet achat est introuvable. Vérifiez le stock avant toute correction.');return}}
+  if(purchase.stockProductId){stockProduct=db.products.find(p=>p.id===purchase.stockProductId);if(!stockProduct){alert('Annulation bloquée : le produit lié à cet achat est introuvable. Vérifiez le stock avant toute correction.');return}const additionProof=db.auditLog.filter(m=>m&&m.entityType==='stock'&&m.action==='purchase_addition'&&m.relatedPurchaseId===purchase.id&&String(m.entityId)===String(purchase.stockProductId));if(!purchase.stockAddedAt||additionProof.length!==1||Math.abs(Number(additionProof[0].quantity)-Number(purchase.quantity))>1e-9){alert('Annulation bloquée : aucune preuve unique et cohérente de l’ajout initial de cet achat au stock. Aucune quantité ne sera retirée automatiquement. Vérifiez le stock manuellement.');return}}
   else {const possible=db.products.find(p=>String(p.name||'').trim().toLowerCase()===String(purchase.item||'').trim().toLowerCase());if(possible){alert('Annulation bloquée : cet ancien achat ne contient pas le lien exact vers le produit de stock. Vérifiez manuellement le stock avant toute correction.');return}}
  }
  if(stockProduct&&Number(stockProduct.quantity||0)<Number(purchase.quantity||0)){alert('Annulation bloquée : le stock actuel est inférieur à la quantité de cet achat. Une partie a peut-être déjà été vendue ou ajustée. Vérifiez le stock avant de continuer.');return}
