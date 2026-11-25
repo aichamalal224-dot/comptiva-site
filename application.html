@@ -1710,7 +1710,7 @@ async function krediInitFirebase(){try{
       // Si des changements locaux attendent et que la version cloud a changé
       // depuis notre dernière base connue, ne jamais choisir silencieusement
       // une version : une résolution de conflit est nécessaire.
-      if(hasPending&&(!krediLastWrite||mergedTextFromRemote!==krediLastWrite)){
+      if(hasPending&&(!krediLastWrite||(mergedTextFromRemote!==krediLastWrite&&mergedTextFromRemote!==JSON.stringify(localData)))){
         krediCloudReady=false;krediLocalDirty=true;
         krediSafeStorageSet('comptiva_pending_'+activeUid,'1');
         krediStatus('Conflit de synchronisation détecté : les données ont changé sur un autre appareil pendant que cet appareil avait des modifications en attente. Aucune écriture automatique ne sera faite. Gardez les deux appareils et contactez le support avant de reprendre la synchronisation.');
