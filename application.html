@@ -1204,9 +1204,16 @@ function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client su
 function paidFor(debtId){
  const active=db.payments.filter(p=>p&&p.debtId===debtId&&p.status!=='cancelled');
  const ids=new Set();let total=0;
+ // Un identifiant de remboursement doit être unique dans tout le registre, pas seulement pour une dette.
+ for(const payment of db.payments){
+  if(!payment||payment.status==='cancelled')continue;
+  if(!payment.id||ids.has(String(payment.id)))return NaN;
+  ids.add(String(payment.id));
+ }
+ total=0;
  for(const payment of active){
-  if(!payment.id||ids.has(String(payment.id))||!Number.isSafeInteger(payment.amount)||payment.amount<=0)return NaN;
-  ids.add(String(payment.id));total+=payment.amount;
+  if(!isValidISODate(payment.date)||!Number.isSafeInteger(payment.amount)||payment.amount<=0)return NaN;
+  total+=payment.amount;
   if(!Number.isSafeInteger(total))return NaN;
  }
  return total;
