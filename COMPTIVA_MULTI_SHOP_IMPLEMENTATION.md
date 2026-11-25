@@ -321,6 +321,18 @@ Tests synthétiques ciblés : dette sans paiement, remboursement partiel, rembou
 Limites : ces contrôles sont exécutés sur les données locales chargées dans l'application. Aucun test navigateur, Firebase Emulator, multi-appareil, rapprochement de caisse ou vérification de transactions Mobile Money réelles n'a été effectué. Les anomalies historiques ne sont pas corrigées automatiquement.
 
 
+### Audit arithmétique des ventes — 25 novembre 2026
+
+Le calcul de saisie d'une vente utilise déjà `Math.round(quantité × prix unitaire)`, vérifie une quantité finie strictement positive, un prix unitaire entier positif et un total entier sûr. Une vente mixte est acceptée uniquement si les parts espèces et Mobile Money sont des entiers non négatifs dont la somme égale le total. Les ventes à crédit créent une dette liée à la vente ; la correction et l'annulation contrôlent les remboursements, les dettes liées et les preuves de mouvement de stock.
+
+Un point de contrôle a été renforcé dans `saleFinancialAmounts` : lorsque quantité et prix unitaire sont présents, ils doivent être tous deux valides et reproduire exactement le total selon le même arrondi que la saisie. Les ventes historiques dépourvues de ces champs restent évaluables à partir de leurs montants enregistrés, afin de ne pas invalider automatiquement les anciennes données. Les paiements mixtes sont également contrôlés au niveau du calcul financier central, et pas seulement sur le reçu.
+
+L'historique de correction d'une vente conserve un instantané `before`, les champs `after`, le motif, la date et l'auteur ; l'annulation conserve une trace dédiée. Cela ne constitue pas un historique complet des changements de chaque champ avant la correction initiale, et les anciennes opérations sans trace ne sont pas reconstituées.
+
+Tests synthétiques ciblés : vente cohérente, total différent du produit quantité/prix, quantité ou prix invalide, vente historique sans ces deux champs, champ manquant isolé, paiement mixte cohérent/incohérent, vente annulée. Les trois blocs JavaScript intégrés compilent après correction.
+
+Limites : aucun rapprochement sur les données réelles du compte commerçant, aucun test navigateur, Firebase Emulator, multi-appareil, impression ou paiement Mobile Money réel n'a été effectué. Les anomalies de données ne sont pas corrigées automatiquement.
+
 ### Audit ventes et reçus — 25 novembre 2026
 
 Le reçu de vente distingue désormais le crédit initial accordé au moment de la vente du solde actuel de la dette. Pour afficher le solde actuel, l'application exige une dette active unique liée à cette vente, une relation client/vente cohérente et un solde calculable ; sinon le montant est marqué « À vérifier » au lieu de présenter le crédit initial comme un solde courant. Les ventes annulées conservent leur marqueur d'annulation.
