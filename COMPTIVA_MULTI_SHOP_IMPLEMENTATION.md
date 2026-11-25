@@ -746,3 +746,37 @@ Le document historique users/{uid}/comptivaData/main reste limité à son propre
 - Aucune migration, écriture de données réelles, publication ou modification de main.
 
 **Statut :** défaut d’autorisation par rôle dans l’interface confirmé par lecture statique. La séparation serveur du futur modèle partagé est partiellement décrite dans les règles, mais le contrat applicatif et la migration ne sont pas prêts. Ne pas activer le multi-boutiques avant la mise en place de la matrice de permissions et les tests Emulator.
+
+
+## Première correction des contrôles Patron / Vendeur dans l’interface — 26 novembre 2026
+
+### Modifications appliquées à application.html
+
+- Ajout d’un état de rôle distinct de la session Firebase. Il reste inconnu tant que la lecture serveur des affectations n’a pas abouti.
+- Ajout d’un résolveur serveur qui lit l’index privé userShopMemberships/{uid}/shops, puis vérifie la boutique et le document membre vendeur : UID, rôle seller, état actif, ownerUid/patronUid concordants et assignedBy égal au Patron propriétaire.
+- Plusieurs affectations vendeur, affectation inactive, incohérence des documents, absence de Firestore ou échec de lecture ne donnent jamais les droits Patron. Les fonctions Patron restent bloquées en cas de rôle non confirmé.
+- Les comptes sans affectation vendeur dans l’index serveur conservent le mode historique Patron, afin de ne pas casser les comptes commerçants existants. Le compte Créateur est traité séparément.
+- Navigation réservée au Patron pour Profil du commerce (qui contient aussi la gestion des vendeurs), Chiffres, Achats et Dépenses.
+- Contrôle ajouté à l’ouverture et à l’enregistrement des formulaires Produit, Achat et Dépense.
+- Contrôle direct ajouté aux fonctions de modification/annulation des ventes, dettes, remboursements, achats et dépenses, ainsi qu’à l’export CSV. Les contrôles ne reposent donc pas uniquement sur la présence des boutons.
+- Pour le rôle vendeur confirmé, le tableau Stock n’affiche plus le prix d’achat ni la marge théorique ; il conserve le nom, la catégorie, la quantité et le prix de vente.
+- Le tableau de bord masque les montants d’achats, dépenses et l’indicateur CA − achats − dépenses pour les comptes qui ne disposent pas du rôle Patron confirmé.
+- À la déconnexion, l’état du rôle est réinitialisé.
+
+### Limites importantes
+
+- Cette correction est une protection de l’interface et des fonctions JavaScript ; elle n’est pas une frontière de sécurité serveur. Le contrôle final des données du futur modèle partagé reste dans Firestore Rules.
+- Le modèle partagé n’est toujours pas migré dans l’application : le vendeur n’accède pas encore au jeu de données commun de la boutique. Les opérations locales historiques restent stockées dans users/{uid}/comptivaData/main.
+- Les règles Firestore du chemin historique autorisent le propriétaire de chaque UID à écrire dans son propre espace ; les guards de l’interface ne peuvent pas empêcher un utilisateur de modifier son propre stockage local ou d’appeler directement l’API sur son propre chemin.
+- Les comptes sans affectation vendeur sont considérés Patron historique, selon le modèle actuel. Une migration vers un rôle Patron explicitement enregistré sera nécessaire avant activation complète des boutiques partagées.
+- Les actions de création de vente, client, dette et remboursement restent possibles pour un vendeur ; les modifications/annulations sont Patron-only. Les opérations de stock liées à la vente restent dans l’ancien modèle local et devront être migrées vers une opération serveur/transaction atomique avant activation multi-boutiques.
+- Une erreur de résolution de rôle bloque les actions Patron, mais le test réel de ce comportement exige Firebase Emulator et deux comptes de test.
+
+### Vérifications effectuées
+
+- Relecture du fichier après écriture et contrôle des guards présents sur les pages, formulaires et fonctions directes.
+- Les trois blocs JavaScript de application.html compilent avec new Function : 3/3 réussis après correction d’une erreur de syntaxe détectée pendant la première vérification.
+- Aucun test Firebase Emulator, test navigateur, compte réel Patron/Vendeur ou appel direct Firestore exécuté.
+- Aucun changement des règles Firestore, aucune migration ni donnée réelle modifiée. Aucun déploiement et aucune modification de main.
+
+**Statut :** première barrière UI Patron/Vendeur ajoutée. À valider ensuite avec Emulator et tests de non-régression ; ne pas considérer cette correction comme une autorisation serveur ni comme l’activation du multi-boutiques.
