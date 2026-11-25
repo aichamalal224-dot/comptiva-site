@@ -398,6 +398,12 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
         <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button></div>
         <div id="shopMigrationPreflight" class="footer" aria-live="polite">Aucune analyse lancée.</div>
       </div>
+      <div class="card" style="margin-top:16px" id="patronPresenceCard">
+        <h3>Présence des vendeurs</h3>
+        <p>Le Patron peut voir quels vendeurs sont connectés à sa boutique. Le statut « En ligne » repose sur un signal de présence récent.</p>
+        <div class="formactions"><button class="soft" type="button" onclick="krediRefreshSellerPresence()">Actualiser les présences</button></div>
+        <div id="sellerPresenceList" class="footer" aria-live="polite">Disponible lorsque la boutique et ses vendeurs seront configurés.</div>
+      </div>
     </section>
     <section id="page-sales" class="hidden">
       <div class="pagehead"><div><h2>Ventes</h2><p>Enregistrez chaque article vendu, en espèces/mobile money ou à crédit.</p></div><div class="actions"><button class="soft" onclick="printLatestSale()">🖨 Dernier reçu</button><button class="primary" onclick="openForm('sale')">+ Enregistrer une vente</button></div></div>
@@ -619,6 +625,60 @@ function krediShowShopMigrationPreview(){
   el.innerHTML='<b>Contrôle local terminé — '+(p.localCheckPassed?'aucun lien manquant détecté':'anomalies à examiner')+'</b><br>'+esc(counts)+'<br>Ventes actives : '+money(p.totals.salesGNF)+' · Achats : '+money(p.totals.purchasesGNF)+' · Dépenses : '+money(p.totals.expensesGNF)+' · Remboursements : '+money(p.totals.paymentsGNF)+' · Stock : '+Number(p.totals.stockUnits).toLocaleString('fr-FR')+' unités<br>Identifiant boutique proposé : <code>'+esc(p.suggestedShopId)+'</code><br>'+(missing?'Liens à examiner : '+esc(missing):'Relations locales vérifiées.')+'<br><b>Étape non effectuée :</b> aucune sauvegarde cloud, création de boutique ou migration. Une sauvegarde distante et la vérification du propriétaire restent obligatoires.';
  }catch(error){el.textContent='Analyse impossible : '+(error.message||'erreur inconnue')}
 }
+/* Présence vendeur : heartbeat Firestore, en ligne si signal serveur < 90 s. */
+let krediPresenceHeartbeat=null,krediPresenceShopId='';
+function krediStopSellerPresence(){
+ if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
+ krediPresenceShopId='';
+}
+async function krediStartSellerPresence(){
+ krediStopSellerPresence();
+ if(!krediUser||!krediStore||!navigator.onLine)return;
+ let memberships;
+ try{memberships=await krediStore.collection('userShopMemberships').doc(krediUser.uid).collection('shops').limit(2).get({source:'server'})}
+ catch(error){console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
+ const docs=memberships.docs.filter(d=>d.data()&&d.data().active===true&&d.data().role==='seller');
+ if(docs.length!==1)return;
+ const uid=krediUser.uid,shopId=docs[0].id;
+ krediPresenceShopId=shopId;
+ const send=async()=>{
+  if(!krediUser||krediUser.uid!==uid||krediPresenceShopId!==shopId||document.visibilityState==='hidden')return;
+  try{await krediStore.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
+  catch(error){console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
+ };
+ await send();
+ krediPresenceHeartbeat=setInterval(send,30000);
+}
+function krediEscapePresence(value){
+ return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
+}
+async function krediRefreshSellerPresence(){
+ const target=document.getElementById('sellerPresenceList');
+ if(!target)return;
+ if(!krediUser||!krediStore){target.textContent='Connectez-vous et vérifiez la connexion Firebase.';return}
+ const shopId='shop-'+krediUser.uid;
+ target.textContent='Lecture des vendeurs…';
+ try{
+  const base=krediStore.collection('shops').doc(shopId);
+  const members=await base.collection('members').get({source:'server'});
+  if(!members.size){target.textContent='Aucun vendeur attribué à cette boutique pour le moment.';return}
+  const presence=await base.collection('presence').get({source:'server'});
+  const seen=new Map();presence.forEach(doc=>seen.set(doc.id,doc.data()||{}));
+  const now=Date.now();
+  target.innerHTML=members.docs.map(doc=>{
+   const m=doc.data()||{},p=seen.get(doc.id)||{};
+   const stamp=p.lastSeen&&typeof p.lastSeen.toMillis==='function'?p.lastSeen.toMillis():0;
+   const online=!!(m.active===true&&stamp&&now-stamp<=90000);
+   const name=[m.firstName,m.lastName].filter(Boolean).join(' ').trim()||m.email||('Vendeur '+doc.id.slice(0,6));
+   const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Aucune connexion enregistrée';
+   return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small></span><span class="pill '+(online?'':'pending')+'">'+(online?'Connecté':'Pas encore connecté / hors ligne')+'</span></div>';
+  }).join('');
+ }catch(error){
+  console.warn('[COMPTIVA] Lecture de présence indisponible.',error);
+  target.textContent='Présence indisponible : boutique multi-vendeurs non configurée ou règles Firestore non publiées.';
+ }
+}
+
 function saveDB(){if(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()){krediStatus('COMPTIVA est verrouillé : déverrouillez la session avant toute sauvegarde.');return false}if(!krediStoreMatchesActiveUser()){krediCloudReady=false;krediStatus('Sécurité des comptes : sauvegarde bloquée car l’espace de stockage ne correspond pas au compte connecté. Reconnectez-vous avant toute modification.');return false}if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){krediStatus('Sécurité des données : la base locale est illisible. Aucune sauvegarde ni synchronisation ne sera effectuée. '+(window.krediDBStorageIssue.backupSaved?'Une copie de secours a été conservée.':'La copie de secours n’a pas pu être créée.'));flash('Données protégées : récupération nécessaire avant toute modification.',6500);return false}if(krediUser&&!krediIsCreator()&&!krediCanUseMerchantApp()){db=loadDB();renderAll();flash('Accès suspendu : vérifiez ou renouvelez votre abonnement avant de modifier les données.');return false}try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return false}renderAll();krediQueueCloudSave();return true}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -1716,7 +1776,7 @@ async function krediInitFirebase(){try{
     krediShowConflictRecoveryButton();
     try{krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1')}catch(storageError){krediLocalDirty=!!activeUser;console.warn('[COMPTIVA] Marqueur local illisible : prudence, les données locales seront traitées comme potentiellement non synchronisées.',storageError)}
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
-    if(!activeUser){krediIdleStop();krediIdleHideOverlay();STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
+    if(!activeUser){krediStopSellerPresence();krediIdleStop();krediIdleHideOverlay();STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=krediEmptyDB();subscription=loadSubscription();krediShowLogin();krediStatus('Connexion sécurisée prête.');return}
     krediIdleHideOverlay();krediUseAccountStore(activeUser.uid);krediShowApp(activeUser);renderAll();krediIdleSchedule();
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
@@ -1742,6 +1802,7 @@ async function krediInitFirebase(){try{
       return;
     }
     if(krediIsCreator()){krediSubscriptionAccess='active';loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);await krediLoadMerchantSubscription();}
+    krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Présence vendeur non initialisée.',error));
     // Ne pas poursuivre le chargement cloud si une autre session a pris la place.
     if(!isCurrentSession())return;
     krediStatus('Compte connecté. Vérification des données en ligne…');
