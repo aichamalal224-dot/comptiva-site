@@ -776,6 +776,55 @@ async function krediCheckKnownDebtPaymentRelations(shopRef,shopId,uid){
  assertOwner();
  return issues;
 }
+/* Audit exhaustif et paginé des relations de la boutique. Lecture serveur uniquement ; aucun document n'est modifié. */
+async function krediAuditAllSharedRelations(shopRef,shopId,uid){
+ const pageSize=200,collections=['sales','debts','payments','clients','products','purchases'];
+ const rows={},scanned={};
+ const assertOwner=()=>{if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé pendant l’audit paginé des relations.')};
+ for(const name of collections){
+  rows[name]=[];
+  let last=null,done=false;
+  while(!done){
+   assertOwner();
+   let query=shopRef.collection(name).orderBy(firebase.firestore.FieldPath.documentId()).limit(pageSize);
+   if(last)query=query.startAfter(last);
+   const snap=await query.get({source:'server'});
+   assertOwner();
+   snap.docs.forEach(doc=>rows[name].push({id:doc.id,data:doc.data()||{}}));
+   scanned[name]+=snap.size;
+   if(snap.size<pageSize)done=true;
+   else last=snap.docs[snap.docs.length-1];
+  }
+ }
+ const maps={};
+ collections.forEach(name=>maps[name]=new Map(rows[name].map(row=>[row.id,row.data])));
+ const issues=[];
+ const add=(kind,id,detail)=>{if(issues.length<100)issues.push(kind+':'+id+' ('+detail+')')};
+ collections.forEach(name=>rows[name].forEach(row=>{
+  if(row.data.shopId!==shopId)add(name,row.id,'shopId absent ou incorrect');
+ }));
+ rows.sales.forEach(({id,data})=>{
+  if(data.clientId&&!maps.clients.has(String(data.clientId)))add('vente',id,'client référencé absent');
+  if(data.stockProductId&&!maps.products.has(String(data.stockProductId)))add('vente',id,'produit de stock référencé absent');
+ });
+ rows.debts.forEach(({id,data})=>{
+  if(data.saleId&&!maps.sales.has(String(data.saleId)))add('dette',id,'vente référencée absente');
+  if(data.clientId&&!maps.clients.has(String(data.clientId)))add('dette',id,'client référencé absent');
+  if(data.saleId&&maps.sales.has(String(data.saleId))){
+   const sale=maps.sales.get(String(data.saleId));
+   if(String(sale.clientId||'')!==String(data.clientId||''))add('dette',id,'client différent de celui de la vente');
+  }
+ });
+ rows.payments.forEach(({id,data})=>{
+  if(!data.debtId)add('remboursement',id,'debtId absent');
+  else if(!maps.debts.has(String(data.debtId)))add('remboursement',id,'dette référencée absente');
+ });
+ rows.purchases.forEach(({id,data})=>{
+  if(data.stockProductId&&!maps.products.has(String(data.stockProductId)))add('achat',id,'produit de stock référencé absent');
+ });
+ assertOwner();
+ return{complete:true,scanned,issueCount:issues.length,issues};
+}
 async function krediCheckSharedSaleIdCollisions(){
  if(!krediUser||!krediUser.uid||!krediStoreMatchesActiveUser())throw new Error('Compte propriétaire non confirmé avant le contrôle des doublons.');
  const uid=krediUser.uid,shopId='shop-'+uid;
@@ -842,8 +891,9 @@ async function krediCheckSharedSaleIdCollisions(){
   }
  }
  const knownRelationIssues=await krediCheckKnownDebtPaymentRelations(shopRef,shopId,uid);
+ const fullRelationAudit=await krediAuditAllSharedRelations(shopRef,shopId,uid);
  if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())throw new Error('Compte changé après le contrôle des doublons.');
- return{shopExists:true,checked:sales.length,collisions,same,different,insufficient,knownRelationIssues};
+ return{shopExists:true,checked:sales.length,collisions,same,different,insufficient,knownRelationIssues,fullRelationAudit};
 }
 async function krediVerifyShopMigrationBackup(){
  const el=document.getElementById('shopMigrationPreflight');
@@ -865,15 +915,18 @@ async function krediVerifyShopMigrationBackup(){
   const localSnapshot=krediStableSnapshot(db),remoteSnapshot=krediStableSnapshot(remote.db);
   if(localSnapshot!==remoteSnapshot){say('Sauvegarde cloud trouvée, mais elle ne correspond pas exactement aux données locales. Synchronisez ou résolvez le conflit avant toute migration.');return false}
   const collisions=await krediCheckSharedSaleIdCollisions();
-  if(collisions.collisions.length||collisions.knownRelationIssues.length){
+  if(collisions.collisions.length||collisions.knownRelationIssues.length||collisions.fullRelationAudit.issueCount){
    const examples=collisions.collisions.slice(0,6).map(x=>x.id+' ['+(x.status==='same'?'contenu concordant':x.status==='different'?'contenu différent': 'comparaison incomplète')+(x.fields.length?' : '+x.fields.join('/'):'')+(x.relationIssues.length?' ; liens : '+x.relationIssues.join('/'):'')+']').join(' · ');
-   const relationCount=collisions.collisions.filter(x=>x.relationIssues.length).length+collisions.knownRelationIssues.length;
-   const relationExamples=collisions.knownRelationIssues.slice(0,6).join(' · ');
-   say('Migration bloquée : '+collisions.collisions.length+' ID de vente déjà présents. Comparaison métier : '+collisions.same+' concordant(s), '+collisions.different+' différent(s), '+collisions.insufficient+' non vérifiable(s). Relations incohérentes ou absentes : '+relationCount+'. Exemples ventes : '+examples+(relationExamples?' · Autres liens : '+relationExamples:'')+'. Même si le contenu concorde, aucun doublon n’est automatiquement ignoré ou écrasé. Vérification manuelle requise.');
+   const relationCount=collisions.collisions.filter(x=>x.relationIssues.length).length+collisions.knownRelationIssues.length+collisions.fullRelationAudit.issueCount;
+   const relationExamples=collisions.knownRelationIssues.slice(0,4).join(' · ');
+   const fullExamples=collisions.fullRelationAudit.issues.slice(0,8).join(' · ');
+   const scanLabel=Object.entries(collisions.fullRelationAudit.scanned).map(([k,v])=>k+': '+v).join(', ');
+   say('Migration bloquée : '+collisions.collisions.length+' ID de vente déjà présents. Comparaison métier : '+collisions.same+' concordant(s), '+collisions.different+' différent(s), '+collisions.insufficient+' non vérifiable(s). Anomalies de relations : '+relationCount+'. Documents parcourus intégralement : '+scanLabel+'. Exemples ventes : '+examples+(relationExamples?' · Liens locaux : '+relationExamples:'')+(fullExamples?' · Audit complet : '+fullExamples:'')+'. Même si le contenu concorde, aucun doublon n’est automatiquement ignoré ou écrasé. Vérification manuelle requise.');
    return false;
   }
   const stamp=remote.updatedAt&&typeof remote.updatedAt.toDate==='function'?remote.updatedAt.toDate().toLocaleString('fr-FR'):'date non disponible';
-  const collisionLabel=collisions.shopExists?'Aucun identifiant de vente historique en collision ('+collisions.checked+' contrôlé(s)) et aucun lien dette/remboursement local connu en anomalie.':'Boutique partagée non encore créée : aucun document métier partagé à comparer.';
+  const scanLabel=Object.entries(collisions.fullRelationAudit.scanned).map(([k,v])=>k+': '+v).join(', ');
+  const collisionLabel=collisions.shopExists?'Aucun identifiant de vente historique en collision ('+collisions.checked+' contrôlé(s)) et audit complet des relations sans anomalie. Documents parcourus : '+scanLabel+'.':'Boutique partagée non encore créée : aucun document métier partagé à comparer.';
   say('Sauvegarde cloud vérifiée sur le serveur ('+stamp+'). Copie identique aux données locales. '+Object.values(preview.counts).reduce((a,b)=>a+b,0)+' enregistrements contrôlés. '+collisionLabel+' Aucune donnée n’a été déplacée ni modifiée.');
   return true;
  }catch(error){
