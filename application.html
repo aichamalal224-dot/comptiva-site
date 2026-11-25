@@ -1755,11 +1755,21 @@ function saveMerchantProfile(event){
  }
  flash('Profil du commerce enregistré localement. Synchronisation cloud en attente de confirmation.');
 }
+function saleReceiptDebtState(sale){
+ const amounts=saleFinancialAmounts(sale);
+ if(!amounts||!isActiveSale(sale)||amounts.credit===0)return {credit:amounts?amounts.credit:NaN,currentBalance:null,issue:amounts? '':'Montants de vente incohérents.'};
+ const linked=db.debts.filter(d=>d&&d.saleId===sale.id&&d.status!=='cancelled');
+ if(linked.length!==1)return {credit:amounts.credit,currentBalance:NaN,issue:linked.length?'Plusieurs dettes actives liées à la vente.':'Dette liée introuvable.'};
+ const debt=linked[0],relationIssue=krediDebtRelationIssue(debt),remaining=balance(debt);
+ if(relationIssue||!Number.isSafeInteger(remaining)||remaining<0)return {credit:amounts.credit,currentBalance:NaN,issue:relationIssue||'Solde de dette incohérent.'};
+ return {credit:amounts.credit,currentBalance:remaining,issue:''};
+}
+function receiptMixedPartsValid(sale){return !!sale&&Number.isSafeInteger(sale.cashPart)&&sale.cashPart>=0&&Number.isSafeInteger(sale.mobilePart)&&sale.mobilePart>=0&&Number.isSafeInteger(sale.paidAmount)&&sale.cashPart+sale.mobilePart===sale.paidAmount;}
 function printReceipt(saleId,isDuplicate=false){
  const sale=db.sales.find(x=>x.id===saleId);
  if(!sale){alert('Vente introuvable.');return}
- const paid=paidOfSale(sale),credit=creditOfSale(sale);
- const customer=sale.clientId?db.clients.find(x=>x.id===sale.clientId):null;const client=customer?customer.name:'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart||0)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart||0)+'</span></div>':'';
+ const paid=paidOfSale(sale),credit=creditOfSale(sale),debtState=saleReceiptDebtState(sale);
+ const customer=sale.clientId?db.clients.find(x=>x.id===sale.clientId):null;const client=customer?customer.name:'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?(receiptMixedPartsValid(sale)?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart)+'</span></div>':'<div class="item"><span>Répartition du paiement</span><b>À vérifier</b></div>'):'';
  const receiptNo=String(sale.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
@@ -1783,7 +1793,7 @@ function printReceipt(saleId,isDuplicate=false){
  <div class="item total"><span>Total</span><span>${money(sale.total)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(sale.method||(sale.saleType==='credit'?'Crédit client':'Espèces'))}</span></div>${paymentBreakdown}
  <div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div>
- <div class="item"><span>Reste à payer</span><b>${money(credit)}</b></div>
+ <div class="item"><span>Crédit initial à la vente</span><b>${money(credit)}</b></div>${sale.status!=='cancelled'&&Number.isSafeInteger(credit)&&credit>0?'<div class="item"><span>Solde actuel de la dette</span><b>'+money(debtState.currentBalance)+'</b></div>':''}
  <div class="line"></div><p class="thanks">Merci pour votre achat !</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script></body></html>`);
  w.document.close();
