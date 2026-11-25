@@ -2017,7 +2017,26 @@ async function krediSignUp(){
   }
 }
 async function krediForgotPassword(){if(!krediAuth){krediAuthMessage('Firebase n’est pas encore chargé.');return}const email=document.getElementById('cloudEmail').value.trim();if(!email){krediAuthMessage('Saisissez votre adresse e-mail pour recevoir le lien de réinitialisation.');return}try{await krediAuth.sendPasswordResetEmail(email);krediAuthMessage('Un lien de réinitialisation a été envoyé si ce compte existe.',true)}catch(e){krediAuthMessage(krediFriendlyError(e))}}
-async function krediSignOut(){if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}if(!confirm('Voulez-vous vous déconnecter de votre compte Comptiva ?'))return;if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}let localSaved=false;const storageBlocked=!!(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE);if(!storageBlocked){try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(storageError){console.error('[COMPTIVA] Sauvegarde locale avant déconnexion impossible :',storageError)}}try{await krediAuth.signOut();if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500)}catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}}
+async function krediSignOut(){
+ if(!krediAuth){krediStatus('Firebase n’est pas initialisé.');return}
+ const signingOutUid=krediUser&&krediUser.uid;
+ const storageBlocked=!!(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE);
+ const pendingRead=signingOutUid?krediSafeStorageGet('comptiva_pending_'+signingOutUid):{ok:true,value:null};
+ const cloudPending=!!(signingOutUid&&(krediLocalDirty||krediSaveInFlightUid===signingOutUid||!!krediSaveTimer||!pendingRead.ok||pendingRead.value==='1'||!krediCloudReady));
+ const warning=cloudPending
+  ?'Des modifications ne sont pas confirmées comme synchronisées sur Firebase. Elles seront conservées localement sur cet appareil, mais peuvent ne pas être disponibles sur vos autres appareils.\\n\\nAvant de vous déconnecter, assurez-vous de pouvoir revenir sur cet appareil ou de faire une sauvegarde de récupération. Voulez-vous vraiment continuer ?'
+  :'Voulez-vous vous déconnecter de votre compte Comptiva ?';
+ if(!confirm(warning))return;
+ if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}
+ let localSaved=false;
+ if(!storageBlocked){try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(storageError){console.error('[COMPTIVA] Sauvegarde locale avant déconnexion impossible :',storageError)}}
+ try{
+  await krediAuth.signOut();
+  if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);
+  else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500);
+  else if(cloudPending)flash('Déconnexion effectuée. Attention : des données restent peut-être uniquement sur cet appareil et ne sont pas confirmées sur Firebase.',8000);
+ }catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}
+}
 window.addEventListener('error',event=>{if(event&&event.message&&event.message!=='Script error.')krediStatus('Erreur JavaScript : '+event.message)});
 // Le formulaire est relié immédiatement, sans attendre le retour du listener Firebase.
 const krediLoginForm=document.getElementById('authForm');
