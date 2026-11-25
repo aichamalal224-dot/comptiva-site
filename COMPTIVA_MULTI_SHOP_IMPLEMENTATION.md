@@ -88,6 +88,16 @@ Chaque document métier doit inclure un `shopId` cohérent avec son chemin, un i
 | Lire l'historique des opérations | Oui | Limité à ses opérations si nécessaire |
 | Effacer l'historique | Non | Non |
 
+## Traçabilité Patron / Vendeur — état vérifié
+
+- Les nouvelles opérations du modèle historique utilisent `createdByUid`, `createdByName`, `createdAt` et `updatedAt` via `krediActorStamp()`. Les écrans Ventes, Dettes, Remboursements, Achats et Dépenses affichent déjà le nom enregistré lorsque disponible.
+- Le pré-contrôle de migration compte désormais les enregistrements dont les métadonnées d'auteur sont complètes, partielles ou absentes. Les données historiques sans auteur restent explicitement inconnues : aucun UID ni nom n'est reconstitué par supposition.
+- Limite bloquante : le vendeur est actuellement connecté avec son propre UID et le document historique qu'il sauvegarde est `users/{sellerUid}/comptivaData/main`. Le Patron consulte encore `users/{patronUid}/comptivaData/main`. Les deux espaces restent séparés ; le fait d'inscrire le bon UID dans une vente ne la rend donc pas automatiquement visible dans la base du Patron.
+- La présence et l'affectation du vendeur sont suivies dans `shops/{shopId}/members`, `presence` et `userShopMemberships`, mais les écrans opérationnels ne lisent/écrivent pas encore les collections métier `shops/{shopId}/sales`, `clients`, `debts` et `payments`.
+- Ne pas tenter de contourner cette limite en copiant le document complet du vendeur dans celui du Patron ou en ouvrant les règles `users/{uid}` à d'autres comptes : cela créerait un risque de fuite inter-commerçants et d'écrasement de données.
+
+**Conséquence :** l'affichage fiable des ventes du Vendeur dans l'espace Patron exige la migration vers les collections par boutique, avec attribution serveur vérifiée et règles Firestore testées. Jusqu'à cette migration, le suivi de présence peut fonctionner, mais le partage des opérations commerciales n'est pas encore opérationnel.
+
 ## Migration sans perte — étapes obligatoires
 
 1. Inventorier les documents locaux et cloud et vérifier leur propriétaire UID.
