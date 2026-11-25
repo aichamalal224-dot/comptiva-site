@@ -395,7 +395,7 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
       <div class="card" style="margin-top:16px">
         <h3>Préparation des boutiques multiples</h3>
         <p>Analyse locale de vos données avant leur future migration vers une boutique principale. Cette vérification ne déplace, ne modifie et ne supprime aucune donnée.</p>
-        <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button></div>
+        <div class="formactions"><button class="soft" type="button" onclick="krediShowShopMigrationPreview()">Analyser mes données</button><button class="soft" type="button" onclick="krediVerifyShopMigrationBackup()">Vérifier la sauvegarde cloud</button></div>
         <div id="shopMigrationPreflight" class="footer" aria-live="polite">Aucune analyse lancée.</div>
       </div>
       <div class="card" style="margin-top:16px" id="patronPresenceCard">
@@ -622,6 +622,37 @@ function krediBuildShopMigrationPreview(){
  const sum=(key,field)=>active(key).reduce((n,x)=>n+Number(x[field]||0),0);
  const orphanCount=Object.values(missing).reduce((n,x)=>n+x,0);
  return{uid:krediUser.uid,legacyPath:'users/'+krediUser.uid+'/comptivaData/main',suggestedShopId:'shop-'+krediUser.uid,schemaVersion:1,counts:Object.fromEntries(Object.entries(rows).map(([k,v])=>[k,v.length])),totals:{salesGNF:sum('sales','total'),purchasesGNF:sum('purchases','amount'),expensesGNF:sum('expenses','amount'),paymentsGNF:sum('payments','amount'),stockUnits:rows.products.reduce((n,x)=>n+Number(x.quantity||0),0)},missing,orphanCount,localCheckPassed:orphanCount===0,requiresCloudBackup:true,requiresServerOwnerVerification:true,generatedAt:new Date().toISOString()};
+}
+function krediStableSnapshot(value){
+ if(value===null||typeof value!=='object')return JSON.stringify(value);
+ if(Array.isArray(value))return '['+value.map(krediStableSnapshot).join(',')+']';
+ return '{'+Object.keys(value).sort().map(key=>JSON.stringify(key)+':'+krediStableSnapshot(value[key])).join(',')+'}';
+}
+async function krediVerifyShopMigrationBackup(){
+ const el=document.getElementById('shopMigrationPreflight');
+ const say=message=>{if(el)el.textContent=message};
+ if(!krediUser||!krediUser.uid||!krediStore||!krediStoreMatchesActiveUser()){say('Vérification cloud refusée : connectez-vous au compte propriétaire des données.');return false}
+ if(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()){say('Session verrouillée : déverrouillez-la avant de vérifier la sauvegarde.');return false}
+ if(!navigator.onLine){say('Vérification impossible hors connexion. Vos données locales ne sont pas modifiées.');return false}
+ if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){say('Base locale illisible : aucune comparaison ni migration autorisée.');return false}
+ try{
+  const preview=krediBuildShopMigrationPreview();
+  const ref=krediStore.collection('users').doc(krediUser.uid).collection('comptivaData').doc('main');
+  const snap=await ref.get({source:'server'});
+  if(!krediUser||!krediStoreMatchesActiveUser()){say('Compte changé pendant la vérification : résultat ignoré.');return false}
+  if(!snap.exists){say('Aucune sauvegarde cloud trouvée pour ce compte. La migration reste bloquée.');return false}
+  const remote=snap.data()||{};
+  if(!remote.db||typeof remote.db!=='object'){say('Format de sauvegarde cloud inattendu. Migration bloquée pour protéger les données.');return false}
+  const localSnapshot=krediStableSnapshot(db),remoteSnapshot=krediStableSnapshot(remote.db);
+  if(localSnapshot!==remoteSnapshot){say('Sauvegarde cloud trouvée, mais elle ne correspond pas exactement aux données locales. Synchronisez ou résolvez le conflit avant toute migration.');return false}
+  const stamp=remote.updatedAt&&typeof remote.updatedAt.toDate==='function'?remote.updatedAt.toDate().toLocaleString('fr-FR'):'date non disponible';
+  say('Sauvegarde cloud vérifiée sur le serveur ('+stamp+'). Copie identique aux données locales. '+Object.values(preview.counts).reduce((a,b)=>a+b,0)+' enregistrements contrôlés. Aucune donnée n’a été déplacée ni modifiée.');
+  return true;
+ }catch(error){
+  console.error('[COMPTIVA] Vérification de sauvegarde cloud impossible.',error);
+  say('Vérification cloud échouée : '+(error&&error.code==='permission-denied'?'accès Firestore refusé.':'connexion ou lecture serveur indisponible.')+' Aucune migration lancée.');
+  return false;
+ }
 }
 function krediShowShopMigrationPreview(){
  const el=document.getElementById('shopMigrationPreflight');if(!el)return;
