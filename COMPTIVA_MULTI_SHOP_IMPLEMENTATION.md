@@ -205,3 +205,25 @@ La fonctionnalité ne sera considérée comme terminée que si :
 
 
 L'audit de cohérence du stock vérifie désormais aussi les quantités actuelles de chaque produit, le lien vente-produit, l'égalité entre quantité vendue et quantité déduite, les indicateurs et la quantité de réintégration lors d'une annulation, ainsi que les traces de retrait lors de l'annulation d'un achat. Les ajustements de vente et d'achat sont contrôlés séparément à partir de leurs quantités précédente/nouvelle et de leur delta. L'audit reste consultatif et en lecture seule : il signale les écarts sans recalculer ni modifier les quantités, car les historiques anciens peuvent ne pas contenir de stock initial.
+
+
+## Revue complémentaire de sécurité et de cohérence — 25 novembre 2026
+
+### Protection des ventes historiques et du stock
+
+Les opérations de modification et d'annulation d'une vente qui porte un `stockProductId` sont désormais bloquées si la vente ne contient pas une preuve fiable de déduction initiale (`stockDeductedAt` et `stockDeductedQuantity` strictement positive et égale à la quantité vendue). Cela évite de réintégrer artificiellement une quantité qui n'aurait peut-être jamais été retirée. L'audit de stock signale aussi ces ventes sous le code `sale_deduction_unproven`, ainsi que les déductions sans identifiant de produit. Aucun stock n'est corrigé automatiquement.
+
+### Blocages de migration multi-boutiques identifiés — ne pas activer en l'état
+
+- L'application utilise toujours le document legacy `users/{uid}/comptivaData/main` pour la synchronisation principale. La transaction compare et remplace le document global `db` ; elle ne réalise pas encore les écritures métier dans les sous-collections `shops/{shopId}/sales`, `clients`, `debts`, `payments`, `products`, `purchases` et `auditLog`.
+- Les règles des ventes et paiements partagés exigent `createdBy == request.auth.uid`, alors que le tampon d'auteur actuellement utilisé par les opérations métier fournit `createdByUid` et `createdByName`. Les règles des événements d'audit exigent `shopId` et `actorUid`, alors que les entrées locales existantes utilisent notamment `actor` et `actorName`. Les objets clients, dettes, produits et achats ne sont pas encore systématiquement estampillés avec le `shopId` requis par les règles.
+- La transaction actuelle protège contre l'écrasement concurrent du document global, mais ne fournit pas une transaction métier par produit, vente ou mouvement partagé. Les opérations multi-vendeurs ne doivent donc pas être présentées comme atomiques.
+- En conséquence, les règles multi-boutiques et les contrôles d'audit associés restent une préparation de sécurité, pas une migration opérationnelle achevée. Ne pas déployer/activer ces règles ni migrer les données avant alignement des schémas, des auteurs, des chemins d'écriture et des transactions, puis tests Firestore Emulator et tests réels autorisés.
+
+### Vérifications de cette revue
+
+- Les trois scripts JavaScript intégrés compilent après les modifications.
+- Un scénario synthétique de vente liée à un produit sans preuve de déduction déclenche bien l'anomalie `sale_deduction_unproven`.
+- Les protections de modification et d'annulation refusent ce cas avant toute réintégration automatique.
+- Les écarts entre le modèle legacy de l'application et les prérequis des règles multi-boutiques ont été confirmés par lecture du code et des règles de la branche.
+- Aucun test Firebase réel, test Emulator, test navigateur multi-appareils, déploiement de règles, migration de données, fusion ou publication n'a été effectué.
