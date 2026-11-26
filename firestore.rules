@@ -44,17 +44,25 @@ service cloud.firestore {
 
     function isActiveShopMember(shopId) {
       let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+      let indexPath = /databases/$(database)/documents/userShopMemberships/$(request.auth.uid)/shops/$(shopId);
       return signedIn()
         && shopExists(shopId)
         && shopData(shopId).status == 'active'
         && exists(memberPath)
-        // Une appartenance valide doit correspondre exactement au compte connecté.
+        && exists(indexPath)
+        // Le document membre et l'index privé doivent tous deux confirmer le même vendeur actif.
         && get(memberPath).data.keys().hasAll(['uid', 'role', 'active', 'assignedBy'])
         && get(memberPath).data.uid == request.auth.uid
         && get(memberPath).data.role == 'seller'
         && get(memberPath).data.active == true
-        // Seul le Patron propriétaire de cette boutique peut avoir affecté ce vendeur.
         && get(memberPath).data.assignedBy == shopData(shopId).patronUid
+        // Un index absent, inactif ou rattaché à un autre Patron bloque aussi l'accès.
+        && get(indexPath).data.keys().hasAll(['uid', 'shopId', 'role', 'active', 'patronUid'])
+        && get(indexPath).data.uid == request.auth.uid
+        && get(indexPath).data.shopId == shopId
+        && get(indexPath).data.role == 'seller'
+        && get(indexPath).data.active == true
+        && get(indexPath).data.patronUid == shopData(shopId).patronUid
         && hasActiveSubscription(shopData(shopId).patronUid);
     }
 
