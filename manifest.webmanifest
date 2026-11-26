@@ -1,0 +1,15 @@
+{
+  "id": "./application.html",
+  "name": "COMPTIVA — Gestion de commerce",
+  "short_name": "COMPTIVA",
+  "description": "Votre commerce, toujours sous contrôle.",
+  "lang": "fr",
+  "start_url": "./application.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f7fd",
+  "theme_color": "#0d3b66",
+  "categories": ["business", "finance", "productivity"],
+  "icons": [{"src":"./icons/comptiva.svg","sizes":"any","type":"image/svg+xml","purpose":"any maskable"}]
+}

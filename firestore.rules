@@ -1,0 +1,288 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isCreator() {
+      return signedIn()
+        && request.auth.uid == "ELopCSbMMrSTDEMCzNhchqonGci2";
+    }
+
+    function hasActiveSubscription(uid) {
+      let sub = get(/databases/$(database)/documents/merchantSubscriptions/$(uid));
+      return sub.exists()
+        && sub.data.keys().hasAll(['status'])
+        && (
+          (sub.data.status == 'trial'
+            && sub.data.keys().hasAll(['trialEnd'])
+            && sub.data.trialEnd is timestamp
+            && request.time < sub.data.trialEnd)
+          ||
+          (sub.data.status in ['active', 'paid']
+            && sub.data.keys().hasAll(['paidUntil'])
+            && sub.data.paidUntil is timestamp
+            && request.time < sub.data.paidUntil)
+        );
+    }
+
+    function shopExists(shopId) {
+      return exists(/databases/$(database)/documents/shops/$(shopId));
+    }
+
+    function shopData(shopId) {
+      return get(/databases/$(database)/documents/shops/$(shopId)).data;
+    }
+
+    function isShopPatron(shopId) {
+      return signedIn()
+        && shopExists(shopId)
+        && shopData(shopId).ownerUid == request.auth.uid
+        && shopData(shopId).patronUid == request.auth.uid;
+    }
+
+    function isActiveShopMember(shopId) {
+      let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+      let indexPath = /databases/$(database)/documents/userShopMemberships/$(request.auth.uid)/shops/$(shopId);
+      return signedIn()
+        && shopExists(shopId)
+        && shopData(shopId).status == 'active'
+        && exists(memberPath)
+        && exists(indexPath)
+        // Le document membre et l'index privé doivent tous deux confirmer le même vendeur actif.
+        && get(memberPath).data.keys().hasAll(['uid', 'role', 'active', 'assignedBy'])
+        && get(memberPath).data.uid == request.auth.uid
+        && get(memberPath).data.role == 'seller'
+        && get(memberPath).data.active == true
+        && get(memberPath).data.assignedBy == shopData(shopId).patronUid
+        // Un index absent, inactif ou rattaché à un autre Patron bloque aussi l'accès.
+        && get(indexPath).data.keys().hasAll(['uid', 'shopId', 'role', 'active', 'patronUid'])
+        && get(indexPath).data.uid == request.auth.uid
+        && get(indexPath).data.shopId == shopId
+        && get(indexPath).data.role == 'seller'
+        && get(indexPath).data.active == true
+        && get(indexPath).data.patronUid == shopData(shopId).patronUid
+        && hasActiveSubscription(shopData(shopId).patronUid);
+    }
+
+    function canWriteShop(shopId) {
+      return shopExists(shopId)
+        && shopData(shopId).status == 'active'
+        && (
+          (isShopPatron(shopId) && hasActiveSubscription(shopData(shopId).patronUid))
+          || isActiveShopMember(shopId)
+        );
+    }
+
+    function isShopSeller(shopId) {
+      let memberPath = /databases/$(database)/documents/shops/$(shopId)/members/$(request.auth.uid);
+      return isActiveShopMember(shopId)
+        && get(memberPath).data.role == 'seller';
+    }
+
+    function canUseShop(shopId) {
+      return isShopPatron(shopId) || isActiveShopMember(shopId);
+    }
+
+    // LEGACY: preserve each existing merchant's current private data path.
+    // This block must remain until the migration has been verified for every account.
+    match /users/{userId}/{document=**} {
+      allow read: if signedIn() && request.auth.uid == userId;
+      allow write: if signedIn()
+        && request.auth.uid == userId
+        && (isCreator() || hasActiveSubscription(userId));
+    }
+
+    match /merchantDirectory/{merchantUid} {
+      allow read, delete: if isCreator();
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'email', 'displayName', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid;
+      allow update: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['email', 'displayName', 'updatedAt'])
+        && request.resource.data.uid == merchantUid;
+    }
+
+    match /merchantSubscriptions/{merchantUid} {
+      allow read, write: if isCreator();
+      allow get: if signedIn() && request.auth.uid == merchantUid;
+      allow create: if signedIn()
+        && request.auth.uid == merchantUid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'status', 'trialStart', 'trialEnd', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'status', 'trialStart', 'trialEnd', 'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.uid == merchantUid
+        && request.resource.data.status == 'trial'
+        && request.resource.data.trialStart == request.time
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.trialEnd is timestamp
+        && request.resource.data.trialEnd > request.time
+        && request.resource.data.trialEnd <= request.time + duration.value(14, 'd');
+      allow update, delete: if isCreator();
+    }
+
+    // Index privé : chaque vendeur ne peut consulter que sa propre affectation.
+    match /userShopMemberships/{memberUid}/shops/{shopId} {
+      allow get, list: if signedIn() && request.auth.uid == memberUid;
+      allow create, update: if signedIn()
+        && isShopPatron(shopId)
+        && request.resource.data.keys().hasOnly(['uid', 'shopId', 'role', 'active', 'patronUid', 'updatedAt'])
+        && request.resource.data.uid == memberUid
+        && request.resource.data.shopId == shopId
+        && request.resource.data.role == 'seller'
+        && request.resource.data.active is bool
+        && request.resource.data.patronUid == request.auth.uid
+        && exists(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid))
+        // Vérifie le statut final du membre dans la même écriture groupée.
+        && getAfter(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == request.resource.data.active;
+      allow delete: if isShopPatron(shopId);
+    }
+
+    // NEW MULTI-SHOP MODEL. Do not activate before the application migration is ready.
+    match /shops/{shopId} {
+      allow get: if isCreator() || canUseShop(shopId);
+      allow list: if signedIn() && resource.data.ownerUid == request.auth.uid;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly([
+          'ownerUid', 'patronUid', 'name', 'status', 'schemaVersion',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.patronUid == request.auth.uid
+        && request.resource.data.status == 'active'
+        && request.resource.data.schemaVersion == 1
+        && hasActiveSubscription(request.auth.uid);
+      allow update: if canWriteShop(shopId) && isShopPatron(shopId)
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.patronUid == resource.data.patronUid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'status', 'updatedAt']);
+      allow delete: if false;
+
+      match /members/{memberUid} {
+        allow read: if isCreator()
+          || (signedIn() && request.auth.uid == memberUid && isActiveShopMember(shopId))
+          || isShopPatron(shopId);
+        allow create, update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && memberUid != request.auth.uid
+          && request.resource.data.keys().hasOnly([
+            'uid', 'role', 'active', 'firstName', 'lastName', 'email',
+            'createdAt', 'updatedAt', 'assignedBy'
+          ])
+          && request.resource.data.uid == memberUid
+          && request.resource.data.role == 'seller'
+          && request.resource.data.active is bool
+          && request.resource.data.assignedBy == request.auth.uid;
+        allow delete: if canWriteShop(shopId) && isShopPatron(shopId) && memberUid != request.auth.uid;
+      }
+
+      // Présence : Patron lit la liste ; un vendeur ne peut lire que le document de son Patron.
+      // Chaque utilisateur ne peut écrire que son propre document de présence.
+      match /presence/{memberUid} {
+        allow get: if isShopPatron(shopId)
+          || (isActiveShopMember(shopId) && memberUid == shopData(shopId).patronUid);
+        allow list: if isShopPatron(shopId);
+        allow create, update: if signedIn()
+          && request.auth.uid == memberUid
+          && (
+            isActiveShopMember(shopId)
+            || (isShopPatron(shopId) && hasActiveSubscription(shopData(shopId).patronUid))
+          )
+          && request.resource.data.keys().hasOnly(['uid', 'lastSeen', 'clientState'])
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.lastSeen == request.time
+          && request.resource.data.clientState in ['active', 'disconnected'];
+        allow delete: if false;
+      }
+
+      match /sales/{saleId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canWriteShop(shopId)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && request.resource.data.shopId == resource.data.shopId
+          && request.resource.data.createdBy == resource.data.createdBy;
+        allow delete: if false;
+      }
+
+      match /clients/{clientId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canWriteShop(shopId)
+          && request.resource.data.shopId == shopId;
+        allow update: if canWriteShop(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
+        allow delete: if canWriteShop(shopId) && isShopPatron(shopId);
+      }
+
+      match /debts/{debtId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canWriteShop(shopId)
+          && request.resource.data.shopId == shopId;
+        allow update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
+      }
+
+      match /payments/{paymentId} {
+        allow read: if canUseShop(shopId);
+        allow create: if canWriteShop(shopId)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && resource.data.shopId == shopId
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
+      }
+
+      match /products/{productId} {
+        // Les documents produit peuvent contenir purchasePrice et d'autres données de marge.
+        // Firestore ne sait pas masquer des champs : lecture Patron uniquement jusqu'à séparation
+        // en catalogue public vendeur et coûts privés Patron.
+        allow read: if isShopPatron(shopId);
+        // Stock mutations are Patron-only until atomic sale/inventory operations
+        // have been migrated and verified. This intentionally blocks direct seller edits.
+        allow create, update, delete: if canWriteShop(shopId) && isShopPatron(shopId);
+      }
+
+      match /purchases/{purchaseId} {
+        allow read: if isShopPatron(shopId);
+        allow create, update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isShopPatron(shopId);
+        allow create, update: if canWriteShop(shopId) && isShopPatron(shopId)
+          && request.resource.data.shopId == shopId;
+        allow delete: if false;
+      }
+
+      match /reports/{reportId} {
+        allow read: if isShopPatron(shopId);
+        allow write: if false;
+      }
+
+      match /auditLog/{eventId} {
+        allow read: if isShopPatron(shopId);
+        allow create: if canWriteShop(shopId)
+          && request.resource.data.shopId == shopId
+          && request.resource.data.actorUid == request.auth.uid;
+        allow update, delete: if false;
+      }
+    }
+  }
+}
