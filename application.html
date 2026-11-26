@@ -2579,11 +2579,22 @@ function krediFindSyncMergeConflicts(localData,remoteData){
   if(key==='businessProfile')continue;
   const localRows=Array.isArray(localData&&localData[key])?localData[key]:[];
   const remoteRows=Array.isArray(remoteData&&remoteData[key])?remoteData[key]:[];
-  const remoteById=new Map(remoteRows.filter(row=>row&&typeof row==='object'&&row.id).map(row=>[String(row.id),row]));
+  const localById=new Map(),remoteById=new Map();
   for(const row of localRows){
    if(!row||typeof row!=='object'||!row.id)continue;
-   const remote=remoteById.get(String(row.id));
-   if(remote&&stable(row)!==stable(remote))conflicts.push(key+'/'+row.id);
+   const rowId=String(row.id);
+   if(localById.has(rowId))conflicts.push(key+'/'+rowId+' (identifiant local dupliqué)');
+   else localById.set(rowId,row);
+  }
+  for(const row of remoteRows){
+   if(!row||typeof row!=='object'||!row.id)continue;
+   const rowId=String(row.id);
+   if(remoteById.has(rowId))conflicts.push(key+'/'+rowId+' (identifiant cloud dupliqué)');
+   else remoteById.set(rowId,row);
+  }
+  for(const [rowId,row] of localById){
+   const remote=remoteById.get(rowId);
+   if(remote&&stable(row)!==stable(remote))conflicts.push(key+'/'+rowId);
   }
  }
  return conflicts;
