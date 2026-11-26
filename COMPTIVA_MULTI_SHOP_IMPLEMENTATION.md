@@ -3058,3 +3058,17 @@ Une protection intermédiaire a été ajoutée avant la fusion locale/cloud. Lor
 Cette mesure **ne constitue pas encore un système de suppression synchronisée** : elle bloque les suppressions unilatérales non versionnées plutôt que de les propager. Les suppressions cohérentes des deux côtés ne sont pas signalées par cette règle. Si la base de référence est absente ou illisible, ce contrôle spécifique ne peut pas conclure ; le mécanisme existant de conflit et de validation de structure reste en place. La création de tombstones durables, leur propagation et leur politique de rétention restent nécessaires.
 
 **Vérifications :** code relu après écriture ; compilation statique des trois blocs JavaScript ; documentation relue. Aucun test d'exécution multi-appareils, Firebase Emulator, compte réel, réseau hors connexion ou concurrence n'a été exécuté. Aucune migration, modification des règles Firestore, fusion, publication ou déploiement. `main` reste intacte.
+
+
+### Audit des relations clients, ventes, dettes, remboursements et stock — 26 novembre 2026
+
+**Contrôles déjà présents dans le code :**
+- L'aperçu de migration compte les références client/vente/produit absentes, les dettes orphelines, les dettes liées à une vente annulée ou à un autre client, les ventes à crédit sans dette unique et les incohérences de montants.
+- Le contrôle relationnel des données partagées vérifie notamment les clients et produits référencés par les ventes, les ventes référencées par les dettes et les dettes référencées par les remboursements.
+- L'annulation d'une vente vérifie les dettes actives et bloque si des remboursements sont déjà enregistrés ou si la preuve de mouvement de stock est insuffisante.
+
+**Limite et risque :** ces vérifications d'intégrité sont concentrées dans l'analyse/migration et certains flux de vente. Elles ne prouvent pas que chaque action de suppression de l'interface passe par un contrôle global des dépendances. L'inspection de cette version n'a pas permis d'identifier de manière fiable un ensemble complet de gestionnaires de suppression pour toutes les collections ; aucune suppression globale ni aucun changement de schéma n'a donc été introduit.
+
+**Règle de protection retenue :** ne pas supprimer physiquement un client, produit, vente, dette ou remboursement tant que les dépendances et l'historique ne sont pas vérifiés. La correction durable devra privilégier l'archivage/désactivation, conserver les identifiants et les reçus, et empêcher la suppression d'une fiche encore référencée. Les ventes annulées et les remboursements réels doivent rester des événements financiers distincts.
+
+**Tests :** relecture du code et de la documentation uniquement pour cet audit. Aucun test fonctionnel de suppression, aucune base réelle, aucun émulateur Firebase ni appareil secondaire n'a été utilisé. Aucun changement de règles Firestore, migration, publication ou déploiement.
