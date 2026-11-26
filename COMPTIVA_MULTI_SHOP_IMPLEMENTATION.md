@@ -1247,3 +1247,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - L'écriture Firestore déjà lancée n'est pas annulée si le délai expire ; le mécanisme de sérialisation des écritures et le contrôle de session restent en place.
 - Vérification statique : modification retrouvée après relecture GitHub ; les trois blocs JavaScript compilent avec `new Function`.
 - Cette correction ne résout pas le défaut d'un document partagé entre plusieurs appareils. Le schéma multi-sessions décrit ci-dessus reste à implémenter et à tester.
+
+
+## Correction complémentaire — arrêt des signaux en attente lors de la déconnexion (26 novembre 2026)
+
+- Une déconnexion pouvait arrêter l’intervalle de heartbeat alors qu’un ancien signal `active` attendait encore la fin d’une écriture Firestore précédente. Comme l’utilisateur restait authentifié pendant la confirmation de déconnexion, ce signal en attente pouvait théoriquement être écrit après le marqueur `disconnected`.
+- Le code bloque désormais les nouvelles écritures `active` dès le début de la déconnexion, y compris après l’attente d’une écriture précédente. Le marqueur `disconnected` reste autorisé.
+- La tentative de déconnexion est aussi liée à l’époque de session (`krediSessionEpoch`) capturée au départ : un changement de session invalide l’ancienne tentative.
+- Cette correction réduit une course locale entre heartbeat et déconnexion. Elle ne résout pas le défaut multi-appareils dû au document unique `presence/{uid}` : les sous-documents `sessions/{sessionId}` restent à concevoir et implémenter avec leurs règles et leurs tests.
+- Vérification statique uniquement ; aucun test Firebase Emulator, navigateur, téléphone ou multi-appareils n’a été exécuté.
