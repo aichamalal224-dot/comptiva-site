@@ -3111,12 +3111,19 @@ async function krediSignOut(){
  if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}
  let localSaved=false;
  if(!storageBlocked){try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(storageError){console.error('[COMPTIVA] Sauvegarde locale avant déconnexion impossible :',storageError)}}
+ // Si la synchronisation cloud n'est pas confirmée, conserver un marqueur durable
+ // pour que la prochaine connexion traite ce snapshot comme des données en attente.
+ let pendingMarkerSaved=true;
+ if(cloudPending&&signingOutUid){
+  pendingMarkerSaved=krediSafeStorageSet('comptiva_pending_'+signingOutUid,'1');
+  if(!pendingMarkerSaved)console.error('[COMPTIVA] Impossible de conserver le marqueur de données locales en attente avant déconnexion.');
+ }
  try{
   await krediMarkSellerDisconnected(signingOutUid);
   await krediAuth.signOut();
   if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);
   else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500);
-  else if(cloudPending)flash('Déconnexion effectuée. Attention : des données restent peut-être uniquement sur cet appareil et ne sont pas confirmées sur Firebase.',8000);
+  else if(cloudPending)flash(pendingMarkerSaved?'Déconnexion effectuée. Des données restent peut-être uniquement sur cet appareil. Leur synchronisation sera vérifiée à votre prochaine connexion.':'Déconnexion effectuée, mais le marqueur de synchronisation en attente n’a pas pu être enregistré. Ne changez pas de compte sur cet appareil et faites une copie de récupération avant de reprendre.',9500);
  }catch(e){
   // Si Firebase Auth refuse la déconnexion, le compte reste potentiellement actif.
   // Réactiver son suivi évite de laisser un utilisateur connecté affiché « Déconnecté ».
