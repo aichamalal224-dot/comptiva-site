@@ -3129,3 +3129,10 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Correction : les actions financières (ajout de paiement, modification et annulation) dans la liste des dettes sont suspendues lorsque le registre global ou la dette concernée est incohérent. L’impression du relevé reste disponible pour inspection, mais refuse désormais un identifiant de dette absent ou dupliqué.
 - Limite : la suspension est volontairement conservatrice et peut bloquer les actions sur des dettes saines tant qu’une anomalie ailleurs dans le registre n’est pas corrigée. Aucune donnée historique n’a été modifiée.
 - Tests statiques requis après commit : compilation des trois blocs JavaScript, relecture des fonctions et comparaison de la branche avec main. Aucun test réel navigateur, appareil, Firebase Emulator ou compte marchand n’est réputé effectué.
+
+### Audit de l’enregistrement des remboursements — 26 novembre 2026
+- Constat : l’ajout contrôlait déjà le montant positif et le plafond du solde de la dette, mais ne contrôlait pas explicitement la date, le mode, l’unicité de l’identifiant de dette sélectionné ni l’intégrité globale des registres avant écriture.
+- Correction : avant tout nouveau remboursement, le registre global est validé par reportDebtLedger ; la dette sélectionnée doit exister une seule fois ; la date doit être une date ISO valide ; le mode doit appartenir aux choix autorisés ; l’identifiant de paiement généré doit être non vide et unique.
+- Les contrôles antérieurs restent actifs : dette active, relation client/vente valide, montant entier positif et montant inférieur ou égal au solde restant.
+- Limite : le stockage reste celui du mécanisme local/cloud existant ; cette validation applicative n’est pas une transaction atomique entre plusieurs appareils. Les tests de concurrence multi-appareils et de double soumission restent à réaliser en environnement de test.
+- Aucune donnée existante, règle Firebase, branche main ou déploiement n’a été modifié.
