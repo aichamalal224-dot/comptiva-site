@@ -3122,3 +3122,10 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 **Limites restantes :** les listes de clients récents et d'échéances du tableau de bord utilisent encore des agrégations individuelles qui méritent un contrôle dédié des dettes incohérentes. Cette correction ne constitue pas un registre de remboursement financier des ventes annulées ; un remboursement réel au client doit rester distinct de l'annulation commerciale et du retour de stock.
 
 **Vérifications :** relecture du bloc modifié et compilation statique des trois blocs JavaScript (3/3). Aucun test navigateur/appareil, jeu de données contrôlé, Firebase Emulator, compte réel, impression ou scénario multi-appareils n'a été exécuté. Aucune donnée métier, règle Firestore, migration, fusion, publication ou déploiement n'a été modifié ; `main` reste intacte.
+
+### Audit des listes de dettes et des soldes clients — 26 novembre 2026
+- Constat : la liste des clients additionnait les soldes dette par dette sans exiger la validation globale du registre. Des identifiants de dettes dupliqués ou des remboursements orphelins pouvaient donc rendre le total affiché trompeur.
+- Correction : le solde total d’un client est désormais affiché « À vérifier » tant que reportDebtLedger ne valide pas l’ensemble du registre actif. Les dettes annulées restent exclues du solde.
+- Correction : les actions financières (ajout de paiement, modification et annulation) dans la liste des dettes sont suspendues lorsque le registre global ou la dette concernée est incohérent. L’impression du relevé reste disponible pour inspection, mais refuse désormais un identifiant de dette absent ou dupliqué.
+- Limite : la suspension est volontairement conservatrice et peut bloquer les actions sur des dettes saines tant qu’une anomalie ailleurs dans le registre n’est pas corrigée. Aucune donnée historique n’a été modifiée.
+- Tests statiques requis après commit : compilation des trois blocs JavaScript, relecture des fonctions et comparaison de la branche avec main. Aucun test réel navigateur, appareil, Firebase Emulator ou compte marchand n’est réputé effectué.
