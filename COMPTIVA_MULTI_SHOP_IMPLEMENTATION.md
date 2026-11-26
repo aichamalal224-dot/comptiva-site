@@ -3049,3 +3049,12 @@ L'examen de `cancelSale()`, des mouvements de stock et des écritures de caisse 
 - Tester suppression hors ligne, reconnexion tardive, suppression simultanée avec modification, restauration de sauvegarde et multi-appareils.
 
 **Tests :** relecture après modification et compilation statique des trois blocs JavaScript ; aucun test de scénarios multi-appareils, émulateur Firebase ou compte réel n'a été exécuté. Aucune migration ni modification des règles Firestore ; aucun déploiement ou fusion. `main` reste intacte.
+
+
+### Garde-fou temporaire contre la réapparition des suppressions — 26 novembre 2026
+
+Une protection intermédiaire a été ajoutée avant la fusion locale/cloud. Lorsque `krediLastWrite` fournit une base de référence lisible, COMPTIVA compare les identifiants de chaque collection avec cette base. Si une fiche de référence manque d'un côté alors que l'autre côté la conserve sans modification, la synchronisation est suspendue et une copie de récupération locale/distante est demandée. Aucune fiche n'est alors réintroduite automatiquement par la fusion.
+
+Cette mesure **ne constitue pas encore un système de suppression synchronisée** : elle bloque les suppressions unilatérales non versionnées plutôt que de les propager. Les suppressions cohérentes des deux côtés ne sont pas signalées par cette règle. Si la base de référence est absente ou illisible, ce contrôle spécifique ne peut pas conclure ; le mécanisme existant de conflit et de validation de structure reste en place. La création de tombstones durables, leur propagation et leur politique de rétention restent nécessaires.
+
+**Vérifications :** code relu après écriture ; compilation statique des trois blocs JavaScript ; documentation relue. Aucun test d'exécution multi-appareils, Firebase Emulator, compte réel, réseau hors connexion ou concurrence n'a été exécuté. Aucune migration, modification des règles Firestore, fusion, publication ou déploiement. `main` reste intacte.
