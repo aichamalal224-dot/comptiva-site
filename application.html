@@ -1012,32 +1012,38 @@ function krediStopSellerPresence(){
 }
 async function krediStartSellerPresence(){
  krediStopSellerPresence();
+ const uid=krediUser&&krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch;
+ const isCurrent=()=>!!uid&&krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store;
  const card=document.getElementById('patronPresenceCard');
  if(card)card.classList.add('hidden');
- if(!krediUser||!krediStore||!navigator.onLine)return;
+ if(!uid||!store||!navigator.onLine)return;
  let memberships;
- try{memberships=await krediStore.collection('userShopMemberships').doc(krediUser.uid).collection('shops').limit(2).get({source:'server'})}
- catch(error){console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
+ try{memberships=await store.collection('userShopMemberships').doc(uid).collection('shops').limit(2).get({source:'server'})}
+ catch(error){if(isCurrent())console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
+ if(!isCurrent())return;
  const docs=memberships.docs.filter(d=>d.data()&&d.data().active===true&&d.data().role==='seller');
  if(docs.length===1){
-  const uid=krediUser.uid,shopId=docs[0].id;
+  const shopId=docs[0].id;
+  if(krediShopRole.status!=='verified'||krediShopRole.role!=='seller'||krediShopRole.uid!==uid||krediShopRole.shopId!==shopId)return;
   krediPresenceShopId=shopId;
   if(card)card.classList.add('hidden');
  }else{
+  if(docs.length>1)return;
   try{
-   const ownShop=await krediStore.collection('shops').doc('shop-'+krediUser.uid).get({source:'server'});
-   if(ownShop.exists&&ownShop.data()&&ownShop.data().ownerUid===krediUser.uid&&card)card.classList.remove('hidden');
-  }catch(error){console.warn('[COMPTIVA] Vérification du rôle Patron indisponible.',error)}
+   const ownShop=await store.collection('shops').doc('shop-'+uid).get({source:'server'});
+   if(!isCurrent())return;
+   if(ownShop.exists&&ownShop.data()&&ownShop.data().ownerUid===uid&&ownShop.data().patronUid===uid&&card)card.classList.remove('hidden');
+  }catch(error){if(isCurrent())console.warn('[COMPTIVA] Vérification du rôle Patron indisponible.',error)}
   return;
  }
- const uid=krediUser.uid,shopId=docs[0].id;
+ const shopId=docs[0].id;
  const send=async()=>{
-  if(!krediUser||krediUser.uid!==uid||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
-  try{await krediStore.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
-  catch(error){console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
+  if(!isCurrent()||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
+  try{await store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
+  catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
  };
  await send();
- krediPresenceHeartbeat=setInterval(send,30000);
+ if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,30000);
 }
 function krediEscapePresence(value){
  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
@@ -2637,7 +2643,9 @@ async function krediInitFirebase(){try{
       return;
     }
     try{await krediResolveShopRole(activeUser.uid)}catch(roleError){krediShopRole={status:'unknown',role:'unknown',uid:activeUser.uid};console.warn('[COMPTIVA] Rôle Patron/Vendeur non confirmé : actions Patron bloquées.',roleError)}if(!isCurrentSession())return;renderAll();if(krediIsCreator()){krediSubscriptionAccess='active';loadCreatorDirectory();loadCreatorPublicAds()}else{krediTrackMerchant(activeUser);await krediLoadMerchantSubscription();}
-    krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Présence vendeur non initialisée.',error));
+    // Une lecture d'abonnement peut se terminer après un changement de compte : l'ancienne session s'arrête ici.
+    if(!isCurrentSession())return;
+    krediStartSellerPresence().catch(error=>{if(isCurrentSession())console.warn('[COMPTIVA] Présence vendeur non initialisée.',error)});
     // Ne pas poursuivre le chargement cloud si une autre session a pris la place.
     if(!isCurrentSession())return;
     krediStatus('Compte connecté. Vérification des données en ligne…');
