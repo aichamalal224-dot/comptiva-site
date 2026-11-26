@@ -1357,3 +1357,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - La correction Auth précédente (arrêt des écouteurs et du heartbeat lors de chaque transition de compte) reste en place.
 - Aucun test Firebase Emulator, navigateur, compte réel ou appareil exécuté ; aucun déploiement, aucune migration de données, aucune publication.
 - La branche de travail reste distincte de `main` ; `main` n'est pas modifiée.
+
+
+## Correction — invalidation des anciennes instances du suivi de présence — 26 novembre 2026
+
+- Ajout d'un compteur de génération pour le suivi de présence du Patron. Chaque réouverture du suivi invalide les rappels et callbacks appartenant à l'instance précédente, même si le même UID reste connecté.
+- Les callbacks des écouteurs membres et présences, leurs erreurs, le rendu périodique et le bloc de gestion d'erreur vérifient maintenant que leur génération est toujours courante avant de modifier l'interface.
+- Chaque transition Auth invalide également la génération du suivi, en plus du nettoyage des écouteurs déjà en place.
+- Correction ciblée sur l'interface du suivi des présences ; aucune règle Firestore, donnée métier, vente, stock ou abonnement n'a été modifié.
+- Vérification statique : les trois blocs JavaScript de la version modifiée compilent. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'a été exécuté.
