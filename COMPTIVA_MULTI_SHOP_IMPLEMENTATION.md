@@ -3246,3 +3246,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Les remboursements annulés restent exclus du calcul des soldes et des totaux encaissés de la période ; leur identifiant demeure toutefois soumis à l’unicité historique.
 - Vérifications réalisées : relecture après écriture, contrôles statiques des nouveaux garde-fous et compilation JavaScript des trois blocs script.
 - Vérifications non réalisées : scénarios navigateur/appareil, données de production, tests Firebase Emulator, concurrence multi-appareils, synchronisation réelle et déploiement. Aucune règle Firestore, donnée métier, migration, fusion, publication ou branche `main` n’a été modifiée.
+
+
+### Audit synchronisation multi-appareils — conflits de suppression — 26 novembre 2026
+- Le contrôle des suppressions non versionnées a été renforcé : lorsqu’un enregistrement présent dans la référence a été supprimé sur un appareil mais existe encore sur l’autre, la synchronisation est désormais suspendue, même si la copie restante a également été modifiée. Cela évite de réintroduire silencieusement une fiche supprimée ou d’écraser une modification concurrente.
+- Le même principe est appliqué aux champs du profil commerce (`businessProfile`) : la suppression d’un champ sur un appareil face à sa présence sur l’autre est signalée comme conflit, qu’il soit inchangé ou modifié.
+- Si l’élément est supprimé des deux côtés, ce contrôle ne crée pas de conflit artificiel.
+- Vérifications réalisées : relecture après écriture, contrôles statiques des quatre cas de suppression et compilation JavaScript des trois blocs script.
+- Vérifications non réalisées : essais navigateur/appareils simultanés, scénarios hors ligne/réseau instable, données de production, Firebase Emulator, synchronisation réelle et déploiement. Aucune donnée métier, règle Firestore, migration, fusion, publication ou branche `main` n’a été modifiée.
