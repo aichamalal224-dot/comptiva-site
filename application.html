@@ -2689,6 +2689,9 @@ async function krediInitFirebase(){try{
       return;
     }
     const sessionEpoch=++krediSessionEpoch;
+    // Arrêter aussi le heartbeat et l'écoute du Patron de l'ancienne session,
+    // y compris lors d'un changement direct de compte sans état déconnecté.
+    krediStopSellerPresence();
     // Toute transition Auth invalide les écouteurs de présence de l'ancien compte,
     // y compris lors d'un passage direct Patron A → compte B sans étape déconnectée.
     if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}
