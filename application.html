@@ -339,6 +339,12 @@ body.auth-ready #authScreen{display:none!important;visibility:hidden!important}
     <div id="flash" class="success hidden"></div>
     <section id="page-dashboard">
       <div class="pagehead"><div><h2 id="dashboardGreeting">Bonjour, bienvenue sur COMPTIVA</h2><p id="dashboardSubGreeting">Voici la situation de votre commerce.</p></div><div class="actions"><button class="soft" onclick="exportCSV()">Exporter CSV</button><button class="green" onclick="backupData()">Sauvegarder les données</button><button class="soft" onclick="document.getElementById('restoreFile').click()">Restaurer une sauvegarde</button><input id="restoreFile" type="file" accept="application/json,.json" style="display:none" onchange="restoreData(event)"></div></div>
+      <div class="card hidden" id="sellerPatronPresenceCard" style="margin-bottom:14px" aria-live="polite">
+        <h3>Présence de votre Patron</h3>
+        <p>Vous pouvez voir si le Patron de votre boutique est connecté. Cette information ne donne pas accès à ses données privées.</p>
+        <div><span class="pill pending" id="sellerPatronPresenceStatus">Vérification…</span></div>
+        <small class="footer" id="sellerPatronPresenceWhen">Dernier signal : en attente</small>
+      </div>
       <div class="stats hero-kpis" aria-label="Indicateurs principaux">
         <div class="card"><div class="stat-icon">₲</div><div class="stat-label">Total des dettes restantes</div><div class="stat-number" id="kpiDebtTotal">0 GNF</div></div>
         <div class="card"><div class="stat-icon">👤</div><div class="stat-label">Clients débiteurs</div><div class="stat-number" id="kpiDebtorClients">0</div></div>
@@ -1005,11 +1011,30 @@ async function krediDiagnoseSharedShopAccess(){
  }
 }
 /* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
-let krediPresenceHeartbeat=null,krediPresenceShopId='';
+let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null;
 const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
+ if(krediPatronPresenceUnsub){krediPatronPresenceUnsub();krediPatronPresenceUnsub=null}
+ if(krediPatronPresenceRenderTimer){clearInterval(krediPatronPresenceRenderTimer);krediPatronPresenceRenderTimer=null}
+ krediPatronPresenceSnapshot=null;
+ const patronCard=document.getElementById('sellerPatronPresenceCard');
+ if(patronCard)patronCard.classList.add('hidden');
  krediPresenceShopId='';
+}
+function krediRenderPatronPresence(){
+ const card=document.getElementById('sellerPatronPresenceCard');
+ const status=document.getElementById('sellerPatronPresenceStatus');
+ const when=document.getElementById('sellerPatronPresenceWhen');
+ if(!card||!status||!when)return;
+ const p=krediPatronPresenceSnapshot||{};
+ const stamp=p.lastSeen&&typeof p.lastSeen.toMillis==='function'?p.lastSeen.toMillis():0;
+ const age=stamp?Math.max(0,Date.now()-stamp):Infinity;
+ const online=!!(stamp&&age<=KREDI_PRESENCE_OFFLINE_MS&&p.clientState!=='disconnected');
+ const label=p.clientState==='disconnected'?'Déconnecté':online?'Connecté':'Hors ligne';
+ status.textContent=label;
+ status.className='pill '+(online?'':'pending');
+ when.textContent=stamp?'Dernier signal : '+new Date(stamp).toLocaleString('fr-FR'):'Aucun signal reçu pour le moment';
 }
 async function krediMarkSellerDisconnected(expectedUid){
  const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId;
@@ -1026,36 +1051,54 @@ async function krediStartSellerPresence(){
  krediStopSellerPresence();
  const uid=krediUser&&krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch;
  const isCurrent=()=>!!uid&&krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store;
- const card=document.getElementById('patronPresenceCard');
- if(card)card.classList.add('hidden');
- if(!uid||!store||!navigator.onLine)return;
+ const patronCard=document.getElementById('patronPresenceCard');
+ const sellerCard=document.getElementById('sellerPatronPresenceCard');
+ if(patronCard)patronCard.classList.add('hidden');
+ if(sellerCard)sellerCard.classList.add('hidden');
+ if(!uid||!store||!navigator.onLine||krediShopRole.status!=='verified'||krediShopRole.uid!==uid)return;
  let memberships;
  try{memberships=await store.collection('userShopMemberships').doc(uid).collection('shops').limit(2).get({source:'server'})}
  catch(error){if(isCurrent())console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
  if(!isCurrent())return;
  const docs=memberships.docs.filter(d=>d.data()&&d.data().active===true&&d.data().role==='seller');
  if(docs.length===1){
-  const shopId=docs[0].id;
-  if(krediShopRole.status!=='verified'||krediShopRole.role!=='seller'||krediShopRole.uid!==uid||krediShopRole.shopId!==shopId)return;
+  const shopId=docs[0].id,link=docs[0].data()||{};
+  if(krediShopRole.role!=='seller'||krediShopRole.shopId!==shopId||krediShopRole.patronUid!==link.patronUid||!link.patronUid)return;
   krediPresenceShopId=shopId;
-  if(card)card.classList.add('hidden');
- }else{
-  if(docs.length>1)return;
-  try{
-   const ownShop=await store.collection('shops').doc('shop-'+uid).get({source:'server'});
+  const patronUid=link.patronUid;
+  if(sellerCard)sellerCard.classList.remove('hidden');
+  const patronRef=store.collection('shops').doc(shopId).collection('presence').doc(patronUid);
+  krediPatronPresenceUnsub=patronRef.onSnapshot(snap=>{
+   if(!isCurrent()||krediPresenceShopId!==shopId)return;
+   krediPatronPresenceSnapshot=snap.exists?(snap.data()||{}):null;
+   krediRenderPatronPresence();
+  },error=>{
    if(!isCurrent())return;
-   if(ownShop.exists&&ownShop.data()&&ownShop.data().ownerUid===uid&&ownShop.data().patronUid===uid&&card)card.classList.remove('hidden');
-  }catch(error){if(isCurrent())console.warn('[COMPTIVA] Vérification du rôle Patron indisponible.',error)}
-  return;
+   console.warn('[COMPTIVA] Présence du Patron indisponible.',error);
+   const status=document.getElementById('sellerPatronPresenceStatus');
+   const when=document.getElementById('sellerPatronPresenceWhen');
+   if(status){status.textContent='Indisponible';status.className='pill pending'}
+   if(when)when.textContent='La lecture du statut du Patron est refusée ou indisponible.';
+  });
+  krediPatronPresenceRenderTimer=setInterval(()=>{if(isCurrent())krediRenderPatronPresence()},KREDI_PRESENCE_RENDER_MS);
+ }else{
+  if(docs.length>1||krediShopRole.role!=='patron'||krediIsCreator())return;
+  try{
+   const shopId='shop-'+uid,ownShop=await store.collection('shops').doc(shopId).get({source:'server'});
+   if(!isCurrent())return;
+   const shop=ownShop.exists?(ownShop.data()||{}):{};
+   if(!ownShop.exists||shop.ownerUid!==uid||shop.patronUid!==uid||shop.status!=='active'||krediShopRole.shopId!==shopId)return;
+   if(patronCard)patronCard.classList.remove('hidden');
+   krediPresenceShopId=shopId;
+   const send=async()=>{
+    if(!isCurrent()||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
+    try{await store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
+    catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence du Patron non confirmé.',error)}
+   };
+   await send();
+   if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,KREDI_PRESENCE_HEARTBEAT_MS);
+  }catch(error){if(isCurrent())console.warn('[COMPTIVA] Vérification ou signal de présence Patron indisponible.',error)}
  }
- const shopId=docs[0].id;
- const send=async()=>{
-  if(!isCurrent()||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
-  try{await store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
-  catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
- };
- await send();
- if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,KREDI_PRESENCE_HEARTBEAT_MS);
 }
 function krediEscapePresence(value){
  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
