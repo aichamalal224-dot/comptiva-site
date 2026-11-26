@@ -1050,13 +1050,15 @@ async function krediMarkSellerDisconnected(expectedUid){
  if(!uid||!store||!shopId||!navigator.onLine||!krediUser||krediUser.uid!==uid)return false;
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
  const isCurrent=()=>!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
+ let timeoutId=null;
  try{
   await Promise.race([
    krediWritePresenceState(store,shopId,uid,'disconnected',isCurrent),
-   new Promise((_,reject)=>setTimeout(()=>reject(new Error('presence-disconnect-timeout')),1500))
+   new Promise((_,reject)=>{timeoutId=setTimeout(()=>reject(new Error('presence-disconnect-timeout')),1500)})
   ]);
   return true;
  }catch(error){console.warn('[COMPTIVA] Déconnexion de présence non confirmée ; le délai hors ligne prendra le relais.',error);return false}
+ finally{if(timeoutId!==null)clearTimeout(timeoutId)}
 }
 async function krediStartSellerPresence(){
  krediStopSellerPresence();
