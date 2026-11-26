@@ -1477,8 +1477,9 @@ function cancelPayment(paymentId){if(!krediRequirePatron('annuler un rembourseme
  flash('Annulation enregistrée sur cet appareil. Synchronisation cloud en cours ou en attente : vérifiez son statut avant de changer d’appareil.');
 }
 function printPaymentReceipt(paymentId,isDuplicate=false){
- const payment=db.payments.find(x=>x.id===paymentId);
- if(!payment){alert('Remboursement introuvable.');return}
+ const paymentMatches=db.payments.filter(x=>x&&x.id===paymentId);
+ if(paymentMatches.length!==1){alert('Reçu indisponible : remboursement introuvable ou identifiant dupliqué. Vérifiez le registre avant impression.');return}
+ const payment=paymentMatches[0];
  const debt=db.debts.find(x=>x.id===payment.debtId);
  if(!debt){alert('Dette introuvable.');return}
  const cancelled=payment.status==='cancelled';
@@ -1905,8 +1906,9 @@ function saleReceiptDebtState(sale){
 }
 function receiptMixedPartsValid(sale){return !!sale&&Number.isSafeInteger(sale.cashPart)&&sale.cashPart>=0&&Number.isSafeInteger(sale.mobilePart)&&sale.mobilePart>=0&&Number.isSafeInteger(sale.paidAmount)&&sale.cashPart+sale.mobilePart===sale.paidAmount;}
 function printReceipt(saleId,isDuplicate=false){
- const sale=db.sales.find(x=>x.id===saleId);
- if(!sale){alert('Vente introuvable.');return}
+ const saleMatches=db.sales.filter(x=>x&&x.id===saleId);
+ if(saleMatches.length!==1){alert('Reçu indisponible : vente introuvable ou identifiant dupliqué. Vérifiez le registre avant impression.');return}
+ const sale=saleMatches[0];
  const paid=paidOfSale(sale),credit=creditOfSale(sale),debtState=saleReceiptDebtState(sale);
  const customer=sale.clientId?db.clients.find(x=>x.id===sale.clientId):null;const client=customer?customer.name:'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?(receiptMixedPartsValid(sale)?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart)+'</span></div>':'<div class="item"><span>Répartition du paiement</span><b>À vérifier</b></div>'):'';
  const receiptNo=String(sale.id).slice(-8).toUpperCase();
