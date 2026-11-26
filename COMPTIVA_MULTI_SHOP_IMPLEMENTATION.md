@@ -2821,3 +2821,13 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Ces gardes empêchent une ancienne continuation de poursuivre son travail après un changement de session. Elles ne remplacent pas les tests réels ni le modèle de présence multi-appareils par sessions.
 - Vérifications : relecture GitHub, contrôle des deux gardes, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
 - Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
+
+
+## Correction — garde de session à l'intérieur des transactions cloud — 26 novembre 2026
+
+- Audit : les appels de transaction vérifiaient la session après la résolution de la transaction, mais le callback Firestore pouvait attendre une lecture serveur avant de préparer `transaction.set`.
+- Correction : `krediWriteCloudIfUnchanged` exige désormais une fonction `isCurrent`, vérifie la session avant de démarrer la transaction et la revérifie immédiatement après `transaction.get`, avant toute préparation d'écriture. Les deux chemins (fusion initiale après lecture du snapshot et sauvegarde différée) transmettent leur garde de session propre.
+- Une session devenue obsolète pendant la lecture transactionnelle interrompt le callback avec le code `comptiva/stale-session`. Les gestionnaires existants ignorent alors la continuation si leur session n'est plus courante.
+- Limite importante : une écriture déjà envoyée au serveur ne peut pas être annulée par JavaScript ; cette garde réduit la fenêtre de course mais ne constitue pas une garantie d'annulation atomique en cas de changement intervenant après la préparation du commit. Les règles Firestore restent la barrière d'autorisation côté serveur.
+- Vérifications : relecture, confirmation des trois occurrences (définition + deux appels), compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
+- Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
