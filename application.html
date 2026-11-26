@@ -1054,11 +1054,11 @@ async function krediMarkSellerDisconnected(expectedUid){
  const isCurrent=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
  let timeoutId=null;
  try{
-  await Promise.race([
+  const confirmed=await Promise.race([
    krediWritePresenceState(store,shopId,uid,'disconnected',isCurrent),
    new Promise((_,reject)=>{timeoutId=setTimeout(()=>reject(new Error('presence-disconnect-timeout')),1500)})
   ]);
-  return true;
+  return confirmed===true;
  }catch(error){console.warn('[COMPTIVA] Déconnexion de présence non confirmée ; le délai hors ligne prendra le relais.',error);return false}
  finally{if(timeoutId!==null)clearTimeout(timeoutId)}
 }
