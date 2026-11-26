@@ -1939,8 +1939,11 @@ function printReceipt(saleId,isDuplicate=false){
  const saleMatches=db.sales.filter(x=>x&&x.id===saleId);
  if(saleMatches.length!==1){alert('Reçu indisponible : vente introuvable ou identifiant dupliqué. Vérifiez le registre avant impression.');return}
  const sale=saleMatches[0];
- const paid=paidOfSale(sale),credit=creditOfSale(sale),debtState=saleReceiptDebtState(sale);
- const customer=sale.clientId?db.clients.find(x=>x.id===sale.clientId):null;const client=customer?customer.name:'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?(receiptMixedPartsValid(sale)?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart)+'</span></div>':'<div class="item"><span>Répartition du paiement</span><b>À vérifier</b></div>'):'';
+ const receiptAmounts=saleFinancialAmounts(sale.status==='cancelled'?{...sale,status:'active'}:sale);
+ const paid=receiptAmounts?receiptAmounts.paid:NaN,credit=receiptAmounts?receiptAmounts.credit:NaN,debtState=saleReceiptDebtState(sale);
+ const customerMatches=sale.clientId?db.clients.filter(x=>x&&x.id===sale.clientId):[];
+ const customer=customerMatches.length===1?customerMatches[0]:null;
+ const client=sale.clientId?(customer?customer.name:'Client à vérifier'):'—';const customerContact=(customer&&customer.phone?'<p><b>Téléphone :</b> '+esc(customer.phone)+'</p>':'')+(customer&&customer.address?'<p><b>Adresse :</b> '+esc(customer.address)+'</p>':'');const paymentBreakdown=sale.method==='Paiement mixte'?(receiptMixedPartsValid(sale)?'<div class="item"><span>Espèces</span><span>'+money(sale.cashPart)+'</span></div><div class="item"><span>Mobile Money</span><span>'+money(sale.mobilePart)+'</span></div>':'<div class="item"><span>Répartition du paiement</span><b>À vérifier</b></div>'):'';
  const receiptNo=String(sale.id).slice(-8).toUpperCase();
  const w=window.open('','_blank','width=420,height=720');
  if(!w){alert('Le navigateur a bloqué la fenêtre d’impression. Autorisez les fenêtres pop-up pour cette page puis réessayez.');return}
@@ -1963,7 +1966,7 @@ function printReceipt(saleId,isDuplicate=false){
  <div class="line"></div>
  <div class="item total"><span>Total</span><span>${money(sale.total)}</span></div>
  <div class="item"><span>Mode de paiement</span><span>${esc(sale.method||(sale.saleType==='credit'?'Crédit client':'Espèces'))}</span></div>${paymentBreakdown}
- <div class="item"><span>Montant encaissé</span><b>${money(paid)}</b></div>
+ <div class="item"><span>${sale.status==='cancelled'?'Montant encaissé à l’origine':'Montant encaissé'}</span><b>${money(paid)}</b></div>
  <div class="item"><span>Crédit initial à la vente</span><b>${money(credit)}</b></div>${sale.status!=='cancelled'&&Number.isSafeInteger(credit)&&credit>0?'<div class="item"><span>Solde actuel de la dette</span><b>'+money(debtState.currentBalance)+'</b></div>':''}
  <div class="line"></div><p class="thanks">Merci pour votre achat !</p><p class="small" style="text-align:center">Document généré avec COMPTIVA</p>
  <script>window.onload=function(){setTimeout(function(){window.print()},300)};<\\/script></body></html>`);
