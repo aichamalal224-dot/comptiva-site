@@ -3103,7 +3103,7 @@ async function krediSignOut(){
  const signingOutUid=krediUser&&krediUser.uid;
  const storageBlocked=!!(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE);
  const pendingRead=signingOutUid?krediSafeStorageGet('comptiva_pending_'+signingOutUid):{ok:true,value:null};
- const cloudPending=!!(signingOutUid&&(krediLocalDirty||krediSaveInFlightUid===signingOutUid||!!krediSaveTimer||!pendingRead.ok||pendingRead.value==='1'||!krediCloudReady));
+ let cloudPending=!!(signingOutUid&&(krediLocalDirty||krediSaveInFlightUid===signingOutUid||!!krediSaveTimer||!pendingRead.ok||pendingRead.value==='1'||!krediCloudReady));
  const warning=cloudPending
   ?'Des modifications ne sont pas confirmées comme synchronisées sur Firebase. Elles seront conservées localement sur cet appareil, mais peuvent ne pas être disponibles sur vos autres appareils.\\n\\nAvant de vous déconnecter, assurez-vous de pouvoir revenir sur cet appareil ou de faire une sauvegarde de récupération. Voulez-vous vraiment continuer ?'
   :'Voulez-vous vous déconnecter de votre compte Comptiva ?';
@@ -3120,6 +3120,16 @@ async function krediSignOut(){
  }
  try{
   await krediMarkSellerDisconnected(signingOutUid);
+  // La fermeture de présence attend le réseau : recontrôler les données juste avant Auth.signOut,
+  // car une modification peut avoir été faite pendant cette attente.
+  if(signingOutUid&&(!krediUser||krediUser.uid!==signingOutUid||!krediAuth.currentUser||krediAuth.currentUser.uid!==signingOutUid))throw Object.assign(new Error('La session a changé pendant la déconnexion. Aucune autre session ne sera déconnectée.'),{code:'comptiva/stale-session'});
+  if(signingOutUid){
+   const latestPendingRead=krediSafeStorageGet('comptiva_pending_'+signingOutUid);
+   const latePending=!!(krediLocalDirty||krediSaveInFlightUid===signingOutUid||!!krediSaveTimer||!latestPendingRead.ok||latestPendingRead.value==='1'||!krediCloudReady);
+   cloudPending=cloudPending||latePending;
+   if(!storageBlocked){try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(latestStorageError){localSaved=false;console.error('[COMPTIVA] Dernière sauvegarde locale avant Auth.signOut impossible :',latestStorageError)}}
+   if(cloudPending&&!pendingMarkerSaved)pendingMarkerSaved=krediSafeStorageSet('comptiva_pending_'+signingOutUid,'1');
+  }
   await krediAuth.signOut();
   if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);
   else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500);
