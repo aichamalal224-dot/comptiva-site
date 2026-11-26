@@ -2791,3 +2791,13 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Le contrôle est local à l'interface : aucun nouveau document, champ Firestore, droit ou changement de règle n'est introduit. Les données de présence existantes restent inchangées.
 - Cette correction complète la génération dédiée à la liste des vendeurs ; elle ne résout pas le problème distinct des appareils multiples qui partagent encore `presence/{uid}`. L'architecture de sessions individuelles reste à concevoir et tester avant migration.
 - Compilation JavaScript statique et relecture GitHub effectuées après la modification. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel ; aucun déploiement, migration ou publication. `main` reste intacte.
+
+
+## Correction — isolation des écritures de présence par compte et boutique — 26 novembre 2026
+
+- Défaut constaté : un verrou global unique sérialisait toutes les écritures de présence de l'application. Une écriture Firestore lente ou encore en attente pour un ancien compte pouvait retarder les signaux d'un autre compte, même lorsque celui-ci utilisait une autre boutique.
+- Correction : le verrou est maintenant une table de promesses indexée par le couple boutique/UID. Les écritures du même compte dans la même boutique restent ordonnées ; les comptes ou boutiques distincts ne se bloquent plus mutuellement.
+- Le verrou d'une clé est libéré uniquement si la promesse terminée est toujours celle enregistrée pour cette clé, afin de ne pas effacer le verrou d'une écriture plus récente.
+- Limite : une écriture Firestore déjà soumise n'est pas annulée. Une écriture précédente du même UID et de la même boutique peut encore retarder l'écriture suivante tant qu'elle n'est pas résolue. La séparation par session individuelle et les tests multi-appareils restent nécessaires.
+- Vérifications : relecture GitHub, contrôle statique de l'absence de l'ancien verrou global, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
+- Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; main reste intacte.
