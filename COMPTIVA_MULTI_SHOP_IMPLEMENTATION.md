@@ -2879,3 +2879,28 @@ L'audit des règles du modèle multi-boutiques a confirmé que les vendeurs acti
 Conséquence volontaire : le catalogue produit partagé ne doit pas encore être activé côté vendeur. Avant migration, il faudra séparer les données visibles du catalogue (nom, référence, quantité nécessaire à la vente, prix de vente) des coûts privés (prix d'achat, marge et données financières), puis ajouter des règles et des tests Emulator adaptés. Le diagnostic de collision de migration peut lire les produits pour le Patron ; aucun usage vendeur de cette collection n'a été identifié dans le code applicatif inspecté. Les ventes restent lisibles par les vendeurs car leur structure actuelle ne contient pas de champ de coût produit ; cette hypothèse devra être revalidée lors de la migration.
 
 Contrôles statiques : modification exacte de la règle, compilation des trois blocs JavaScript intégrés, relecture GitHub après commit et comparaison de branche. Les règles Firestore n'ont pas été déployées ni testées dans Firebase Emulator ou sur un compte réel. Aucun déploiement ni publication ; `main` reste intacte.
+
+
+
+### Audit des droits d'écriture sur les opérations commerciales — 26 novembre 2026
+
+L'examen croisé de `firestore.rules` et du schéma réellement produit par `saveForm()` révèle plusieurs autorisations trop larges dans le modèle multi-boutiques préparatoire :
+
+- **Ventes :** la création vérifie `shopId` et `createdBy`, mais ne limite pas les champs acceptés ni ne valide les valeurs métier. Le modèle local actuel utilise `createdByUid`, `createdByName`, `createdAt` et `updatedAt` ; il ne faut donc pas confondre ces noms avec le champ cible `createdBy` sans une conversion explicite et contrôlée.
+- **Clients :** la création ne vérifie que `shopId`. La mise à jour permet actuellement de modifier tout le document, y compris potentiellement l'identifiant d'auteur et les dates de création. Le modèle local connu contient `id`, les quatre métadonnées d'auteur, `name`, `phone`, `address` et `note`.
+- **Dettes :** la création ne vérifie que `shopId`, sans auteur ni liste de champs autorisés. Le modèle local connu contient `id`, les métadonnées d'auteur, `clientId`, `amount`, `date`, `due`, `description` et, pour une dette issue d'une vente, `saleId`.
+- **Remboursements :** la création vérifie `shopId` et `createdBy`, mais n'impose pas de liste de champs, de montant positif, ni de relation vérifiée avec une dette de la même boutique. Le modèle local connu contient `id`, les métadonnées d'auteur, `debtId`, `amount`, `date` et `method`. La mise à jour reste réservée au Patron et la suppression est interdite.
+
+Le code applicatif inspecté utilise ces chemins de boutique pour des lectures de diagnostic, de contrôle de doublons et de relations ; aucune procédure d'écriture/migration de ces collections vers le modèle partagé n'a été identifiée dans les blocs examinés. L'application continue d'enregistrer les opérations dans la base locale historique du compte. Les règles multi-boutiques restent donc préparatoires et ne sont pas une protection déjà activée pour les opérations quotidiennes.
+
+**Décision de sécurité :** ne pas ajouter maintenant des listes de champs ou validations supposées aux règles en se basant uniquement sur le schéma local. La conversion vers le schéma partagé doit d'abord être définie pour chaque collection, notamment les noms d'auteur, les champs de statut/annulation et les métadonnées d'audit. Une restriction improvisée pourrait bloquer des documents valides ou laisser une faille sous un autre nom de champ.
+
+**Corrections obligatoires avant activation de la migration :**
+1. Définir un schéma partagé versionné et une liste blanche de champs par collection.
+2. Pour les créations, imposer un auteur UID égal à `request.auth.uid`, un `shopId` égal au chemin et des montants/dates/types valides.
+3. Pour les clients, rendre immuables l'identifiant, l'auteur initial et la date de création ; n'autoriser au vendeur que les champs de contact explicitement nécessaires.
+4. Pour les dettes et remboursements, vérifier côté serveur les références client/dette/vente dans la même boutique. Interdire au vendeur de modifier ou supprimer un remboursement validé ; toute correction Patron doit être traçable.
+5. Pour les ventes, conserver l'interdiction de modification vendeur et de suppression ; valider les montants, les parts de paiement, l'auteur et les relations avant création.
+6. Écrire les tests Firebase Emulator couvrant les champs ajoutés, les UID falsifiés, les montants négatifs, les références hors boutique, les modifications d'auteur et les tentatives d'annulation/suppression.
+
+**Contrôles de cet audit :** lecture des règles et des structures de création locales ; vérification des occurrences d'accès aux collections partagées dans `application.html`. Aucun changement des règles Firestore, aucune migration, aucun test Firebase Emulator, aucun déploiement ni publication. `main` reste intacte.
