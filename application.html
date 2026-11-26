@@ -2815,7 +2815,7 @@ async function krediInitFirebase(){try{
         if(!krediIsCreator()&&(krediNeedsSubscriptionRecheck||!krediCanUseMerchantApp())){krediStatus('Données locales conservées : vérification obligatoire de l’abonnement avant toute synchronisation cloud.');return}
         krediLocalDirty=true;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediCloudReady=false;krediStatus('Données locales conservées : le navigateur ne peut pas mémoriser la synchronisation en attente. Libérez de l’espace avant de réessayer.');return}
         krediStatus('Envoi des données locales vers Firebase…');
-        try{krediLastWrite=remoteText;await krediWriteCloudIfUnchanged(ref,remoteText,merged);if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
+        try{krediLastWrite=remoteText;await krediWriteCloudIfUnchanged(ref,remoteText,merged,isCurrentSession);if(!isCurrentSession())return;krediLastWrite=mergedText;if(JSON.stringify(db)!==mergedText){krediLocalDirty=true;krediCloudReady=false;if(!krediSafeStorageSet('comptiva_pending_'+activeUid,'1')){krediStatus('Une modification effectuée pendant la synchronisation reste sur cet appareil. Le navigateur ne peut pas mémoriser son attente : gardez cette page ouverte.')}else{krediStatus('Une nouvelle modification a été détectée pendant la synchronisation. Envoi complémentaire programmé.');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>{if(isCurrentSession())krediQueueCloudSave()},700)}renderAll();return}krediLocalDirty=false;krediCloudReady=true;krediSafeStorageRemove('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
         catch(e){if(!isCurrentSession())return;krediCloudReady=false;if(e&&String(e.code||'').startsWith('comptiva/cloud-')){krediCloudConflictUid=activeUid;const saved=krediSaveConflictSnapshot(activeUid,db,null,krediLastWrite,'Conflit détecté pendant une transaction Firestore ; version cloud à relire');krediSafeStorageSet('comptiva_pending_'+activeUid,'1');krediShowConflictRecoveryButton();if(!saved)console.warn('[COMPTIVA] Copie de récupération non enregistrée après conflit de transaction.')}krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
         return;
       }
@@ -2889,9 +2889,13 @@ function krediShowConflictRecoveryButton(){
 function krediSafeStorageGet(key){try{return{ok:true,value:localStorage.getItem(key)}}catch(error){console.warn('[COMPTIVA] Lecture du stockage local impossible :',error);return{ok:false,value:null}}}
 function krediSafeStorageSet(key,value){try{localStorage.setItem(key,value);return true}catch(error){console.warn('[COMPTIVA] Écriture du stockage local impossible :',error);return false}}
 function krediSafeStorageRemove(key){try{localStorage.removeItem(key);return true}catch(error){console.warn('[COMPTIVA] Nettoyage du stockage local impossible :',error);return false}}
-async function krediWriteCloudIfUnchanged(ref,expectedRemoteText,nextData){
+async function krediWriteCloudIfUnchanged(ref,expectedRemoteText,nextData,isCurrent){
+  if(typeof isCurrent!=='function'||!isCurrent())throw Object.assign(new Error('La session a changé avant la transaction cloud.'),{code:'comptiva/stale-session'});
   return firebase.firestore().runTransaction(async transaction=>{
     const snapshot=await transaction.get(ref);
+    // Firestore peut relancer ce callback après une attente réseau : revérifier
+    // la génération juste avant de préparer une écriture pour l'ancien compte.
+    if(!isCurrent())throw Object.assign(new Error('La session a changé pendant la lecture transactionnelle.'),{code:'comptiva/stale-session'});
     const document=snapshot.exists?snapshot.data():null;
     if(snapshot.exists&&(!document||!Object.prototype.hasOwnProperty.call(document,'db')))throw Object.assign(new Error('Le document cloud ne contient pas la base attendue.'),{code:'comptiva/cloud-shape-conflict'});
     const currentData=snapshot.exists?document.db:krediEmptyDB();
@@ -2937,7 +2941,7 @@ function krediQueueCloudSave(){
     try{
       if(!krediLastWrite)throw Object.assign(new Error('La version cloud de référence est inconnue. Synchronisation suspendue pour protéger les données.'),{code:'comptiva/cloud-version-conflict'});
       const targetRef=storeForSave.collection('users').doc(uid).collection('comptivaData').doc('main');
-      await krediWriteCloudIfUnchanged(targetRef,krediLastWrite,JSON.parse(payload));
+      await krediWriteCloudIfUnchanged(targetRef,krediLastWrite,JSON.parse(payload),isCurrentSaveSession);
       if(!isCurrentSaveSession())return;
       krediLastWrite=payload;
       if(JSON.stringify(db)===payload){
