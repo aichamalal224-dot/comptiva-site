@@ -1263,3 +1263,13 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - `krediWritePresenceState` peut renvoyer `false` lorsque la session a changé ou que le contexte n'est plus valide. La fonction d'appel ignorait auparavant cette valeur et renvoyait tout de même `true` dès que la promesse se terminait sans exception.
 - La fonction vérifie maintenant explicitement `confirmed === true`. Une écriture refusée ou abandonnée n'est donc plus présentée comme une déconnexion confirmée ; le délai de trois minutes sans signal reste le mécanisme de repli.
 - Vérification statique et compilation JavaScript uniquement ; aucun test Firebase réel ou multi-appareils n'a été effectué.
+
+
+## Correction ciblée — reprise de présence après échec de déconnexion — 26 novembre 2026
+
+- Défaut confirmé par lecture du flux `krediSignOut()` : le suivi de présence était arrêté et l'état `disconnected` pouvait être écrit avant l'appel `Firebase Auth signOut()`. Si cet appel échouait, l'utilisateur restait potentiellement connecté, mais son heartbeat n'était pas relancé ; son Patron pouvait donc le voir comme déconnecté jusqu'à une nouvelle initialisation ou au vieillissement du signal.
+- Correction : dans le bloc d'échec de déconnexion, si le même UID est toujours connecté et que le réseau est disponible, COMPTIVA relance `krediStartSellerPresence()`. Le démarrage revalide le rôle et l'affectation avant de réémettre un signal actif. L'erreur de reprise est journalisée sans masquer l'erreur de déconnexion.
+- La correction ne prétend pas résoudre la présence multi-appareils : le document parent unique par UID reste une limite connue ; les sessions par onglet/appareil ne sont pas encore implémentées.
+- Vérifications prévues dans cette passe : relecture du fichier modifié, compilation des trois blocs JavaScript, contrôle statique du nouveau chemin et comparaison avec `main`.
+- Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel ; aucun déploiement, aucune migration et aucune publication.
+- `main` reste intacte.
