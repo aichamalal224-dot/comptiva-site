@@ -1611,6 +1611,9 @@ function cancelSale(saleId){if(!krediRequirePatron('annuler une vente'))return;
  const sale=saleMatches[0];
  if(!reportDebtLedger(dayKey(new Date()))){alert('Annulation bloquée : le registre des dettes ou des remboursements présente une anomalie. Vérifiez les dossiers avant toute annulation de vente.');return}
  if(sale.status==='cancelled'){flash('Cette vente est déjà annulée.');return}
+ const saleAmounts=saleFinancialAmounts(sale);
+ if(!saleAmounts){alert('Annulation bloquée : les montants encaissés et le crédit de cette vente sont incohérents. Vérifiez le reçu et le registre avant toute opération.');return}
+ if(saleAmounts.paid>0){alert('Annulation suspendue : cette vente a déjà encaissé '+money(saleAmounts.paid)+'. COMPTIVA ne dispose pas encore d’un registre distinct des remboursements clients permettant de prouver le montant, la date et le mode du remboursement réel. Ne confirmez pas une annulation qui ferait disparaître cet encaissement des indicateurs sans tracer sa restitution. Régularisez le remboursement avec une procédure vérifiée avant de réessayer.');return}
  const linkedDebts=db.debts.filter(d=>d.saleId===sale.id&&d.status!=='cancelled');
  if(linkedDebts.length>1){alert('Annulation bloquée : plusieurs dettes actives sont liées à cette vente. Vérifiez et régularisez les dettes avant toute annulation.');return}
  if(linkedDebts.some(d=>krediDebtRelationIssue(d))){alert('Annulation bloquée : le client ou le montant de la dette ne correspond pas à la vente d’origine. Vérifiez le dossier avant toute annulation.');return}
