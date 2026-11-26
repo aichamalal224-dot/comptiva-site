@@ -1028,3 +1028,44 @@ Pendant une réactivation séquentielle, le vendeur reste bloqué tant que les d
 - Les tests Firebase Emulator doivent confirmer les cas : deux documents actifs cohérents, membre inactif/index actif, membre actif/index inactif, index absent, UID/shopId/patronUid incohérent, abonnement expiré, boutique suspendue, Patron propriétaire.
 - Vérifier les limites de lectures d'accès Firestore et l'évaluation des règles avec l'Emulator avant toute publication.
 - Aucun test Emulator ou compte réel exécuté dans cette passe.
+
+
+## Contrat de données métier avant durcissement des règles partagées — 26 novembre 2026
+
+### Schéma effectivement produit par l'application historique
+
+La lecture du formulaire `saveForm()` confirme les champs suivants pour les nouvelles opérations locales. Ils sont donnés comme inventaire du modèle historique, et non comme schéma Firestore cible déjà validé.
+
+- **Vente** : `id`, métadonnées `createdByUid`, `createdByName`, `createdAt`, `updatedAt`, `product`, `quantity`, `unitPrice`, `total`, `date`, `saleType`, `clientId`, `method`, `paidAmount`, `creditAmount`, `cashPart`, `mobilePart`; selon le lien stock : `stockProductId`, `stockDeductedAt`, `stockDeductedQuantity`.
+- **Dette** : `id`, métadonnées d'auteur, `clientId`, `amount`, `date`, `due`, `description`, et `saleId` lorsqu'elle provient d'une vente à crédit.
+- **Remboursement** : `id`, métadonnées d'auteur, `debtId`, `amount`, `date`, `method`.
+- **Client** : `id`, métadonnées d'auteur, `name`, `phone`, `address`, `note`.
+- **Achat** : `id`, métadonnées d'auteur, `item`, `supplier`, `quantity`, `amount`, `date`, `method`, `note`; selon le lien stock : `stockProductId`, `stockAddedAt`.
+- **Dépense** : `id`, métadonnées d'auteur, `category`, `description`, `amount`, `date`, `method`, `note`.
+- **Produit historique** : `id`, métadonnées d'auteur, `name`, `category`, `sku`, `quantity`, `purchasePrice`, `salePrice`, `alertAt`.
+- **Journal de stock** : `id`, `entityType`, `entityId`, `action`, `relatedSaleId` ou `relatedPurchaseId`, `quantity`, `before`, `after`, `at`, `actor`, `actorName`.
+
+### Écarts à résoudre avant toute règle de validation
+
+1. Le modèle historique utilise `createdByUid`; les règles partagées exigent `createdBy`. Une conversion ne peut être faite qu'après vérification de l'appartenance du compte à la boutique.
+2. Le modèle historique n'ajoute pas `shopId` à ces objets, car ils sont conservés dans `users/{uid}/comptivaData/main`. La règle d'appartenance au chemin partagé ne peut donc pas être simplement appliquée à ces données.
+3. Le code local valide plusieurs invariants métier — entiers GNF, quantités positives, somme des paiements mixtes égale au total, remboursement inférieur ou égal au solde, relations client/vente/dette — mais ces contrôles JavaScript ne sont pas des protections serveur.
+4. Les règles partagées autorisent actuellement des créations avec peu de validation de champs et des mises à jour Patron sans liste blanche complète. En cas de déploiement isolé, un client pourrait donc soumettre des documents incohérents ou modifier des champs métier non prévus.
+5. Les opérations stock/vente et dette/remboursement doivent être traitées comme des ensembles cohérents. Une simple règle sur chaque document ne prouve pas que les soldes, quantités et traces ont été modifiés ensemble.
+
+### Décision de correction sûre
+
+- Ne pas recopier le schéma historique dans les règles partagées sans spécifier les champs obligatoires, optionnels et immuables du modèle cible.
+- Ne pas transformer `createdByUid` en `createdBy` par simple renommage ; l'identité doit être validée contre le membre actif de la boutique.
+- Avant migration, définir les listes blanches distinctes pour création et modification de chaque collection, les champs immuables (`id`, `shopId`, auteur initial, dates de création et références), les types numériques/date, les montants autorisés et les invariants relationnels.
+- Définir ensuite les opérations atomiques vente + mouvement de stock + dette éventuelle, puis remboursement + solde, avec validation serveur/Firestore Emulator. Les tests doivent inclure des écritures partielles, des références croisées vers une autre boutique, des montants négatifs ou non entiers, des surpaiements, des quantités de stock insuffisantes et des modifications d'auteur.
+- Garder le chemin historique et ses règles owner-only inchangés jusqu'à validation de la migration complète.
+
+### Vérifications de cette passe
+
+- Relecture de `firestore.rules`, de `application.html` et des sections de migration de cette documentation sur la branche de travail.
+- Inventaire des objets créés par `saveForm()` effectué par lecture statique.
+- Confirmation que le modèle historique et les chemins partagés ne sont pas encore raccordés pour les opérations métier.
+- Aucun changement de `firestore.rules` ni de `application.html` dans cette passe : les validations serveur ne peuvent pas être fixées sûrement tant que le schéma cible et les opérations atomiques ne sont pas définis.
+- Aucun test Firebase Emulator, test navigateur, test de compte réel, migration, déploiement ou publication effectué.
+- `main` reste intacte.
