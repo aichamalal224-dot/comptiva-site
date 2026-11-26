@@ -1238,3 +1238,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Aucun test Firebase Emulator, navigateur, compte réel ou appareil exécuté.
 - Aucun déploiement, aucune migration de données et aucune publication.
 - `main` reste intacte.
+
+
+### Correction complémentaire — temporisation de déconnexion — 26 novembre 2026
+
+- Le délai maximal de 1,5 seconde utilisé pour attendre la confirmation d'une déconnexion dispose maintenant d'un identifiant et est annulé dans un bloc `finally`, que l'écriture réussisse ou échoue.
+- Cela évite de laisser un minuteur temporaire actif après la fin de l'attente.
+- L'écriture Firestore déjà lancée n'est pas annulée si le délai expire ; le mécanisme de sérialisation des écritures et le contrôle de session restent en place.
+- Vérification statique : modification retrouvée après relecture GitHub ; les trois blocs JavaScript compilent avec `new Function`.
+- Cette correction ne résout pas le défaut d'un document partagé entre plusieurs appareils. Le schéma multi-sessions décrit ci-dessus reste à implémenter et à tester.
