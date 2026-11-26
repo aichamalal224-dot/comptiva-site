@@ -3136,3 +3136,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Les contrôles antérieurs restent actifs : dette active, relation client/vente valide, montant entier positif et montant inférieur ou égal au solde restant.
 - Limite : le stockage reste celui du mécanisme local/cloud existant ; cette validation applicative n’est pas une transaction atomique entre plusieurs appareils. Les tests de concurrence multi-appareils et de double soumission restent à réaliser en environnement de test.
 - Aucune donnée existante, règle Firebase, branche main ou déploiement n’a été modifié.
+
+
+## Audit de l’historique et des reçus de remboursement — 26 novembre 2026
+- La liste des remboursements compte désormais les identifiants sur l’ensemble du registre : si un identifiant est absent ou dupliqué, toutes les lignes concernées affichent « À vérifier » et leurs actions financières sont suspendues.
+- L’affichage du client exige une dette liée présente une seule fois et une relation client/vente valide ; les remboursements rattachés à une dette annulée ne sont pas présentés comme des opérations actives valides.
+- Le contrôle partagé avant modification ou annulation d’un remboursement exige maintenant une dette liée unique, en plus de l’unicité du remboursement, de sa date, de son montant et de l’intégrité du registre.
+- L’impression d’un reçu de remboursement refuse une dette liée absente ou dupliquée ; elle refuse également de présenter comme actif un remboursement rattaché à une dette annulée. Les reçus d’opérations annulées restent identifiés comme non valables lorsqu’ils peuvent être reliés sans ambiguïté.
+- Vérification statique : les trois blocs JavaScript de `application.html` compilent avec `new Function` après les modifications. Il ne s’agit pas d’un test navigateur, d’impression réelle, Firebase, ni d’un test de données corrompues.
+- Limite : aucune transaction atomique multi-appareils n’a été ajoutée ; les modifications restent soumises au mécanisme de synchronisation existant et aux conflits de concurrence déjà documentés.
+- Aucune donnée existante, règle Firebase, branche `main`, fusion ou publication n’a été modifiée.
