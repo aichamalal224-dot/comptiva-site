@@ -1250,12 +1250,15 @@ async function krediSetSellerActive(sellerUid,active){
 async function krediRefreshSellerPresence(){
  const target=document.getElementById('sellerPresenceList');
  if(!target)return;
- if(!krediUser||!krediStore){target.textContent='Connectez-vous et vérifiez la connexion Firebase.';return}
+ // Invalider d'abord les callbacks déjà mis en file, puis retirer les anciens écouteurs.
+ const listEpoch=++krediPresenceListEpoch;
  if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}
  if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}
  if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}
+ if(!krediUser||!krediStore){target.textContent='Connectez-vous et vérifiez la connexion Firebase.';return}
+ if(!krediRequirePatron('consulter les présences')){target.textContent='Accès réservé au Patron confirmé.';return}
+ if(!krediCanUseMerchantApp()&&!krediIsCreator()){target.textContent='Abonnement non confirmé : suivi des présences bloqué.';return}
  const patronUid=krediUser.uid,shopId='shop-'+patronUid,base=krediStore.collection('shops').doc(shopId);
- const listEpoch=++krediPresenceListEpoch;
  const isCurrentList=()=>krediPresenceListEpoch===listEpoch&&!!krediUser&&krediUser.uid===patronUid;
  let members=[],presence=new Map(),gotMembers=false,gotPresence=false;
  target.textContent='Connexion au suivi des présences…';
