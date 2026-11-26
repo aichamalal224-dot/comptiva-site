@@ -1111,3 +1111,40 @@ Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne 
 - Aucune exécution Firebase Emulator, aucun test navigateur ou compte réel, aucune migration, aucun déploiement ni publication.
 - Le chemin legacy `users/{uid}/comptivaData/main` reste inchangé et owner-only.
 - `main` reste intacte.
+
+
+## Correction ciblée — présence vendeur, déconnexion et hors ligne — 26 novembre 2026
+
+### Comportement retenu dans le code
+
+- **Signal serveur (heartbeat) :** un vendeur affecté et vérifié envoie un signal Firestore toutes les 30 secondes, uniquement si sa session est toujours la session courante, si l'application est visible et si la session n'est pas verrouillée.
+- **Actualisation de l'affichage :** la liste du Patron recalcule les statuts localement toutes les 1 seconde. Ce rafraîchissement ne déclenche pas une lecture Firestore chaque seconde.
+- **Seuil hors ligne :** sans signal serveur récent depuis plus de 3 minutes (180 000 ms), le vendeur est affiché « Hors ligne ».
+- **Connecté :** affectation active, signal récent dans la fenêtre de 3 minutes et dernier état différent de « disconnected ».
+- **Déconnecté :** lors d'une déconnexion volontaire, le client tente d'écrire immédiatement `clientState: 'disconnected'` et un horodatage serveur avant l'appel Firebase Auth `signOut()`. Cette tentative est limitée à 1,5 seconde pour ne pas bloquer durablement la déconnexion.
+- **Coupure réseau / fermeture brutale :** si l'application ne peut pas écrire l'état « Déconnecté », le dernier signal vieillit et le statut passe automatiquement à « Hors ligne » après le seuil de 3 minutes.
+- **Suspendu :** l'état d'affectation désactivée reste distinct des états de connexion.
+- **Retour d'Internet :** le heartbeat est relancé après la vérification de l'abonnement et la validation de la session.
+- **Déverrouillage après inactivité :** le suivi de présence est relancé après réauthentification.
+- **Perte d'Internet :** le heartbeat local est arrêté ; aucune fausse confirmation de présence n'est envoyée hors connexion.
+
+### Règles Firestore
+
+- Le vendeur ne peut toujours écrire que son propre document de présence.
+- La règle autorise maintenant les états `active` et `disconnected`, avec `lastSeen == request.time`, et conserve l'exigence d'une affectation vendeur active et d'un abonnement valide.
+- La lecture des présences reste réservée au Patron de la boutique.
+
+### Points de vigilance et tests restant à exécuter
+
+- Le seuil de 3 minutes est calculé dans l'interface à partir de l'horodatage serveur comparé à l'horloge de l'appareil ; un décalage important de l'horloge du téléphone peut décaler l'affichage. Les droits d'accès restent, eux, vérifiés par Firestore.
+- Si le vendeur perd le réseau, ferme brutalement l'application ou si la tentative de déconnexion échoue, le statut « Déconnecté » immédiat ne peut pas être garanti ; le basculement « Hors ligne » après expiration du signal est le mécanisme de secours.
+- Le délai de 1 seconde concerne uniquement le recalcul visuel ; le heartbeat réseau reste à 30 secondes afin d'éviter des écritures Firestore excessives.
+- À tester dans Firebase Emulator et sur appareils réels : connexion, déconnexion volontaire, fermeture forcée, perte et retour du réseau, application en arrière-plan, verrouillage après inactivité, vendeur suspendu, abonnement expiré et changement rapide de compte.
+- Vérifier aussi les coûts et limites Firestore, les écritures en attente au moment de `signOut()` et le comportement du timeout de 1,5 seconde.
+
+### Vérifications statiques après correction
+
+- Les trois blocs JavaScript de `application.html` compilent : 3/3.
+- Les contrôles statiques confirment le heartbeat 30 s, le rafraîchissement visuel 1 s, le seuil 180 s, l'écriture de déconnexion, la reprise après reconnexion et la règle Firestore correspondante.
+- Aucun test Firebase Emulator, navigateur ou appareil réel n'a été exécuté.
+- Aucune donnée réelle, aucun compte réel, aucune migration ni aucun déploiement n'ont été modifiés ; `main` reste intacte.
