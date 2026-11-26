@@ -1011,9 +1011,10 @@ async function krediDiagnoseSharedShopAccess(){
  }
 }
 /* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
-let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null,krediPresenceStopping=false;
+let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null,krediPresenceStopping=false,krediPresenceRunEpoch=0;
 const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
+ krediPresenceRunEpoch++;
  krediPresenceStopping=false;
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
  if(krediPatronPresenceUnsub){krediPatronPresenceUnsub();krediPatronPresenceUnsub=null}
@@ -1064,8 +1065,8 @@ async function krediMarkSellerDisconnected(expectedUid){
 }
 async function krediStartSellerPresence(){
  krediStopSellerPresence();
- const uid=krediUser&&krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch;
- const isCurrent=()=>!!uid&&krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store;
+ const uid=krediUser&&krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch,presenceRunEpoch=krediPresenceRunEpoch;
+ const isCurrent=()=>!!uid&&krediSessionEpoch===sessionEpoch&&krediPresenceRunEpoch===presenceRunEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store;
  const patronCard=document.getElementById('patronPresenceCard');
  const sellerCard=document.getElementById('sellerPatronPresenceCard');
  if(patronCard)patronCard.classList.add('hidden');
