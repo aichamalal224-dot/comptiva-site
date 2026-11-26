@@ -1290,3 +1290,23 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Le document parent `presence/{uid}` reste partagé entre tous les onglets/appareils d'un même compte. Un appareil qui se déconnecte peut donc encore écraser l'état d'un autre appareil actif. C'est la priorité de correction suivante : sessions individuelles sous `presence/{uid}/sessions/{sessionId}`.
 - Les scénarios à tester sur Firebase Emulator puis sur appareils réels restent : verrouillage/déverrouillage, onglet masqué puis visible, coupure réseau, reconnexion, déconnexion refusée, changement de compte pendant une écriture, deux appareils simultanés, et vérification qu'un vendeur ne peut lire aucune présence d'un autre vendeur.
 - Aucun test Emulator, navigateur, appareil réel, ni compte Firebase réel n'a été exécuté dans cet audit. Aucun changement des règles Firestore n'a été fait dans cette passe.
+
+
+## Correction ciblée — nettoyage des écouteurs de présence lors d'un changement de compte — 26 novembre 2026
+
+### Défaut constaté
+- Le suivi de présence des vendeurs dans l'espace Patron utilise deux écouteurs Firestore (liste des membres et collection de présence) ainsi qu'un minuteur de rendu local.
+- Ces écouteurs étaient arrêtés lors d'une déconnexion complète et lors d'un nouvel appel manuel à l'actualisation, mais pas explicitement au début de chaque transition d'état Firebase Auth.
+- En cas de passage direct d'un compte à un autre sans état intermédiaire déconnecté, les callbacks refusaient déjà de modifier l'interface si l'UID ne correspondait plus, mais les anciens écouteurs pouvaient rester actifs et continuer à consommer des lectures.
+
+### Correction appliquée
+- Au début de chaque callback onAuthStateChanged, après incrément de l'époque de session, COMPTIVA retire les écouteurs de membres et de présence et arrête le minuteur de rendu du suivi Patron.
+- Les callbacks déjà en vol sont invalidés par le changement d'époque de session et les nouveaux écouteurs ne sont recréés qu'à la demande du compte actuellement authentifié.
+- Le nettoyage existant lors de la déconnexion est conservé ; il devient simplement redondant et sans effet si les écouteurs ont déjà été retirés.
+- Cette correction ne modifie ni les règles Firestore, ni les documents de présence, ni les données métier.
+
+### Limites et vérifications
+- Cette correction réduit les écouteurs abandonnés lors d'un changement direct de compte ; elle ne résout pas le défaut multi-appareils du document parent unique presence/{uid}.
+- Vérifications statiques et compilation JavaScript à effectuer après relecture de la version enregistrée.
+- Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel exécuté ; aucun déploiement, migration ou publication.
+- main reste intacte.
