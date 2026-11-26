@@ -781,12 +781,12 @@ async function krediInitFirebase(){try{
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
         try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid)return;krediLastWrite=mergedText;if(JSON.stringify(db)===mergedText){krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}else{krediLocalDirty=true;krediCloudReady=false;localStorage.setItem('comptiva_pending_'+activeUid,'1');krediStatus('Nouvelles modifications détectées pendant la synchronisation · envoi complémentaire en cours…');krediQueueCloudSave()}}
-        catch(e){krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
+        catch(e){if(krediUser&&krediUser.uid===activeUid){krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}else{console.warn('[COMPTIVA] Échec tardif d’écriture Firebase pour un compte inactif.',e)}}
         return;
       }
       krediCloudReady=true;krediLocalDirty=false;localStorage.removeItem('comptiva_pending_'+activeUid);
       krediStatus(navigator.onLine?'Connecté · données synchronisées':'Hors connexion · données locales disponibles');renderAll();
-    },err=>{clearTimeout(serverProbeTimer);krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))});
+    },err=>{clearTimeout(serverProbeTimer);if(krediUser&&krediUser.uid===activeUid){krediCloudReady=false;krediShowDiagnostic(err,'ECOUTE TEMPS REEL users/'+activeUid+'/comptivaData/main | navigator.onLine='+(navigator.onLine?'true':'false'))}else{console.warn('[COMPTIVA] Erreur tardive de l’écoute Firebase pour un compte inactif.',err)}});
   },err=>{
     krediAuthStateReceived=true;
     clearTimeout(krediAuthWaitTimer);
@@ -825,8 +825,13 @@ function krediQueueCloudSave(){
       }
       renderAll();
     }catch(e){
-      krediCloudReady=false;krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+uid,'1');
-      krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
+      try{localStorage.setItem('comptiva_pending_'+uid,'1')}catch(storageError){console.error('[COMPTIVA] Impossible de marquer la synchronisation en attente pour '+uid,storageError)}
+      if(krediUser&&krediUser.uid===uid){
+        krediCloudReady=false;krediLocalDirty=true;
+        krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
+      }else{
+        console.warn('[COMPTIVA] Échec tardif de synchronisation pour un compte inactif.',e);
+      }
     }finally{
       krediSaveInFlight=false;
       // Une écriture de l'ancien compte peut se terminer après un changement de session.
