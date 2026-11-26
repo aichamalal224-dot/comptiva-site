@@ -2555,6 +2555,26 @@ function krediDatabaseShapeIssue(data){
  if(data.businessProfile!==undefined&&(!data.businessProfile||typeof data.businessProfile!=='object'||Array.isArray(data.businessProfile)))return 'profil commerce invalide';
  return '';
 }
+function krediFindSyncMergeConflicts(localData,remoteData){
+ const conflicts=[];
+ const base=krediEmptyDB();
+ const stable=value=>{try{return krediStableSnapshot(value)}catch(error){return JSON.stringify(value)}};
+ const localProfile=localData&&localData.businessProfile&&typeof localData.businessProfile==='object'&&!Array.isArray(localData.businessProfile)?localData.businessProfile:{};
+ const remoteProfile=remoteData&&remoteData.businessProfile&&typeof remoteData.businessProfile==='object'&&!Array.isArray(remoteData.businessProfile)?remoteData.businessProfile:{};
+ for(const key of Object.keys(localProfile))if(Object.prototype.hasOwnProperty.call(remoteProfile,key)&&stable(localProfile[key])!==stable(remoteProfile[key]))conflicts.push('businessProfile.'+key);
+ for(const key of Object.keys(base)){
+  if(key==='businessProfile')continue;
+  const localRows=Array.isArray(localData&&localData[key])?localData[key]:[];
+  const remoteRows=Array.isArray(remoteData&&remoteData[key])?remoteData[key]:[];
+  const remoteById=new Map(remoteRows.filter(row=>row&&typeof row==='object'&&row.id).map(row=>[String(row.id),row]));
+  for(const row of localRows){
+   if(!row||typeof row!=='object'||!row.id)continue;
+   const remote=remoteById.get(String(row.id));
+   if(remote&&stable(row)!==stable(remote))conflicts.push(key+'/'+row.id);
+  }
+ }
+ return conflicts;
+}
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
@@ -2789,6 +2809,18 @@ async function krediInitFirebase(){try{
         if(!conflictSnapshotSaved)console.warn('[COMPTIVA] Le conflit est bloqué, mais sa copie locale de récupération n’a pas pu être enregistrée.');
         krediStatus('Conflit de synchronisation détecté : les données ont changé sur un autre appareil pendant que cet appareil avait des modifications en attente. Aucune écriture automatique ne sera faite. Gardez les deux appareils et contactez le support avant de reprendre la synchronisation.');
         console.warn('[COMPTIVA] Synchronisation suspendue pour conflit multi-appareils.');
+        return;
+      }
+      const sameRecordConflicts=krediFindSyncMergeConflicts(localData,remoteData);
+      if(sameRecordConflicts.length){
+        krediCloudReady=false;krediLocalDirty=true;krediCloudConflictUid=activeUid;
+        const saved=krediSaveConflictSnapshot(activeUid,localData,remoteData,krediLastWrite,'Même enregistrement modifié différemment sur plusieurs appareils');
+        krediSafeStorageSet('comptiva_pending_'+activeUid,'1');
+        krediShowConflictRecoveryButton();
+        const examples=sameRecordConflicts.slice(0,8).join(' · ');
+        krediStatus('Conflit de données détecté ('+sameRecordConflicts.length+' fiche(s) modifiée(s) différemment : '+examples+(sameRecordConflicts.length>8?' · …':'')+'). Aucune version n’a été choisie ni écrasée. Les copies locale et cloud sont conservées ; téléchargez les copies de récupération avant toute résolution.');
+        if(!saved)console.warn('[COMPTIVA] Conflit détecté, mais la copie locale de récupération n’a pas pu être enregistrée.');
+        console.warn('[COMPTIVA] Fusion suspendue : mêmes identifiants avec contenus divergents.',sameRecordConflicts);
         return;
       }
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
