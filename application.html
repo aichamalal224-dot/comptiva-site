@@ -2681,6 +2681,14 @@ function krediFindUnversionedDeletionConflicts(baselineData,localData,remoteData
  const conflicts=[];
  const base=krediEmptyDB();
  const stable=value=>{try{return krediStableSnapshot(value)}catch(error){return JSON.stringify(value)}};
+ const baselineProfile=baselineData&&baselineData.businessProfile&&typeof baselineData.businessProfile==='object'&&!Array.isArray(baselineData.businessProfile)?baselineData.businessProfile:{};
+ const localProfile=localData&&localData.businessProfile&&typeof localData.businessProfile==='object'&&!Array.isArray(localData.businessProfile)?localData.businessProfile:{};
+ const remoteProfile=remoteData&&remoteData.businessProfile&&typeof remoteData.businessProfile==='object'&&!Array.isArray(remoteData.businessProfile)?remoteData.businessProfile:{};
+ for(const field of Object.keys(baselineProfile)){
+  const localHas=Object.prototype.hasOwnProperty.call(localProfile,field),remoteHas=Object.prototype.hasOwnProperty.call(remoteProfile,field);
+  if(!localHas&&remoteHas)conflicts.push('businessProfile.'+field+' (suppression locale à arbitrer)');
+  if(!remoteHas&&localHas)conflicts.push('businessProfile.'+field+' (suppression cloud à arbitrer)');
+ }
  for(const key of Object.keys(base)){
   if(key==='businessProfile')continue;
   const baseline=Array.isArray(baselineData&&baselineData[key])?baselineData[key]:[];
@@ -2691,8 +2699,8 @@ function krediFindUnversionedDeletionConflicts(baselineData,localData,remoteData
   for(const previous of baseline){
    if(!previous||typeof previous!=='object'||!previous.id)continue;
    const rowId=String(previous.id),local=localById.get(rowId),remote=remoteById.get(rowId);
-   if(!local&&remote&&stable(remote)===stable(previous))conflicts.push(key+'/'+rowId+' (suppression locale non versionnée)');
-   if(!remote&&local&&stable(local)===stable(previous))conflicts.push(key+'/'+rowId+' (suppression cloud non versionnée)');
+   if(!local&&remote)conflicts.push(key+'/'+rowId+' (suppression locale à arbitrer)');
+   if(!remote&&local)conflicts.push(key+'/'+rowId+' (suppression cloud à arbitrer)');
   }
  }
  return conflicts;
