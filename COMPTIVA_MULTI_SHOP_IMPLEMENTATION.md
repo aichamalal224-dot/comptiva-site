@@ -3199,3 +3199,12 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - La correction d'un remboursement préalloue également un identifiant d'audit unique avant mutation. Les contrôles existants de date, montant, mode autorisé et plafond de dette sont conservés.
 - Vérifications réalisées : relecture du fichier ; compilation isolée de `cancelPayment()` et `editPayment()` ; compilation des trois blocs script ; contrôles statiques des gardes et identifiants d'audit.
 - Vérifications non réalisées : tests d'interface, impression, Firebase Emulator, comptes réels, concurrence multi-appareils, données historiques et déploiement.
+
+
+### Audit des reçus de remboursement et relevés de dette — 26 novembre 2026
+- `printPaymentReceipt()` valide désormais date, montant entier positif et mode autorisé du remboursement avant impression.
+- Pour un remboursement actif, le reçu exige aussi un registre global dettes/remboursements valide ; sinon l'impression est suspendue. Le reçu d'un remboursement annulé reste consultable comme document historique non valable comme preuve de paiement.
+- `printDebtStatement()` ne présente des totaux comme confirmés que si la dette est active, sa relation est valide et le registre global est cohérent. Pour une dette annulée ou un registre incohérent, les totaux sont affichés « À vérifier ».
+- Les lignes de l'historique contrôlent les dates, montants et modes ; une ligne mal formée est explicitement affichée « À vérifier » au lieu d'un montant trompeur.
+- Vérifications réalisées : compilation isolée des deux fonctions ; compilation des trois blocs script ; relecture du fichier et contrôles statiques des gardes.
+- Vérifications non réalisées : tests d'impression sur navigateur/appareil, données réelles, Firebase Emulator, synchronisation et concurrence multi-appareils.
