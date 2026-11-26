@@ -1188,3 +1188,53 @@ Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne 
 - Lors d'une déconnexion volontaire, l'intervalle heartbeat est arrêté avant l'écriture de l'état « Déconnecté ».
 - Vérification statique des deux heartbeat, de leur sérialisation, de l'arrêt avant déconnexion et compilation des trois blocs JavaScript : 3/3 réussie après cette correction.
 - Aucun test Firebase Emulator, navigateur, compte réel ou appareil n'a été exécuté ; aucun déploiement ni changement de main.
+
+
+## Audit complémentaire — présence multi-appareils : défaut confirmé et migration à préparer — 26 novembre 2026
+
+### Constat confirmé dans le code actuel
+
+- Le chemin de présence est unique par utilisateur et boutique : `shops/{shopId}/presence/{uid}`.
+- Le Patron et le vendeur utilisent chacun ce document unique, quel que soit le nombre d'appareils ou d'onglets ouverts avec le même compte.
+- Tous les heartbeats d'un même UID écrivent le même champ `lastSeen` et le même `clientState`.
+- Une déconnexion volontaire depuis un appareil écrit `clientState: 'disconnected'` dans ce document commun. Elle peut donc faire afficher « Déconnecté » alors qu'une autre session du même compte envoie encore des heartbeats.
+- La liste du Patron lit actuellement la collection `presence` et interprète un document par vendeur ; l'encart du vendeur écoute un seul document Patron.
+- Les règles actuelles autorisent le Patron à lister les documents de présence et le vendeur actif à faire un get uniquement sur le document Patron. Elles n'autorisent pas encore une sous-collection de sessions.
+
+### Décision de sécurité
+
+Ne pas activer une migration partielle des présences vers des sessions avant de corriger ensemble l'application et les règles. Ne pas ajouter une règle permissive de lecture globale pour simplifier les requêtes.
+
+### Schéma cible à implémenter et tester
+
+- Conserver un document de présence parent par UID pour la compatibilité et l'état agrégé : `shops/{shopId}/presence/{uid}`.
+- Ajouter des documents de session distincts sous `shops/{shopId}/presence/{uid}/sessions/{sessionId}`.
+- Chaque session doit être liée à l'UID authentifié et contenir uniquement les champs nécessaires : identifiant de compte, horodatage serveur du dernier signal et état de session.
+- Chaque onglet/appareil génère son propre identifiant de session. Une déconnexion ne marque que sa session ; elle ne peut pas déclarer l'ensemble du compte déconnecté.
+- Le statut agrégé est « Connecté » si au moins une session a un signal récent et un état actif ; « Déconnecté » si aucune session active n'existe mais qu'une déconnexion volontaire récente est confirmée ; « Hors ligne » si aucune session récente n'existe sans confirmation de déconnexion.
+- Les sessions anciennes doivent être nettoyées selon une politique documentée et sécurisée. Ne pas compter sur une suppression automatique tant qu'une politique TTL réellement configurée côté Firebase n'a pas été vérifiée.
+- La lecture vendeur doit rester limitée aux sessions du seul UID Patron confirmé par l'affectation. Le vendeur ne doit jamais pouvoir lister les sessions d'autres vendeurs ou d'autres boutiques.
+- Le Patron ne doit pouvoir lire que les sessions appartenant aux membres de sa boutique. Les écritures doivent rester limitées aux sessions de l'UID authentifié.
+- Les documents parents historiques doivent rester lisibles pendant une période de compatibilité ; l'application ne doit pas interpréter un parent absent comme une déconnexion certaine pendant la transition.
+
+### Tests de sécurité et de fonctionnement obligatoires
+
+1. Même compte sur deux appareils : les deux sessions apparaissent actives.
+2. Déconnexion appareil A : appareil B reste affiché connecté.
+3. Perte réseau appareil A : appareil B reste connecté ; A passe hors ligne après expiration de son signal.
+4. Déconnexion des deux appareils : statut déconnecté après confirmation des deux sessions.
+5. Fermeture forcée et onglet fermé : expiration du signal sans fausse déconnexion immédiate.
+6. Changement rapide de compte dans un onglet : aucune écriture tardive de l'ancien UID dans la session du nouveau compte.
+7. Deux vendeurs distincts : chaque vendeur ne peut lire que les sessions du Patron, jamais celles de l'autre vendeur.
+8. Tentative de création/écriture dans une session portant l'UID d'un autre utilisateur : refusée par Firestore.
+9. Vendeur suspendu ou abonnement Patron expiré : les accès et heartbeats suivent exactement la politique d'accès existante.
+10. Vérifier le nombre d'écouteurs, de lectures et d'écritures Firestore avec plusieurs vendeurs et appareils.
+
+### État de cette passe
+
+- Défaut multi-appareils confirmé par lecture statique de `application.html` et `firestore.rules`.
+- Aucun changement applicatif ni changement de règle effectué dans cette passe : le schéma de sessions, la politique de nettoyage et les règles de lecture doivent être mis en œuvre ensemble pour ne pas créer une faille ou une présence incohérente.
+- Cette section documente le plan de correction ; elle ne signifie pas que les sessions multi-appareils sont déjà prises en charge.
+- Aucun test Firebase Emulator, navigateur, compte réel ou appareil exécuté.
+- Aucun déploiement, aucune migration de données et aucune publication.
+- `main` reste intacte.
