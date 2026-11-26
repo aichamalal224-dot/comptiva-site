@@ -2016,13 +2016,14 @@ function krediUseCachedSubscriptionOffline(accountUid){
 }
 async function krediLoadMerchantSubscription(){
  if(!krediUser||krediIsCreator())return true;
- const accountUid=krediUser.uid,store=krediStore;
+ const accountUid=krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch;
+ const isCurrentSubscriptionSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===accountUid&&krediStore===store&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===accountUid&&STORE==='comptiva_user_v1_'+accountUid;
  krediSubscriptionAccess='checking';
- if(!store){if(krediUseCachedSubscriptionOffline(accountUid))return true;if(krediUser&&krediUser.uid===accountUid){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription')}return false}
+ if(!store){if(!isCurrentSubscriptionSession())return false;if(krediUseCachedSubscriptionOffline(accountUid))return true;if(isCurrentSubscriptionSession()){krediNeedsSubscriptionRecheck=true;krediSubscriptionAccess='unknown';krediShowSubscriptionMessage('Impossible de vérifier votre abonnement sans connexion à Firebase. Réessayez lorsque Internet sera disponible.');navigate('subscription')}return false}
  try{
   const snap=await store.collection('merchantSubscriptions').doc(accountUid).get({source:'server'});
   // Une réponse tardive ne doit jamais appliquer l’abonnement d’un ancien compte au compte actuel.
-  if(!krediUser||krediUser.uid!==accountUid||!snap)return false;
+  if(!isCurrentSubscriptionSession()||!snap)return false;
   const data=snap.exists?(snap.data()||{}):null;
   krediApplyCloudTrial(data);
   subscription.lastServerVerifiedAt=Date.now();saveSubscription();
@@ -2052,7 +2053,7 @@ async function krediLoadMerchantSubscription(){
   }
   return krediSubscriptionAccess==='active';
  }catch(error){
-  if(!krediUser||krediUser.uid!==accountUid)return false;
+  if(!isCurrentSubscriptionSession())return false;
   krediNeedsSubscriptionRecheck=true;
   if(krediUseCachedSubscriptionOffline(accountUid))return true;
   krediSubscriptionAccess='unknown';
@@ -2069,13 +2070,14 @@ function showTrialSuccess(message){
 async function startTrial(){
  const button=document.getElementById('startTrialButton');
  if(!krediUser||krediIsCreator()){flash('Connecte-toi avec un compte commerçant pour démarrer l’essai.');return}
- const accountUid=krediUser.uid,store=krediStore;
+ const accountUid=krediUser.uid,store=krediStore,sessionEpoch=krediSessionEpoch;
+ const isCurrentTrialSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===accountUid&&krediStore===store&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===accountUid&&STORE==='comptiva_user_v1_'+accountUid;
  if(!store||!navigator.onLine){flash('Connexion Firebase nécessaire pour démarrer et enregistrer les 14 jours. Aucun essai local ne sera créé.');return}
  if(button){button.disabled=true;button.textContent='Enregistrement dans Firebase…'}
  try{
   const ref=store.collection('merchantSubscriptions').doc(accountUid);
   const existing=await ref.get({source:'server'});
-  if(!krediUser||krediUser.uid!==accountUid)return;
+  if(!isCurrentTrialSession())return;
   if(existing.exists){krediApplyCloudTrial(existing.data());renderSubscription();const data=existing.data()||{};if(data.status==='trial'&&data.trialEnd){showTrialSuccess('Ton essai gratuit est déjà enregistré dans Firebase. Les dates sont conservées.')}else{flash('Une fiche d’abonnement existe déjà. La période d’essai ne peut pas être redémarrée.',6000)}return}
   const now=new Date(),end=new Date(now.getTime()+14*24*60*60*1000);
   await ref.set({
@@ -2085,9 +2087,9 @@ async function startTrial(){
    createdAt:firebase.firestore.FieldValue.serverTimestamp(),
    updatedAt:firebase.firestore.FieldValue.serverTimestamp()
   });
-  if(!krediUser||krediUser.uid!==accountUid)return;
+  if(!isCurrentTrialSession())return;
   const saved=await ref.get({source:'server'});
-  if(!krediUser||krediUser.uid!==accountUid)return;
+  if(!isCurrentTrialSession())return;
   if(!saved.exists)throw new Error('La fiche d’essai n’a pas été confirmée par Firebase.');
   krediApplyCloudTrial(saved.data());
   // Cette lecture serveur confirme également le cache hors ligne pour ce compte.
@@ -2097,7 +2099,7 @@ async function startTrial(){
   renderSubscription();
   showTrialSuccess('Essai gratuit de 14 jours enregistré avec succès dans Firebase.');
  }catch(error){
-  if(!krediUser||krediUser.uid!==accountUid)return;
+  if(!isCurrentTrialSession())return;
   console.error('[COMPTIVA] Création de l’essai Firebase refusée ou impossible',error);
   flash('Impossible d’enregistrer l’essai dans Firebase ('+(error.code||error.message||'erreur')+'). Vérifie les règles Firestore.');
  }finally{
@@ -2432,20 +2434,22 @@ function krediIsCreator(){return !!(krediUser&&krediUser.uid===KREDI_CREATOR_UID
 function krediShowApp(user){document.body.classList.add('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.setAttribute('aria-hidden','true');const allowed=!!(user&&user.uid===KREDI_CREATOR_UID);['creatorNav','creatorTopButton'].forEach(id=>{const el=document.getElementById(id);if(el)el.classList.toggle('hidden',!allowed)});const legacy=document.getElementById('legacyAdminDemo');if(legacy)legacy.classList.add('hidden');if(typeof navigate==='function')navigate('dashboard');const who=document.getElementById('topTitle');if(who)who.textContent='Tableau de bord';const subtitle=document.querySelector('.topbar .welcome-tagline');if(subtitle)subtitle.textContent='Votre commerce, toujours sous contrôle. · '+(user.email||'Compte connecté');}
 function krediShowLogin(){document.body.classList.remove('auth-ready');const authScreen=document.getElementById('authScreen');if(authScreen)authScreen.removeAttribute('aria-hidden');krediSetAuthMode('signin');}
 async function loadCreatorDirectory(){
+ const creatorUid=krediUser&&krediUser.uid,creatorStore=krediStore,sessionEpoch=krediSessionEpoch;
+ const isCurrentCreatorLoad=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===creatorUid&&creatorUid===KREDI_CREATOR_UID&&krediIsCreator()&&krediStore===creatorStore&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===creatorUid;
  const list=document.getElementById('creatorMerchantList'),subList=document.getElementById('creatorSubscriptionList');
  if(!list)return;
  if(!krediIsCreator()){list.innerHTML='<div class="empty">Accès refusé.</div>';if(subList)subList.innerHTML='';return}
  if(!krediStore){list.innerHTML='<div class="empty">Firestore n’est pas encore disponible. Réessayez lorsque la synchronisation est prête.</div>';if(subList)subList.innerHTML='<div class="empty">Firestore indisponible.</div>';const st=document.getElementById('creatorDirectoryStatus');if(st)st.textContent='Hors ligne';return}
  list.innerHTML='<div class="empty">Lecture sécurisée du répertoire…</div>';if(subList)subList.innerHTML='<div class="empty">Lecture des abonnements…</div>';
  try{
-  const snap=await krediStore.collection('merchantDirectory').get();
-  if(!krediIsCreator())return;
+  const snap=await creatorStore.collection('merchantDirectory').get();
+  if(!isCurrentCreatorLoad())return;
   const merchants=[];snap.forEach(doc=>merchants.push({uid:doc.id,data:doc.data()||{}}));
   const rows=merchants.map(({uid,data:d})=>{const created=d.updatedAt&&typeof d.updatedAt.toDate==='function'?d.updatedAt.toDate().toLocaleDateString('fr-FR'):(d.updatedAt?String(d.updatedAt):'—');return '<tr><td>'+esc(d.displayName||'—')+'</td><td>'+esc(d.email||'—')+'</td><td>'+esc(uid)+'</td><td>'+esc(created)+'</td></tr>'});
   const count=document.getElementById('creatorMerchantCount'),status=document.getElementById('creatorDirectoryStatus');if(count)count.textContent=String(rows.length);if(status)status.textContent='Connecté';
   list.innerHTML=rows.length?'<table><thead><tr><th>Commerçant</th><th>E-mail</th><th>UID</th><th>Dernière activité</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant trouvé dans merchantDirectory.</div>';
-  const subscriptionDocs=await Promise.all(merchants.map(async merchant=>{try{const doc=await krediStore.collection('merchantSubscriptions').doc(merchant.uid).get();return {merchant,exists:doc.exists,data:doc.exists?(doc.data()||{}):{}}}catch(error){return {merchant,error}}}));
-  if(!krediIsCreator())return;
+  const subscriptionDocs=await Promise.all(merchants.map(async merchant=>{try{const doc=await creatorStore.collection('merchantSubscriptions').doc(merchant.uid).get();return {merchant,exists:doc.exists,data:doc.exists?(doc.data()||{}):{}}}catch(error){return {merchant,error}}}));
+  if(!isCurrentCreatorLoad())return;
   const pending=subscriptionDocs.filter(x=>x.error||!x.exists||!['active','paid'].includes(String(x.data.status||'').toLowerCase()));
   const pendingCount=document.getElementById('creatorPendingSubscriptionCount');if(pendingCount)pendingCount.textContent=String(pending.length);
   if(subList){
@@ -2473,6 +2477,7 @@ async function loadCreatorDirectory(){
    subList.innerHTML=subRows.length?'<table><thead><tr><th>Commerçant</th><th>État</th><th>Début</th><th>Échéance</th><th>Temps restant</th></tr></thead><tbody>'+subRows.join('')+'</tbody></table>':'<div class="empty">Aucun commerçant répertorié.</div>';
   }
  }catch(e){
+  if(!isCurrentCreatorLoad())return;
   console.error('[COMPTIVA Créateur] Lecture du répertoire ou des abonnements refusée',e);
   const status=document.getElementById('creatorDirectoryStatus');if(status)status.textContent='Erreur';
   list.innerHTML='<div class="notice">Impossible de lire le répertoire des commerçants. Code : '+esc(e.code||'erreur')+'</div>';
@@ -2481,6 +2486,8 @@ async function loadCreatorDirectory(){
 }
 const COMPTIVA_PUBLIC_API='https://comptiva-public-api.aichamalal224.workers.dev';
 async function loadCreatorPublicAds(){
+ const creatorUid=krediUser&&krediUser.uid,sessionEpoch=krediSessionEpoch;
+ const isCurrentCreatorAds=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===creatorUid&&creatorUid===KREDI_CREATOR_UID&&krediIsCreator()&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===creatorUid;
  const list=document.getElementById('creatorPublicAdsList');
  const status=document.getElementById('creatorPublicAdsStatus');
  if(!list||!status)return;
@@ -2489,10 +2496,11 @@ async function loadCreatorPublicAds(){
  list.innerHTML='<div class="empty">Chargement…</div>';
  try{
   const token=await krediUser.getIdToken();
+  if(!isCurrentCreatorAds())return;
   const response=await fetch(COMPTIVA_PUBLIC_API+'/api/admin/public-ads',{headers:{Authorization:'Bearer '+token},cache:'no-store'});
   const result=await response.json().catch(()=>({}));
+  if(!isCurrentCreatorAds())return;
   if(!response.ok||!result.ok)throw new Error(result.error||('HTTP '+response.status));
-  if(!krediIsCreator())return;
   const requests=Array.isArray(result.requests)?result.requests:[];
   status.textContent=requests.length+' demande(s) enregistrée(s).';
   if(!requests.length){list.innerHTML='<div class="empty">Aucune demande publicitaire pour le moment.</div>';return}
@@ -2525,6 +2533,7 @@ async function loadCreatorPublicAds(){
    return '<article class="card" data-ad-id="'+esc(item.id)+'" data-ad-format="'+esc(item.format||'')+'" style="margin-top:12px"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><strong>'+esc(item.business_name||'Commerce')+'</strong><span>'+esc(statuses[item.status]||item.status||'Nouvelle')+'</span></div><p><b>Commerçant :</b> '+esc(item.merchant_name||'—')+'<br><b>Téléphone :</b> '+esc(item.phone||'—')+'<br><b>Format :</b> '+esc(labels[item.format]||item.format||'—')+'<br><b>Ville :</b> '+esc(item.city||'—')+'<br><b>Reçue le :</b> '+esc(item.created_at||'—')+'</p><p style="white-space:pre-wrap;overflow-wrap:anywhere">'+esc(item.description||'')+'</p>'+videoAction+'<label>Statut<select data-ad-status style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+options+'</select></label><label>Note Créateur<textarea data-ad-note rows="2" maxlength="500" style="display:block;width:100%;padding:10px;margin:6px 0 10px;border:1px solid var(--line);border-radius:8px">'+esc(item.admin_note||'')+'</textarea></label><button class="primary" type="button" onclick="updateCreatorAdRequest(this)">Enregistrer le statut et la note</button></article>';
   }).join('');
  }catch(error){
+  if(!isCurrentCreatorAds())return;
   console.error('[COMPTIVA Créateur] Chargement demandes PUB',error);
   status.textContent='Impossible de charger les demandes : '+(error.message||'erreur inconnue');
   list.innerHTML='<div class="empty">Vérifiez que le Worker est déployé et que vous êtes connecté avec le compte Créateur autorisé.</div>';
