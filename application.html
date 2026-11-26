@@ -1004,11 +1004,23 @@ async function krediDiagnoseSharedShopAccess(){
   say('Diagnostic non validé : '+reason+'. Aucune migration ni écriture effectuée.');
  }
 }
-/* Présence vendeur : heartbeat Firestore, en ligne si signal serveur < 90 s. */
+/* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
 let krediPresenceHeartbeat=null,krediPresenceShopId='';
+const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
  krediPresenceShopId='';
+}
+async function krediMarkSellerDisconnected(expectedUid){
+ const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId;
+ if(!uid||!store||!shopId||!navigator.onLine||!krediUser||krediUser.uid!==uid)return false;
+ try{
+  await Promise.race([
+   store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'disconnected'},{merge:true}),
+   new Promise((_,reject)=>setTimeout(()=>reject(new Error('presence-disconnect-timeout')),1500))
+  ]);
+  return true;
+ }catch(error){console.warn('[COMPTIVA] Déconnexion de présence non confirmée ; le délai hors ligne prendra le relais.',error);return false}
 }
 async function krediStartSellerPresence(){
  krediStopSellerPresence();
@@ -1043,7 +1055,7 @@ async function krediStartSellerPresence(){
   catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence non confirmé.',error)}
  };
  await send();
- if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,30000);
+ if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,KREDI_PRESENCE_HEARTBEAT_MS);
 }
 function krediEscapePresence(value){
  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
@@ -1187,13 +1199,15 @@ async function krediRefreshSellerPresence(){
   target.innerHTML=members.map(doc=>{
    const m=doc.data()||{},p=presence.get(doc.id)||{};
    const stamp=p.lastSeen&&typeof p.lastSeen.toMillis==='function'?p.lastSeen.toMillis():0;
-   const online=!!(m.active===true&&stamp&&now-stamp<=90000);
-   const name=[m.firstName,m.lastName].filter(Boolean).join(' ').trim()||m.email||('Vendeur '+doc.id.slice(0,6));
-   const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Pas encore connecté';
+   const age=stamp?Math.max(0,now-stamp):Infinity;
    const active=m.active===true;
+   const online=!!(active&&stamp&&age<=KREDI_PRESENCE_OFFLINE_MS&&p.clientState!=='disconnected');
+   const statusLabel=!active?'Suspendu':p.clientState==='disconnected'?'Déconnecté':online?'Connecté':'Hors ligne';
+   const name=[m.firstName,m.lastName].filter(Boolean).join(' ').trim()||m.email||('Vendeur '+doc.id.slice(0,6));
+   const when=stamp?new Date(stamp).toLocaleString('fr-FR'):'Aucun signal reçu';
    const actionLabel=active?'Suspendre':'Réactiver';
    const actionValue=active?'false':'true';
-   return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small><br><small>'+ (active?'Affectation active':'Affectation suspendue') +'</small></span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill '+(online?'':'pending')+'">'+(online?'Connecté':(active?'Pas encore connecté / hors ligne':'Suspendu'))+'</span><button class="soft" type="button" onclick="krediSetSellerActive(\''+krediEscapePresence(doc.id)+'\','+actionValue+')">'+actionLabel+'</button></span></div>';
+   return '<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid #e5ebf5"><span><b>'+krediEscapePresence(name)+'</b><br><small>'+krediEscapePresence(when)+'</small><br><small>'+ (active?'Affectation active':'Affectation suspendue') +'</small></span><span style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="pill '+(online?'':'pending')+'">'+statusLabel+'</span><button class="soft" type="button" onclick="krediSetSellerActive(\''+krediEscapePresence(doc.id)+'\','+actionValue+')">'+actionLabel+'</button></span></div>';
   }).join('');
  };
  try{
@@ -1205,7 +1219,7 @@ async function krediRefreshSellerPresence(){
    if(!krediUser||krediUser.uid!==patronUid)return;
    presence=new Map();snap.forEach(doc=>presence.set(doc.id,doc.data()||{}));gotPresence=true;render();
   },error=>{console.warn('[COMPTIVA] Signaux de présence indisponibles.',error);target.textContent='Présences indisponibles : vérifiez les règles Firestore.'});
-  krediPresenceRenderTimer=setInterval(render,15000);
+  krediPresenceRenderTimer=setInterval(render,KREDI_PRESENCE_RENDER_MS);
  }catch(error){
   console.warn('[COMPTIVA] Abonnement aux présences impossible.',error);
   target.textContent='Suivi en direct indisponible. Réessayez après vérification de la connexion.';
@@ -2569,7 +2583,7 @@ async function krediInitFirebase(){try{
         const credential=firebase.auth.EmailAuthProvider.credential(currentUser.email,password);
         await currentUser.reauthenticateWithCredential(credential);
         if(!krediUser||krediUser.uid!==uid)return;
-        krediIdleHideOverlay();krediIdleSchedule();krediRecheckSubscriptionOnResume();
+        krediIdleHideOverlay();krediIdleSchedule();krediRecheckSubscriptionOnResume();krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Reprise de présence après déverrouillage impossible.',error));
       }catch(error){
         message.textContent='Mot de passe incorrect ou vérification impossible. Réessayez.';
         panel.querySelector('#comptivaIdlePassword').value='';krediIdleUnlockBusy=false;button.disabled=false;button.textContent='Déverrouiller';panel.querySelector('#comptivaIdlePassword').focus();
@@ -2753,8 +2767,9 @@ async function krediInitFirebase(){try{
     }
     if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())return;
     krediNeedsSubscriptionRecheck=false;clearTimeout(krediSaveTimer);krediQueueCloudSave();
+    krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Reprise de présence après reconnexion impossible.',error));
   });
-  window.addEventListener('offline',()=>{if(krediUser){krediNeedsSubscriptionRecheck=true;krediStatus('Hors connexion · modifications conservées sur cet appareil. Le serveur vérifiera l’abonnement avant toute synchronisation au retour d’Internet.')}});
+  window.addEventListener('offline',()=>{if(krediUser){krediStopSellerPresence();krediNeedsSubscriptionRecheck=true;krediStatus('Hors connexion · modifications conservées sur cet appareil. Le vendeur sera affiché hors ligne après 3 minutes sans signal serveur. Le serveur vérifiera l’abonnement avant toute synchronisation au retour d’Internet.')}});
 }catch(e){
   const detail=(e&&e.code?e.code+' · ':'')+(e&&e.message?e.message:'erreur JavaScript');
   krediStatus('Connexion sécurisée non initialisée : '+detail+' Les données locales ne sont pas modifiées.');
@@ -3020,6 +3035,7 @@ async function krediSignOut(){
  let localSaved=false;
  if(!storageBlocked){try{localStorage.setItem(STORE,JSON.stringify(db));localSaved=true}catch(storageError){console.error('[COMPTIVA] Sauvegarde locale avant déconnexion impossible :',storageError)}}
  try{
+  await krediMarkSellerDisconnected(signingOutUid);
   await krediAuth.signOut();
   if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);
   else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500);
