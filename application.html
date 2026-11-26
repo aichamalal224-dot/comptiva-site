@@ -3105,7 +3105,14 @@ async function krediSignOut(){
   if(storageBlocked)flash('Déconnexion effectuée. Sécurité des données : la base locale illisible n’a pas été remplacée. Une récupération est nécessaire.',7500);
   else if(!localSaved)flash('Déconnexion effectuée, mais la dernière sauvegarde locale n’a pas pu être confirmée. Vérifiez le stockage de cet appareil.',6500);
   else if(cloudPending)flash('Déconnexion effectuée. Attention : des données restent peut-être uniquement sur cet appareil et ne sont pas confirmées sur Firebase.',8000);
- }catch(e){alert('Déconnexion impossible : '+krediFriendlyError(e))}
+ }catch(e){
+  // Si Firebase Auth refuse la déconnexion, le compte reste potentiellement actif.
+  // Réactiver son suivi évite de laisser un utilisateur connecté affiché « Déconnecté ».
+  if(krediUser&&krediUser.uid===signingOutUid&&navigator.onLine){
+   krediStartSellerPresence().catch(presenceError=>console.warn('[COMPTIVA] Reprise de présence après échec de déconnexion impossible.',presenceError));
+  }
+  alert('Déconnexion impossible : '+krediFriendlyError(e));
+ }
 }
 window.addEventListener('error',event=>{if(event&&event.message&&event.message!=='Script error.')krediStatus('Erreur JavaScript : '+event.message)});
 // Le formulaire est relié immédiatement, sans attendre le retour du listener Firebase.
