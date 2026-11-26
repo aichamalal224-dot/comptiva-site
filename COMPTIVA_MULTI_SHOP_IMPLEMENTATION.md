@@ -2831,3 +2831,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Limite importante : une écriture déjà envoyée au serveur ne peut pas être annulée par JavaScript ; cette garde réduit la fenêtre de course mais ne constitue pas une garantie d'annulation atomique en cas de changement intervenant après la préparation du commit. Les règles Firestore restent la barrière d'autorisation côté serveur.
 - Vérifications : relecture, confirmation des trois occurrences (définition + deux appels), compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
 - Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
+
+
+### Garde-fou supplémentaire entre Firebase Auth et l'espace local — 26 novembre 2026
+
+L'audit a identifié une fenêtre de course : Firebase peut déjà avoir changé `currentUser` alors que le rappel `onAuthStateChanged` n'a pas encore terminé de basculer `krediUser` et `STORE`. Un contrôle basé uniquement sur l'UID mémorisé et le nom de l'espace local pouvait donc laisser une courte possibilité d'enregistrer ou de programmer une sauvegarde pour l'ancienne session. La vérification centrale `krediStoreMatchesActiveUser()` exige maintenant que l'utilisateur Firebase courant corresponde exactement à `krediUser` (et qu'il n'existe pas d'utilisateur Firebase lorsqu'on est en mode invité). Les gardes de l'initialisation Auth, de la sauvegarde différée et de la reconnexion contrôlent aussi explicitement `krediAuth.currentUser.uid`.
+
+Cette barrière bloque les opérations locales et cloud dès que l'identité Auth courante ne correspond plus à l'identité applicative, même avant la fin du rappel de transition. Elle ne peut pas annuler une écriture Firestore déjà envoyée au serveur ; les règles Firestore restent indispensables.
+
+Vérifications prévues après modification : compilation des trois scripts intégrés, recherche des gardes modifiées et comparaison de la branche avec `main`. Aucun test navigateur, appareil, Firebase Emulator, compte réel, ni déploiement n'est couvert par cette correction.
