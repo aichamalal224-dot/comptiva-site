@@ -3268,3 +3268,10 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Correction `startTrial()` : contrôles identiques après chaque attente Firestore (lecture initiale, écriture, lecture de confirmation) et dans le chemin d’erreur ; une ancienne opération ne peut plus activer l’essai dans l’état d’un autre cycle de session.
 - Correction des chargements du répertoire commerçant et des demandes publiques du Créateur : ils capturent la session et l’instance Firestore, puis vérifient l’authentification après les attentes réseau avant d’afficher les résultats ou erreurs.
 - Vérification statique uniquement ; aucun test avec deux comptes Firebase réels, Firestore Emulator, Worker ou réseau interrompu n’a été effectué. Aucun changement de règles Firestore ni déploiement.
+
+
+### Audit présence et affectation vendeur — 26 novembre 2026
+- Vérification statique du cycle de présence : heartbeat, écoute Patron et écriture `presence/{uid}` capturent UID, boutique, génération de session et génération de présence ; les opérations périmées sont arrêtées avant écriture ou affichage. Les écritures de présence restent limitées au document UID/boutique attendu.
+- Correction ciblée : `krediEnsurePrimaryShop()` et `krediAssignSellerToPrimaryShop()` capturent désormais UID Patron, instance Firestore et génération de session ; contrôles avant/après attentes réseau et avant chaque écriture, et les anciens callbacks ne mettent plus à jour l’interface d’une autre session.
+- Risque restant identifié : l’affectation vendeur utilise deux écritures Firestore successives (document `members/{uid}`, puis index `userShopMemberships/{uid}/shops/{shopId}`). Si la seconde échoue ou si la session change entre les deux, une fiche membre peut rester sans index. Ne pas présenter l’affectation comme atomique ; prévoir une procédure de réconciliation/écriture transactionnelle compatible avec les règles actuelles avant généralisation.
+- Tests statiques uniquement ; aucune bascule réelle de comptes, aucun test multi-appareil, Firestore Emulator ou essai de panne entre les deux écritures n’a été exécuté.
