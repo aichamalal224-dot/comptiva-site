@@ -2904,3 +2904,26 @@ Le code applicatif inspecté utilise ces chemins de boutique pour des lectures d
 6. Écrire les tests Firebase Emulator couvrant les champs ajoutés, les UID falsifiés, les montants négatifs, les références hors boutique, les modifications d'auteur et les tentatives d'annulation/suppression.
 
 **Contrôles de cet audit :** lecture des règles et des structures de création locales ; vérification des occurrences d'accès aux collections partagées dans `application.html`. Aucun changement des règles Firestore, aucune migration, aucun test Firebase Emulator, aucun déploiement ni publication. `main` reste intacte.
+
+
+
+### Audit de la traçabilité et de l'historique des corrections — 26 novembre 2026
+
+L'examen des règles `auditLog`, `sales`, `debts`, `payments` et `clients` fait ressortir deux limites importantes du modèle multi-boutiques préparatoire :
+
+1. **Un événement d'audit peut être déclaré par son auteur sans validation de son contenu.** La création dans `shops/{shopId}/auditLog/{eventId}` vérifie `shopId` et `actorUid == request.auth.uid`, mais ne limite pas les champs, ne valide pas les types/valeurs et ne vérifie pas que l'événement correspond à une opération réellement créée ou modifiée dans la même écriture atomique. Un utilisateur authentifié peut donc tenter de produire un événement trompeur en attribuant à sa propre identité une action ou des valeurs non vérifiées. La règle interdit bien la modification et la suppression des événements après création, mais cela ne garantit pas la véracité de leur contenu initial.
+2. **Les modifications autorisées au Patron ne sont pas conditionnées à une trace d'audit atomique.** Les règles autorisent au Patron la mise à jour de ventes, clients, dettes et remboursements (selon les restrictions propres à chaque collection), sans exiger qu'un événement correspondant soit créé dans le même commit Firestore. L'historique append-only ne suffit donc pas, à lui seul, à garantir qu'une correction métier est toujours journalisée.
+
+La création d'un événement par le vendeur peut être nécessaire pour tracer ses opérations, mais le client ne doit pas pouvoir fabriquer une preuve d'encaissement, d'annulation ou de correction. Un simple contrôle de `actorUid` prouve seulement l'identité du compte qui a soumis l'événement, pas que l'action décrite a effectivement eu lieu.
+
+**Mesures obligatoires avant activation :**
+- Définir un schéma d'événement versionné et une liste blanche stricte de champs : identifiant, boutique, acteur, type d'entité, identifiant de l'entité, action autorisée, horodatage serveur et références de l'opération.
+- Imposer `actorUid == request.auth.uid`, `shopId` égal au chemin, et utiliser `request.time` pour l'horodatage d'écriture plutôt qu'une date libre fournie par le client.
+- Ne pas permettre au client de déclarer arbitrairement des valeurs financières « avant/après » comme preuve. Les valeurs doivent être vérifiables par rapport aux documents concernés, ou l'événement doit être produit par un environnement serveur de confiance.
+- Pour chaque correction Patron, utiliser une transaction ou un batch qui met à jour le document métier et crée l'événement d'audit correspondant dans la même écriture atomique ; les règles doivent vérifier cette relation avec `getAfter()` lorsque le schéma le permet.
+- Pour les événements sensibles (annulation, remboursement, correction de montant, stock), privilégier une écriture serveur de confiance avec validation des relations et du solde. Les règles Firestore seules ne peuvent pas garantir une logique comptable complète ou calculer de manière fiable un historique global de paiements.
+- Conserver l'interdiction de modifier/supprimer les événements d'audit après création et prévoir un accès de lecture adapté, sans exposer les données financières au vendeur.
+
+**Décision de sécurité :** aucune modification improvisée des règles n'est appliquée. Le code applicatif inspecté n'a pas encore de flux d'écriture partagé pour les opérations commerciales ni de flux de correction multi-boutiques ; le format des événements et la transaction correspondante doivent être définis avec la migration. Modifier maintenant les règles sans ce contrat pourrait créer de faux événements, bloquer les opérations ou donner une fausse assurance d'audit.
+
+**Contrôles effectués :** lecture des règles actuelles et examen des autorisations d'écriture des collections concernées. Aucun test Firebase Emulator, aucune transaction réelle, aucun déploiement de règles et aucune publication. `main` reste intacte.
