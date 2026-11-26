@@ -1125,7 +1125,7 @@ async function krediStartSellerPresence(){
 function krediEscapePresence(value){
  return String(value==null?'':value).replace(/[&<>"']/g,function(ch){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]});
 }
-let krediPresenceMembersUnsub=null,krediPresenceDataUnsub=null,krediPresenceRenderTimer=null;
+let krediPresenceMembersUnsub=null,krediPresenceDataUnsub=null,krediPresenceRenderTimer=null,krediPresenceListEpoch=0;
 
 async function krediEnsurePrimaryShop(){
  const status=document.getElementById('sellerManagementStatus');
@@ -1255,10 +1255,12 @@ async function krediRefreshSellerPresence(){
  if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}
  if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}
  const patronUid=krediUser.uid,shopId='shop-'+patronUid,base=krediStore.collection('shops').doc(shopId);
+ const listEpoch=++krediPresenceListEpoch;
+ const isCurrentList=()=>krediPresenceListEpoch===listEpoch&&!!krediUser&&krediUser.uid===patronUid;
  let members=[],presence=new Map(),gotMembers=false,gotPresence=false;
  target.textContent='Connexion au suivi des présences…';
  const render=()=>{
-  if(!krediUser||krediUser.uid!==patronUid||!gotMembers||!gotPresence)return;
+  if(!isCurrentList()||!gotMembers||!gotPresence)return;
   if(!members.length){target.textContent='Aucun vendeur attribué à cette boutique pour le moment.';return}
   const now=Date.now();
   target.innerHTML=members.map(doc=>{
@@ -1277,15 +1279,16 @@ async function krediRefreshSellerPresence(){
  };
  try{
   krediPresenceMembersUnsub=base.collection('members').onSnapshot(snap=>{
-   if(!krediUser||krediUser.uid!==patronUid)return;
+   if(!isCurrentList())return;
    members=snap.docs.filter(doc=>(doc.data()||{}).role==='seller');gotMembers=true;render();
-  },error=>{console.warn('[COMPTIVA] Liste vendeurs indisponible.',error);target.textContent='Liste des vendeurs indisponible : vérifiez les règles Firestore.'});
+  },error=>{if(!isCurrentList())return;console.warn('[COMPTIVA] Liste vendeurs indisponible.',error);target.textContent='Liste des vendeurs indisponible : vérifiez les règles Firestore.'});
   krediPresenceDataUnsub=base.collection('presence').onSnapshot(snap=>{
-   if(!krediUser||krediUser.uid!==patronUid)return;
+   if(!isCurrentList())return;
    presence=new Map();snap.forEach(doc=>presence.set(doc.id,doc.data()||{}));gotPresence=true;render();
-  },error=>{console.warn('[COMPTIVA] Signaux de présence indisponibles.',error);target.textContent='Présences indisponibles : vérifiez les règles Firestore.'});
-  krediPresenceRenderTimer=setInterval(render,KREDI_PRESENCE_RENDER_MS);
+  },error=>{if(!isCurrentList())return;console.warn('[COMPTIVA] Signaux de présence indisponibles.',error);target.textContent='Présences indisponibles : vérifiez les règles Firestore.'});
+  krediPresenceRenderTimer=setInterval(()=>{if(isCurrentList())render()},KREDI_PRESENCE_RENDER_MS);
  }catch(error){
+  if(!isCurrentList())return;
   console.warn('[COMPTIVA] Abonnement aux présences impossible.',error);
   target.textContent='Suivi en direct indisponible. Réessayez après vérification de la connexion.';
  }
@@ -2689,6 +2692,7 @@ async function krediInitFirebase(){try{
       return;
     }
     const sessionEpoch=++krediSessionEpoch;
+    krediPresenceListEpoch++;
     // Arrêter aussi le heartbeat et l'écoute du Patron de l'ancienne session,
     // y compris lors d'un changement direct de compte sans état déconnecté.
     krediStopSellerPresence();
