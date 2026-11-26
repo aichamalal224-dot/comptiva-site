@@ -185,12 +185,18 @@ service cloud.firestore {
         allow delete: if canWriteShop(shopId) && isShopPatron(shopId) && memberUid != request.auth.uid;
       }
 
-      // Heartbeat : un vendeur écrit uniquement son propre signal ; Patron lit les signaux.
+      // Présence : Patron lit la liste ; un vendeur ne peut lire que le document de son Patron.
+      // Chaque utilisateur ne peut écrire que son propre document de présence.
       match /presence/{memberUid} {
-        allow read: if isShopPatron(shopId);
+        allow get: if isShopPatron(shopId)
+          || (isActiveShopMember(shopId) && memberUid == shopData(shopId).patronUid);
+        allow list: if isShopPatron(shopId);
         allow create, update: if signedIn()
           && request.auth.uid == memberUid
-          && isActiveShopMember(shopId)
+          && (
+            isActiveShopMember(shopId)
+            || (isShopPatron(shopId) && hasActiveSubscription(shopData(shopId).patronUid))
+          )
           && request.resource.data.keys().hasOnly(['uid', 'lastSeen', 'clientState'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.lastSeen == request.time
