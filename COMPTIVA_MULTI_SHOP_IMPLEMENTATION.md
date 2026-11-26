@@ -3322,3 +3322,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Le changement ne modifie ni les données locales, ni le schéma cloud, ni les règles Firestore. Il conserve l’affichage d’attente lorsque le serveur n’a pas encore été confirmé.
 - Vérifications à effectuer après écriture : relecture exacte du code, compilation des trois blocs JavaScript, comparaison branche/main.
 - Vérifications non réalisées : simulation de panne réseau, Firestore Emulator, deux appareils, tests navigateur/appareil, données de production et déploiement.
+
+
+### Audit des références de version lors d'un changement de compte — 26 novembre 2026
+- Constat : `krediLastWrite` était une variable globale à la page et n'était pas réinitialisée lors d'un changement direct d'UID. Une session du compte B pouvait donc comparer son état distant à la dernière référence lue pour le compte A. Cette référence ne constitue pas un baseline valide pour B et pouvait fausser le diagnostic de conflit ou de suppression.
+- Correction ciblée : comparer l'UID précédent et l'UID entrant dans `onAuthStateChanged`; vider `krediLastWrite` dès que l'identité change. Le nouveau compte doit établir sa propre référence à partir d'un instantané confirmé du serveur. Si des modifications sont en attente et qu'aucun baseline fiable n'est disponible, le contrôle existant bloque prudemment la fusion automatique au lieu de réutiliser le baseline d'un autre compte.
+- Aucun contenu de base, marqueur de synchronisation, document Firestore ou règle n'est modifié par cette correction.
+- Vérifications après écriture : relecture du code, compilation des trois blocs JavaScript, comparaison branche/main.
+- Non réalisés : tests d'authentification alternée avec deux comptes réels, Firestore Emulator, scénarios hors ligne, tests navigateur/appareil et déploiement.
