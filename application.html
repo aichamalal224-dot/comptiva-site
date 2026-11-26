@@ -2154,7 +2154,18 @@ function backupData(){
    alert('Sauvegarde refusée : connectez-vous au compte propriétaire des données avant de créer une sauvegarde.');
    return;
   }
-  const payload={app:'COMPTIVA',version:7,schemaVersion:1,scope:'account',ownerUid,createdAt:new Date().toISOString(),data:db};
+  if(window.krediDBStorageIssue&&window.krediDBStorageIssue.store===STORE){
+   alert('Sauvegarde refusée : la base locale est illisible. Une copie brute de secours a peut-être été conservée ; récupérez-la avant toute exportation. COMPTIVA ne créera pas de sauvegarde vide à sa place.');
+   return;
+  }
+  const shapeIssue=krediDatabaseShapeIssue(db);
+  if(shapeIssue)throw new Error('Base locale non vérifiable : '+shapeIssue);
+  const serializedData=JSON.stringify(db);
+  if(typeof serializedData!=='string')throw new Error('La base locale ne peut pas être sérialisée.');
+  const verifiedData=JSON.parse(serializedData);
+  const verifiedIssue=krediDatabaseShapeIssue(verifiedData);
+  if(verifiedIssue)throw new Error('Vérification de la sauvegarde impossible : '+verifiedIssue);
+  const payload={app:'COMPTIVA',version:7,schemaVersion:1,scope:'account',ownerUid,createdAt:new Date().toISOString(),data:verifiedData};
   const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
   const url=URL.createObjectURL(blob),a=document.createElement('a');
   a.href=url;a.download='comptiva-sauvegarde-'+new Date().toISOString().slice(0,10)+'.json';
