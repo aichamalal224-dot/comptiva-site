@@ -3190,3 +3190,12 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Avant toute mutation, l'annulation d'une vente préalloue les identifiants d'audit de la vente et, si nécessaire, du mouvement de stock ; les identifiants doivent être présents, distincts et absents de l'historique existant.
 - Vérifications réalisées : relecture du fichier ; compilation isolée de `cancelDebt()` et `cancelSale()` ; compilation des trois blocs script ; contrôles statiques sur l'unicité du produit et des identifiants d'audit.
 - Vérifications non réalisées : navigateur, stockage réel, Firebase Emulator, concurrence multi-appareils, impression et déploiement.
+
+
+### Audit des annulations et corrections de remboursements — 26 novembre 2026
+- `cancelPayment()` exige désormais que le registre global des dettes/remboursements soit valide avant annulation ; l'action conserve le contrôle de relation et de solde par `krediPaymentActionCheck()`.
+- L'annulation d'un remboursement préalloue un identifiant d'audit et bloque avant mutation si celui-ci est absent ou déjà utilisé.
+- `editPayment()` sélectionne désormais exactement un remboursement ; les identifiants absents ou dupliqués bloquent la correction au lieu de choisir arbitrairement une ligne.
+- La correction d'un remboursement préalloue également un identifiant d'audit unique avant mutation. Les contrôles existants de date, montant, mode autorisé et plafond de dette sont conservés.
+- Vérifications réalisées : relecture du fichier ; compilation isolée de `cancelPayment()` et `editPayment()` ; compilation des trois blocs script ; contrôles statiques des gardes et identifiants d'audit.
+- Vérifications non réalisées : tests d'interface, impression, Firebase Emulator, comptes réels, concurrence multi-appareils, données historiques et déploiement.
