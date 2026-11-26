@@ -143,7 +143,8 @@ service cloud.firestore {
         && request.resource.data.active is bool
         && request.resource.data.patronUid == request.auth.uid
         && exists(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid))
-        && get(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == request.resource.data.active;
+        // Vérifie le statut final du membre dans la même écriture groupée.
+        && getAfter(/databases/$(database)/documents/shops/$(shopId)/members/$(memberUid)).data.active == request.resource.data.active;
       allow delete: if isShopPatron(shopId);
     }
 
