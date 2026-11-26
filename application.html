@@ -2689,6 +2689,11 @@ async function krediInitFirebase(){try{
       return;
     }
     const sessionEpoch=++krediSessionEpoch;
+    // Toute transition Auth invalide les écouteurs de présence de l'ancien compte,
+    // y compris lors d'un passage direct Patron A → compte B sans étape déconnectée.
+    if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}
+    if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}
+    if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}
     const isCurrentSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===activeUser?.uid&&STORE===(activeUser?'comptiva_user_v1_'+activeUser.uid:'comptiva_guest_v1');
     if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
     // Le bouton de récupération est lié au compte actuellement connecté :
