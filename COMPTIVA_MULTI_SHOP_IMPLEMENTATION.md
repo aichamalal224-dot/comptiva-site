@@ -2811,3 +2811,13 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Limite : la présence multi-appareils partage toujours un document par UID et doit faire l'objet de la correction par sessions individuelles. Les transitions réelles doivent être testées sur navigateur et Firebase Emulator avant production.
 - Vérifications : relecture du fichier enregistré, contrôle de la condition de verrouillage, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel n'est revendiqué.
 - Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
+
+
+## Correction — génération de session vérifiée après les attentes Auth et réseau — 26 novembre 2026
+
+- Défaut constaté : le déverrouillage après réauthentification et la reprise après retour d'Internet vérifiaient principalement l'UID. Si une session changeait puis revenait rapidement au même UID, une opération asynchrone ancienne pouvait encore sembler concerner le compte courant.
+- Déverrouillage : capture de `krediSessionEpoch` au début de la demande ; après la réauthentification, vérification de la génération, de l'UID courant, de `krediAuth.currentUser` et du maintien du verrou. Le gestionnaire d'erreur vérifie aussi que la demande appartient encore à l'écran verrouillé courant avant de modifier son message.
+- Retour réseau : capture de la génération au démarrage de l'événement `online`, puis contrôle de génération, UID et correspondance du stockage après la vérification d'abonnement et avant la reprise de synchronisation/présence.
+- Ces gardes empêchent une ancienne continuation de poursuivre son travail après un changement de session. Elles ne remplacent pas les tests réels ni le modèle de présence multi-appareils par sessions.
+- Vérifications : relecture GitHub, contrôle des deux gardes, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
+- Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
