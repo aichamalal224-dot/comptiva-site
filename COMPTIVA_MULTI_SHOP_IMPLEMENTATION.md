@@ -3033,3 +3033,19 @@ L'examen de `cancelSale()`, des mouvements de stock et des écritures de caisse 
 **Limites restantes :** ce garde-fou réduit le risque d'écraser des modifications locales en attente, mais ne constitue pas une comparaison sémantique entre les dates de la sauvegarde et les transactions cloud. Le marqueur local peut être absent après effacement du stockage ; dans ce cas, le contrôle `krediCloudReady`, `krediLocalDirty`, `krediLastWrite` et la transaction cloud restent essentiels. La procédure ne réalise pas de fusion automatique. Aucun test réel de restauration, de concurrence multi-appareils, de stockage effacé ou de course réseau n'a été exécuté.
 
 **Tests statiques après commit :** relecture des fichiers modifiés et compilation des trois blocs JavaScript. Aucune modification de règles Firestore, migration, fusion, déploiement ou publication ; `main` reste intacte.
+
+
+### Audit des suppressions hors connexion et des identifiants dupliqués — 26 novembre 2026
+
+**Constat important :** la fusion actuelle combine les enregistrements présents dans les deux bases par identifiant. Elle n'a pas de registre de suppressions (tombstones) ni de version de suppression. Une fiche supprimée sur un appareil hors connexion peut donc réapparaître si elle est encore présente dans la copie distante ou dans la copie d'un autre appareil. Il ne faut pas considérer la synchronisation hors connexion comme sûre pour les suppressions tant que ce mécanisme n'existe pas.
+
+**Correction de sécurité appliquée :** `krediFindSyncMergeConflicts()` détecte maintenant les identifiants répétés dans une même collection locale ou cloud et les signale comme conflits. La fusion déjà existante suspend alors la synchronisation et conserve les copies de récupération au lieu de laisser la Map remplacer silencieusement un enregistrement par un autre portant le même identifiant.
+
+**Architecture nécessaire avant de corriger la réapparition des suppressions :**
+- Introduire des marqueurs de suppression durables avec identifiant, collection, horodatage serveur, acteur et version.
+- Fusionner ces marqueurs comme des événements de données, sans les supprimer lors d'une fusion.
+- Appliquer la suppression seulement si sa version est plus récente que la dernière modification connue de la fiche ; en cas d'ordre incertain, bloquer et demander une résolution.
+- Prévoir une politique de rétention et de migration des anciennes données qui ne possèdent aucun marqueur de suppression.
+- Tester suppression hors ligne, reconnexion tardive, suppression simultanée avec modification, restauration de sauvegarde et multi-appareils.
+
+**Tests :** relecture après modification et compilation statique des trois blocs JavaScript ; aucun test de scénarios multi-appareils, émulateur Firebase ou compte réel n'a été exécuté. Aucune migration ni modification des règles Firestore ; aucun déploiement ou fusion. `main` reste intacte.
