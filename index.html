@@ -715,7 +715,7 @@ async function krediInitFirebase(){try{
     krediLocalDirty=!!(user&&localStorage.getItem('comptiva_pending_'+user.uid)==='1');
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
     if(!user){STORE='comptiva_guest_v1';SUB_STORE='comptiva_guest_subscription_v1';db=loadDB();subscription=loadSubscription();krediShowLogin();krediStatus(krediStorageBlocked(STORE)||krediStorageBlocked(SUB_STORE)?'Stockage local à récupérer. Aucune synchronisation ne sera effectuée avant restauration.':'Connexion sécurisée prête.');return}
-    krediUseAccountStore(user.uid);krediShowApp(user);renderAll();
+    krediUseAccountStore(user.uid);krediShowApp(user);renderAll();renderSubscription();
     // Firestore est initialisé seulement après confirmation Auth.
     if(!krediStore && firebase.firestore){
       try{
