@@ -3261,3 +3261,10 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Le callback `onSnapshot` vérifie la session avant traitement ; son chemin de fusion est synchrone jusqu’à l’écriture locale, puis le chemin d’écriture cloud revérifie la session dans la transaction et après `await`. Les callbacks devenus obsolètes sont donc abandonnés avant toute mutation locale observable.
 - Correction ciblée : `restoreData()` capture désormais aussi la génération de session, et le callback asynchrone `FileReader.onload` refuse une restauration si la session a changé, même si le même UID est reconnecté entre-temps. Le contrôle est répété avant remplacement de la base.
 - Limite : cette revue est statique. Aucun test réel de bascule A→B, déconnexion pendant transaction, Firestore Emulator, réseau interrompu ou appareils simultanés n’a été exécuté.
+
+
+### Audit chargements asynchrones — abonnement et espace Créateur — 26 novembre 2026
+- Correction `krediLoadMerchantSubscription()` : capture de la génération de session, de l’UID, de l’instance Firestore et du magasin local ; la réponse serveur et le chemin d’erreur ne modifient plus l’état d’un compte si la session a changé, y compris reconnexion rapide du même UID.
+- Correction `startTrial()` : contrôles identiques après chaque attente Firestore (lecture initiale, écriture, lecture de confirmation) et dans le chemin d’erreur ; une ancienne opération ne peut plus activer l’essai dans l’état d’un autre cycle de session.
+- Correction des chargements du répertoire commerçant et des demandes publiques du Créateur : ils capturent la session et l’instance Firestore, puis vérifient l’authentification après les attentes réseau avant d’afficher les résultats ou erreurs.
+- Vérification statique uniquement ; aucun test avec deux comptes Firebase réels, Firestore Emulator, Worker ou réseau interrompu n’a été effectué. Aucun changement de règles Firestore ni déploiement.
