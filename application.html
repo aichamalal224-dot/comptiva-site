@@ -2930,7 +2930,7 @@ async function krediInitFirebase(){try{
     });
     krediUnsubscribe=ref.onSnapshot({includeMetadataChanges:true},async snap=>{
       if(!isCurrentSession())return;
-      if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
+      if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
       const remoteDocument=snap.exists?snap.data():null;
