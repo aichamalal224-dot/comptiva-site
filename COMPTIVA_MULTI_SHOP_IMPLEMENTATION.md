@@ -3226,3 +3226,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Les messages restent préparés manuellement ; aucun envoi automatique n'est introduit.
 - Vérifications réalisées : compilation des trois blocs script ; relecture après écriture ; contrôles statiques des gardes de sélection, registre, solde, copie et partage.
 - Vérifications non réalisées : tests navigateur/appareil, ouverture réelle WhatsApp/SMS/téléphone, jeux de données réels, Firebase Emulator, synchronisation multi-appareils et déploiement.
+
+
+### Audit des ventes à crédit et des dettes liées — 26 novembre 2026
+- La création d'une vente à crédit exige désormais un client dont l'identifiant correspond à un seul enregistrement ; les clients absents ou les identifiants ambigus bloquent la vente.
+- Avant une nouvelle vente à crédit, le registre global des dettes et remboursements doit être cohérent. Les identifiants de vente et de dette sont préalloués et contrôlés avant toute déduction de stock ; l'identifiant du mouvement de stock est lui aussi vérifié avant mutation.
+- La modification d'une vente exige maintenant un identifiant de vente unique. La sélection du client par nom exige une correspondance unique, afin de ne pas choisir arbitrairement entre homonymes.
+- Lorsqu'une modification crée une nouvelle dette liée, elle exige un registre global cohérent et un identifiant de dette préalloué et unique. Une dette active liée à une vente doit correspondre à une vente enregistrée comme crédit, au même client et au même montant.
+- Les contrôles existants empêchent toujours de modifier une dette liée après remboursement actif et de créer plusieurs dettes actives liées à une même vente. Les ventes payées ou mixtes ne génèrent pas de dette dans le flux normal.
+- Vérifications réalisées : relecture du fichier après chaque écriture ; contrôles statiques des garde-fous et compilation JavaScript des blocs script.
+- Vérifications non réalisées : scénario fonctionnel dans un navigateur/appareil, jeux de données réelles ou corrompues, paiements partiels réels, Firebase Emulator, synchronisation/concurrence multi-appareils et déploiement. Aucune règle Firestore, donnée métier, migration, fusion, publication ou branche main n'a été modifiée.
