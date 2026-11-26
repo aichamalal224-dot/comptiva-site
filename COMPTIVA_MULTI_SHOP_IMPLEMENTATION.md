@@ -1375,3 +1375,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Un vendeur ou un compte dont le rôle Patron n'est pas confirmé ne peut donc pas démarrer ce suivi depuis cette fonction. Un abonnement non confirmé bloque également la création des écouteurs, sauf compte Créateur.
 - Les règles Firestore et les données de présence ne sont pas modifiées. Le défaut multi-appareils lié au document parent unique `presence/{uid}` demeure connu ; les sessions individuelles ne sont pas encore implémentées.
 - Vérifications statiques et compilation JavaScript effectuées après relecture GitHub. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel ; aucun déploiement, migration ou publication. `main` reste intacte.
+
+
+## Correction — génération propre au cycle de présence vendeur/Patron — 26 novembre 2026
+
+- Constat : le listener du document de présence du Patron et les opérations asynchrones du démarrage contrôlaient l'UID, la session Auth et la boutique, mais pas l'instance précise du cycle de présence. Un callback déjà mis en file pouvait donc survivre à un arrêt puis à un redémarrage rapide du suivi du même compte dans la même boutique.
+- Ajout de `krediPresenceRunEpoch`, incrémenté à chaque arrêt du suivi. Chaque démarrage capture sa génération et sa fonction `isCurrent()` refuse désormais les callbacks et opérations de toute génération précédente.
+- Le contrôle est local à l'interface : aucun nouveau document, champ Firestore, droit ou changement de règle n'est introduit. Les données de présence existantes restent inchangées.
+- Cette correction complète la génération dédiée à la liste des vendeurs ; elle ne résout pas le problème distinct des appareils multiples qui partagent encore `presence/{uid}`. L'architecture de sessions individuelles reste à concevoir et tester avant migration.
+- Compilation JavaScript statique et relecture GitHub effectuées après la modification. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel ; aucun déploiement, migration ou publication. `main` reste intacte.
