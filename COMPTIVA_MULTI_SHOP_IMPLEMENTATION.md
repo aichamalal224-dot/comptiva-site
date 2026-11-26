@@ -1366,3 +1366,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Chaque transition Auth invalide également la génération du suivi, en plus du nettoyage des écouteurs déjà en place.
 - Correction ciblée sur l'interface du suivi des présences ; aucune règle Firestore, donnée métier, vente, stock ou abonnement n'a été modifié.
 - Vérification statique : les trois blocs JavaScript de la version modifiée compilent. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'a été exécuté.
+
+
+## Correction — contrôle du rôle et de l'abonnement avant le suivi Patron — 26 novembre 2026
+
+- La fonction de rafraîchissement de la liste des présences retirait les anciens écouteurs, mais ne vérifiait pas elle-même le rôle Patron confirmé ni l'accès par abonnement avant d'en créer de nouveaux. Les règles Firestore protégeaient déjà les données et refusaient les lectures non autorisées ; il manquait néanmoins un contrôle préalable côté interface.
+- La fonction invalide maintenant d'abord la génération précédente, retire les écouteurs et le minuteur existants, puis vérifie l'authentification, le rôle Patron confirmé et l'accès à l'application avant toute nouvelle souscription.
+- Un vendeur ou un compte dont le rôle Patron n'est pas confirmé ne peut donc pas démarrer ce suivi depuis cette fonction. Un abonnement non confirmé bloque également la création des écouteurs, sauf compte Créateur.
+- Les règles Firestore et les données de présence ne sont pas modifiées. Le défaut multi-appareils lié au document parent unique `presence/{uid}` demeure connu ; les sessions individuelles ne sont pas encore implémentées.
+- Vérifications statiques et compilation JavaScript effectuées après relecture GitHub. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel ; aucun déploiement, migration ou publication. `main` reste intacte.
