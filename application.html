@@ -1205,47 +1205,30 @@ async function krediSetSellerActive(sellerUid,active){
   if(!data||data.role!=='seller'||data.uid!==sellerUid||data.assignedBy!==krediUser.uid){say('Affectation vendeur introuvable ou incohérente : aucune modification effectuée.');return}
   if(!indexData||indexData.uid!==sellerUid||indexData.shopId!==shopId||indexData.role!=='seller'||indexData.patronUid!==krediUser.uid||indexData.active!==data.active){say('Les documents membre et index ne concordent pas. Réparez cette affectation avant de la modifier.');return}
   if(data.active===active){say(active?'Ce vendeur est déjà actif.':'Ce vendeur est déjà suspendu.');return}
-  const previousActive=data.active;
   const now=firebase.firestore.FieldValue.serverTimestamp();
-  // L'ordre est requis par la règle actuelle de l'index, qui lit le membre déjà persisté.
-  await member.update({active:active,updatedAt:now});
-  try{
-   await index.set({uid:sellerUid,shopId:shopId,role:'seller',active:active,patronUid:krediUser.uid,updatedAt:now});
-  }catch(indexError){
-   console.error('[COMPTIVA] Index vendeur non actualisé ; tentative de retour au statut précédent.',indexError);
-   try{
-    await member.update({active:previousActive,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
-    say('Modification annulée : l’index n’a pas été actualisé et le statut précédent du vendeur a été rétabli.');
-   }catch(rollbackError){
-    console.error('[COMPTIVA] Échec du retour arrière du statut vendeur.',rollbackError);
-    say('ALERTE : l’index et le statut du membre peuvent diverger. Ne réessayez pas ; vérifiez les deux documents Firestore.');
-   }
-   krediRefreshSellerPresence();
-   return;
-  }
-  try{
-   const actorName=String(krediUser.displayName||krediUser.email||'Patron').trim().slice(0,120);
-   await shop.collection('auditLog').add({
-    shopId:shopId,
-    type:active?'seller_reactivated':'seller_suspended',
-    action:active?'Réactivation vendeur':'Suspension vendeur',
-    sellerUid:sellerUid,
-    sellerName:[data.firstName,data.lastName].filter(Boolean).join(' ').trim().slice(0,140),
-    actorUid:krediUser.uid,
-    actorName:actorName,
-    createdAt:firebase.firestore.FieldValue.serverTimestamp()
-   });
-  }catch(auditError){
-   console.error('[COMPTIVA] Statut vendeur appliqué mais événement audit non enregistré.',auditError);
-   say('Statut vendeur modifié et index synchronisé, mais la trace d’audit n’a pas été enregistrée. Vérifiez les règles Firestore avant de considérer le contrôle terminé.');
-   krediRefreshSellerPresence();
-   return;
-  }
-  say(active?'Vendeur réactivé. La modification est enregistrée dans l’audit.':'Vendeur suspendu. Son accès aux opérations protégées est bloqué par les règles Firestore. La modification est enregistrée dans l’audit et son historique est conservé.');
+  const actorName=String(krediUser.displayName||krediUser.email||'Patron').trim().slice(0,120);
+  const auditEvent=shop.collection('auditLog').doc();
+  // Les trois écritures sont atomiques : membre, index privé et trace d'audit.
+  // La règle de l'index vérifie le nouveau statut du membre avec getAfter().
+  const batch=krediStore.batch();
+  batch.update(member,{active:active,updatedAt:now});
+  batch.set(index,{uid:sellerUid,shopId:shopId,role:'seller',active:active,patronUid:krediUser.uid,updatedAt:now});
+  batch.set(auditEvent,{
+   shopId:shopId,
+   type:active?'seller_reactivated':'seller_suspended',
+   action:active?'Réactivation vendeur':'Suspension vendeur',
+   sellerUid:sellerUid,
+   sellerName:[data.firstName,data.lastName].filter(Boolean).join(' ').trim().slice(0,140),
+   actorUid:krediUser.uid,
+   actorName:actorName,
+   createdAt:now
+  });
+  await batch.commit();
+  say(active?'Vendeur réactivé. Statut, index et trace d’audit enregistrés ensemble.':'Vendeur suspendu. Son accès aux opérations protégées est bloqué par les règles Firestore. Statut, index et trace d’audit enregistrés ensemble.');
   krediRefreshSellerPresence();
  }catch(error){
-  console.error('[COMPTIVA] Modification statut vendeur refusée.',error);
-  say('Modification refusée : vérifiez les règles Firestore, l’abonnement et la connexion.');
+  console.error('[COMPTIVA] Modification atomique du statut vendeur refusée.',error);
+  say('Modification non confirmée : aucune réussite ne doit être supposée. Vérifiez la connexion et les règles Firestore, puis relisez les deux documents avant de réessayer.');
  }
 }
 async function krediRefreshSellerPresence(){
