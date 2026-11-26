@@ -2,6 +2,15 @@
 
 ## Statut
 
+## Correction atomique — suspension/réactivation vendeur — 26 novembre 2026
+
+- La fonction `krediSetSellerActive()` utilise maintenant un `WriteBatch` pour modifier ensemble le document membre, l'index privé et l'événement d'audit.
+- La règle de l'index utilise `getAfter()` pour vérifier le statut final du document membre au sein de la même écriture groupée.
+- Si une écriture est refusée, les trois opérations sont rejetées ensemble : plus de fenêtre où le membre est modifié sans index correspondant, ni de succès sans trace d'audit.
+- La fonction continue de relire le magasin, le membre et l'index depuis le serveur avant d'autoriser l'action.
+- Vérification effectuée ici : cohérence statique des trois écritures et compilation JavaScript. À confirmer avec Firebase Emulator/Firestore réel avant publication.
+
+
 - Travail préparatoire sur la branche `comptiva/automatic-subscription-expiry`.
 - `firestore.rules` contient une **proposition de règles** pour la future architecture multi-boutiques.
 - Ces règles ne sont pas publiées dans Firebase et ne doivent pas être copiées en production avant la migration de l'application et les tests Firebase Emulator.
