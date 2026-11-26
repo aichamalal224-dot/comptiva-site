@@ -1310,3 +1310,12 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Vérifications statiques et compilation JavaScript à effectuer après relecture de la version enregistrée.
 - Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel exécuté ; aucun déploiement, migration ou publication.
 - main reste intacte.
+
+## Correction complémentaire — arrêt complet de la présence à chaque transition Auth — 26 novembre 2026
+
+- Le nettoyage précédent retirait les écouteurs Patron, mais un heartbeat de l'ancien compte pouvait rester programmé lors d'un changement direct d'utilisateur Firebase sans état intermédiaire déconnecté.
+- La transition Auth appelle désormais aussi `krediStopSellerPresence()` immédiatement après l'incrément de l'époque de session. Cela arrête l'intervalle heartbeat, retire l'écoute du Patron et efface le contexte local de présence de l'ancien compte.
+- Le nouveau compte ne redémarre sa présence qu'après les vérifications habituelles de rôle, d'affectation, de boutique et d'abonnement.
+- Cette correction ne marque pas artificiellement l'ancien compte comme déconnecté : si son signal de déconnexion n'a pas été confirmé, l'expiration des 3 minutes reste le mécanisme de repli.
+- Elle ne résout toujours pas la collision entre deux appareils partageant le même document parent `presence/{uid}`. La solution par sessions individuelles reste à implémenter et à tester.
+- Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel exécuté ; aucun déploiement, migration ou publication ; `main` reste intacte.
