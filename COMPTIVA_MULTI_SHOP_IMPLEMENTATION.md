@@ -1069,3 +1069,45 @@ La lecture du formulaire `saveForm()` confirme les champs suivants pour les nouv
 - Aucun changement de `firestore.rules` ni de `application.html` dans cette passe : les validations serveur ne peuvent pas être fixées sûrement tant que le schéma cible et les opérations atomiques ne sont pas définis.
 - Aucun test Firebase Emulator, test navigateur, test de compte réel, migration, déploiement ou publication effectué.
 - `main` reste intacte.
+
+
+## Revue ciblée des règles d'écriture multi-boutiques — 26 novembre 2026
+
+### Défauts de validation confirmés dans la version actuelle de `firestore.rules`
+
+Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne signifie pas que ces collections sont actuellement utilisées par le parcours historique de l'application.
+
+| Collection | Contrôle présent | Lacune restante |
+|---|---|---|
+| `sales` | `shopId` et `createdBy` à la création ; auteur et boutique conservés à la modification | Pas de liste blanche, champs obligatoires, types, montants, quantités, méthode de paiement ni relations client/produit ; modification Patron trop large |
+| `debts` | Boutique vérifiée à la création et modification ; modification Patron-only | Pas de validation du client, montant, date, dette source, auteur ni solde ; modification trop large |
+| `payments` | Boutique et auteur à la création ; modification Patron-only | Pas de validation de dette, montant, date, méthode, solde ou unicité ; modification trop large |
+| `clients` | Boutique vérifiée à la création et modification ; suppression Patron-only | Pas de liste blanche ni de validation des champs ; un document peut contenir des champs inattendus |
+| `purchases` / `expenses` | Écriture Patron-only et `shopId` contrôlé | Pas de schéma strict, de validation des montants/dates/types ni de champs immuables |
+| `products` | Écriture Patron-only | Aucune validation de schéma ; lecture intégrale par Vendeur via `canUseShop`, donc risque de divulgation de champs financiers |
+| `auditLog` | Création avec `shopId` et `actorUid` ; modification/suppression interdites | Pas de liste blanche, type d'événement, cible, horodatage serveur ni validation des champs de trace |
+
+### Autres observations d'autorisation
+
+- `canUseShop` autorise toujours les lectures Patron sur une boutique existante, même si son statut est suspendu ou son abonnement expiré. Les règles de lecture des collections partagées héritent de cette politique.
+- `shops` autorise le `list` au propriétaire sur la base de `ownerUid`, sans contrôle du statut ou de l'abonnement.
+- Les créations/modifications de documents `members` sont Patron-only et exigent `uid`, rôle vendeur, booléen `active` et `assignedBy`, mais les champs de profil/date restent partiellement optionnels et la modification ne fige pas explicitement `createdAt`.
+- Les règles d'index `userShopMemberships` permettent au Patron propriétaire de modifier/supprimer son index sans vérifier l'abonnement actif. L'accès effectif du vendeur reste néanmoins bloqué par le statut de boutique et la vérification d'abonnement dans `isActiveShopMember`.
+
+### Priorités avant toute modification des règles
+
+1. Décider explicitement si un Patron expiré/suspendu conserve la lecture de ses archives et si cette politique diffère pour les vendeurs.
+2. Définir le schéma cible versionné et les champs autorisés pour chaque collection ; ne pas déduire le schéma partagé directement des objets legacy.
+3. Séparer les documents produits publics des informations financières Patron-only avant de permettre la lecture vendeur.
+4. Fixer les champs immuables et les listes blanches pour chaque opération create/update.
+5. Définir les invariants transactionnels : vente + stock + dette éventuelle ; remboursement + solde ; achat + mouvement de stock.
+6. Écrire les tests Emulator positifs et négatifs correspondant à chaque règle, y compris requêtes/listes, batchs et transactions.
+
+### Vérifications et limites
+
+- Relecture complète de `firestore.rules` sur la branche de travail.
+- Chaque collection opérationnelle et chaque règle `allow` ci-dessus a été comparée au contrat des objets historiques documenté précédemment.
+- Aucune modification de règle dans cette passe : le schéma cible et la politique d'accès post-expiration doivent être arrêtés avant d'écrire des conditions potentiellement incompatibles.
+- Aucune exécution Firebase Emulator, aucun test navigateur ou compte réel, aucune migration, aucun déploiement ni publication.
+- Le chemin legacy `users/{uid}/comptivaData/main` reste inchangé et owner-only.
+- `main` reste intacte.
