@@ -1000,3 +1000,31 @@ Une initialisation asynchrone d'un compte pouvait se poursuivre après que l'uti
 - Règles Firestore non modifiées.
 - Aucun compte réel, aucune donnée réelle, aucune migration et aucun déploiement modifiés.
 - Branche de travail uniquement ; main reste intacte.
+
+
+## Durcissement des règles : validation croisée membre + index vendeur — 26 novembre 2026
+
+### Écart de sécurité identifié
+
+La fonction Firestore isActiveShopMember vérifiait auparavant le document shops/{shopId}/members/{uid}, mais ne vérifiait pas le document d'index userShopMemberships/{uid}/shops/{shopId}. En cas de divergence, un index marqué inactif ou supprimé pouvait donc ne pas suffire à bloquer une requête directe si le document membre restait actif.
+
+### Correction des règles dans la branche de travail
+
+- isActiveShopMember exige désormais l'existence des deux documents.
+- Le document membre doit confirmer UID, rôle seller, active=true et assignedBy égal au Patron propriétaire.
+- L'index privé doit confirmer UID, shopId, rôle seller, active=true et patronUid égal au Patron propriétaire.
+- Une absence, une suspension, un index obsolète ou un rattachement à un autre Patron fait échouer le contrôle d'accès vendeur.
+- Les opérations partagées qui s'appuient sur canWriteShop ou canUseShop héritent de cette validation croisée.
+- Les droits directs du Patron propriétaire restent séparés de ce contrôle vendeur.
+
+### Conséquence pour les affectations
+
+Pendant une réactivation séquentielle, le vendeur reste bloqué tant que les deux documents ne sont pas actifs et cohérents. Pendant une suspension, le passage du document membre à inactive suffit à bloquer le vendeur, même si l'index n'a pas encore été mis à jour. Cette règle réduit l'effet d'une divergence, sans rendre les deux écritures atomiques.
+
+### Tests et publication
+
+- Cette modification concerne le fichier de règles dans la branche GitHub uniquement.
+- Elle n'a pas été déployée dans Firebase.
+- Les tests Firebase Emulator doivent confirmer les cas : deux documents actifs cohérents, membre inactif/index actif, membre actif/index inactif, index absent, UID/shopId/patronUid incohérent, abonnement expiré, boutique suspendue, Patron propriétaire.
+- Vérifier les limites de lectures d'accès Firestore et l'évaluation des règles avec l'Emulator avant toute publication.
+- Aucun test Emulator ou compte réel exécuté dans cette passe.
