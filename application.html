@@ -2599,6 +2599,26 @@ function krediFindSyncMergeConflicts(localData,remoteData){
  }
  return conflicts;
 }
+function krediFindUnversionedDeletionConflicts(baselineData,localData,remoteData){
+ const conflicts=[];
+ const base=krediEmptyDB();
+ const stable=value=>{try{return krediStableSnapshot(value)}catch(error){return JSON.stringify(value)}};
+ for(const key of Object.keys(base)){
+  if(key==='businessProfile')continue;
+  const baseline=Array.isArray(baselineData&&baselineData[key])?baselineData[key]:[];
+  const localRows=Array.isArray(localData&&localData[key])?localData[key]:[];
+  const remoteRows=Array.isArray(remoteData&&remoteData[key])?remoteData[key]:[];
+  const localById=new Map(localRows.filter(row=>row&&typeof row==='object'&&row.id).map(row=>[String(row.id),row]));
+  const remoteById=new Map(remoteRows.filter(row=>row&&typeof row==='object'&&row.id).map(row=>[String(row.id),row]));
+  for(const previous of baseline){
+   if(!previous||typeof previous!=='object'||!previous.id)continue;
+   const rowId=String(previous.id),local=localById.get(rowId),remote=remoteById.get(rowId);
+   if(!local&&remote&&stable(remote)===stable(previous))conflicts.push(key+'/'+rowId+' (suppression locale non versionnée)');
+   if(!remote&&local&&stable(local)===stable(previous))conflicts.push(key+'/'+rowId+' (suppression cloud non versionnée)');
+  }
+ }
+ return conflicts;
+}
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
@@ -2845,6 +2865,24 @@ async function krediInitFirebase(){try{
         krediStatus('Conflit de données détecté ('+sameRecordConflicts.length+' fiche(s) modifiée(s) différemment : '+examples+(sameRecordConflicts.length>8?' · …':'')+'). Aucune version n’a été choisie ni écrasée. Les copies locale et cloud sont conservées ; téléchargez les copies de récupération avant toute résolution.');
         if(!saved)console.warn('[COMPTIVA] Conflit détecté, mais la copie locale de récupération n’a pas pu être enregistrée.');
         console.warn('[COMPTIVA] Fusion suspendue : mêmes identifiants avec contenus divergents.',sameRecordConflicts);
+        return;
+      }
+      let unversionedDeletionConflicts=[];
+      if(krediLastWrite){
+        try{
+          const baselineData=JSON.parse(krediLastWrite);
+          const baselineIssue=krediDatabaseShapeIssue(baselineData);
+          if(!baselineIssue)unversionedDeletionConflicts=krediFindUnversionedDeletionConflicts(baselineData,localData,remoteData);
+        }catch(baselineError){console.warn('[COMPTIVA] Version de référence illisible : contrôle des suppressions impossible.',baselineError)}
+      }
+      if(unversionedDeletionConflicts.length){
+        krediCloudReady=false;krediLocalDirty=true;krediCloudConflictUid=activeUid;
+        const saved=krediSaveConflictSnapshot(activeUid,localData,remoteData,krediLastWrite,'Suppression détectée sans marqueur versionné');
+        krediSafeStorageSet('comptiva_pending_'+activeUid,'1');
+        krediShowConflictRecoveryButton();
+        const examples=unversionedDeletionConflicts.slice(0,8).join(' · ');
+        krediStatus('Synchronisation suspendue : suppression non versionnée détectée ('+unversionedDeletionConflicts.length+' fiche(s) : '+examples+(unversionedDeletionConflicts.length>8?' · …':'')+'). Aucune fiche ne sera réintroduite automatiquement. Conservez les deux copies avant résolution.');
+        if(!saved)console.warn('[COMPTIVA] Conflit de suppression détecté, mais la copie de récupération n’a pas pu être enregistrée.');
         return;
       }
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
