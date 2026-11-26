@@ -811,11 +811,27 @@ async function krediInitFirebase(){try{
 function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE))return;
   const uid=krediUser.uid;
+  const pendingKey='comptiva_pending_'+uid;
+  const markPending=()=>{
+    try{localStorage.setItem(pendingKey,'1');return true}
+    catch(storageError){console.warn('[COMPTIVA] Marqueur local de synchronisation indisponible pour '+uid,storageError);return false}
+  };
+  const clearPending=()=>{
+    try{localStorage.removeItem(pendingKey);return true}
+    catch(storageError){console.warn('[COMPTIVA] Impossible de retirer le marqueur local de synchronisation pour '+uid,storageError);return false}
+  };
   krediLocalDirty=true;
-  localStorage.setItem('comptiva_pending_'+uid,'1');
+  const pendingSaved=markPending();
   clearTimeout(krediSaveTimer);
-  if(!navigator.onLine){krediStatus('Hors connexion · données conservées sur cet appareil. Envoi dès le retour d’Internet.');return}
-  if(!krediServerReady){krediStatus('Données enregistrées sur cet appareil · attente de la connexion Firebase…');krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediQueueCloudSave()},2500);return}
+  if(!navigator.onLine){
+    krediStatus(pendingSaved?'Hors connexion · données conservées sur cet appareil. Envoi dès le retour d’Internet.':'Hors connexion · marqueur local indisponible. Gardez cet appareil ouvert jusqu’au retour d’Internet.');
+    return;
+  }
+  if(!krediServerReady){
+    krediStatus(pendingSaved?'Données enregistrées sur cet appareil · attente de la connexion Firebase…':'Connexion Firebase en attente · marqueur local indisponible.');
+    krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediQueueCloudSave()},2500);
+    return;
+  }
   if(krediSaveInFlight)return;
   krediSaveTimer=setTimeout(async()=>{
     if(!krediUser||krediUser.uid!==uid||!krediServerReady||!navigator.onLine)return;
@@ -826,15 +842,15 @@ function krediQueueCloudSave(){
       if(!krediUser||krediUser.uid!==uid)return;
       krediLastWrite=payload;
       if(JSON.stringify(db)===payload){
-        krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+uid);
+        krediLocalDirty=false;krediCloudReady=true;clearPending();
         krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');
       }else{
-        krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+uid,'1');
+        krediLocalDirty=true;markPending();
         krediStatus('Nouvelle modification détectée · envoi en cours…');
       }
       renderAll();
     }catch(e){
-      try{localStorage.setItem('comptiva_pending_'+uid,'1')}catch(storageError){console.error('[COMPTIVA] Impossible de marquer la synchronisation en attente pour '+uid,storageError)}
+      markPending();
       if(krediUser&&krediUser.uid===uid){
         krediCloudReady=false;krediLocalDirty=true;
         krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
