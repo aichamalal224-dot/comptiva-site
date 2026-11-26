@@ -3112,3 +3112,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 **Limites à traiter dans un audit ultérieur :** un reçu de vente annulée doit être compris comme une trace historique, pas comme une preuve de remboursement financier. Le registre actuel ne démontre pas à lui seul qu'un remboursement au client a effectivement été exécuté. Il faudra un événement de remboursement séparé (montant, date, moyen, référence, motif et preuve), sans le confondre avec l'annulation commerciale ou la restitution de stock. Les scénarios de ventes mixtes et de remboursements partiels nécessitent encore des essais fonctionnels avec des jeux de données contrôlés.
 
 **Vérifications :** relecture du code, compilation statique des trois blocs JavaScript et comparaison de la branche avec `main`. Aucun test navigateur/appareil, Firebase Emulator, compte réel, impression réelle ni transaction Mobile Money n'a été exécuté. Aucune donnée métier, règle Firestore, migration, fusion, publication ou déploiement n'a été modifié ; `main` reste intacte.
+
+### Garde-fou des indicateurs de ventes du tableau de bord — 26 novembre 2026
+
+**Constat :** les rapports vérifiaient déjà globalement les dates des ventes actives. Le tableau de bord, lui, filtrait directement les ventes par date avant le calcul. Une vente active avec une date invalide pouvait donc être exclue des périodes jour/semaine/mois sans rendre les indicateurs manifestement incomplets.
+
+**Correction appliquée dans `application.html` :** le tableau de bord contrôle désormais toutes les dates des ventes actives avant de présenter les indicateurs de chiffre d'affaires, le nombre de ventes du jour, les encaissements du jour, le crédit du jour et le résultat simplifié du mois. Si une date de vente active est invalide, les montants concernés affichent « À vérifier » et le compteur du jour signale explicitement le problème au lieu de donner un chiffre potentiellement incomplet. Les ventes et leurs dates ne sont pas modifiées.
+
+**Limites restantes :** les listes de clients récents et d'échéances du tableau de bord utilisent encore des agrégations individuelles qui méritent un contrôle dédié des dettes incohérentes. Cette correction ne constitue pas un registre de remboursement financier des ventes annulées ; un remboursement réel au client doit rester distinct de l'annulation commerciale et du retour de stock.
+
+**Vérifications :** relecture du bloc modifié et compilation statique des trois blocs JavaScript (3/3). Aucun test navigateur/appareil, jeu de données contrôlé, Firebase Emulator, compte réel, impression ou scénario multi-appareils n'a été exécuté. Aucune donnée métier, règle Firestore, migration, fusion, publication ou déploiement n'a été modifié ; `main` reste intacte.
