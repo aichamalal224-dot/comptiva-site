@@ -1414,7 +1414,23 @@ function printDebtStatement(id,isDuplicate=false){
  w.document.write('<!doctype html><html lang="fr"><meta charset="utf-8"><title>Relevé COMPTIVA</title><style>body{font:14px Arial;padding:24px;color:#172b4d}h1{text-align:center}.duplicate-mark{text-align:center;border:2px solid #b45309;color:#92400e;font-weight:800;letter-spacing:2px;padding:7px;margin:12px auto;max-width:220px}.warning{padding:10px;background:#fff4db;color:#704e08;border:1px solid #f3dfa6;border-radius:8px}table{width:100%;border-collapse:collapse;margin-top:20px}td,th{padding:9px;border-bottom:1px solid #ddd;text-align:left}@media print{button{display:none}}</style>'+receiptMerchantHeader()+'<h1>RELEVÉ DE DETTE</h1>'+(isDuplicate?'<div class="duplicate-mark">DUPLICATA</div>':'')+(!validLedger?'<p class="warning">Situation financière à vérifier : les totaux ne doivent pas être utilisés comme solde confirmé.</p>':'')+'<p>Client : '+esc(c?c.name:'Client')+'</p><p>Téléphone : '+esc(c&&c.phone||'—')+'</p><p>Dette initiale : <b>'+money(d.amount)+'</b></p><p>Total payé : <b>'+paidDisplay+'</b></p><p>Solde restant : <b>'+balanceDisplay+'</b></p><p>Date : '+dateFmt(d.date)+' · Échéance : '+dateFmt(d.due)+'</p><h2>Historique des paiements</h2><table><tr><th>Date</th><th>Montant</th><th>Mode</th></tr>'+lines+'</table><p>Document généré par COMPTIVA.</p><script>window.onload=()=>window.print()<\/script></html>');
  w.document.close()
 }
-function renderPayments(){let rows=db.payments.slice().reverse().map(p=>{let d=db.debts.find(d=>d.id===p.debtId),cancelled=p.status==='cancelled';return '<tr><td>'+esc(d?clientName(d.clientId):'Dette inconnue')+(cancelled?' <span class="pill overdue">Annulé</span>':'')+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td><button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\''+p.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\''+p.id+'\')">Modifier</button> <button class="danger" onclick="cancelPayment(\''+p.id+'\')">Annuler</button>')+'</td></tr>'});document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)}
+function renderPayments(){
+ const paymentIds=new Set(),rows=db.payments.slice().reverse().map(p=>{
+  if(!p||typeof p!=='object')return '<tr><td>Enregistrement invalide</td><td>À vérifier</td><td>À vérifier</td><td>—</td><td>—</td><td>Actions suspendues</td></tr>';
+  const idKey=String(p.id||''),duplicatePayment=!idKey||paymentIds.has(idKey);
+  if(idKey)paymentIds.add(idKey);
+  const debtMatches=db.debts.filter(d=>d&&d.id===p.debtId),debt=debtMatches.length===1?debtMatches[0]:null;
+  const cancelled=p.status==='cancelled';
+  const paymentValid=!!p.id&&isValidISODate(p.date)&&Number.isSafeInteger(p.amount)&&p.amount>0;
+  const relationIssue=debt?krediDebtRelationIssue(debt):'Dette introuvable ou identifiant de dette dupliqué.';
+  const ledgerValid=!duplicatePayment&&paymentValid&&!!debt&&!relationIssue&&(cancelled||debt.status!=='cancelled');
+  const client=ledgerValid?clientName(debt.clientId):'À vérifier';
+  const statusLabel=cancelled?' <span class="pill overdue">Annulé</span>':(!ledgerValid?' <span class="pill overdue">À vérifier</span>':'');
+  const actions=ledgerValid?'<button class="soft" onclick="printPaymentReceipt(\\''+p.id+'\\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\\''+p.id+'\\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\\''+p.id+'\\')">Modifier</button> <button class="danger" onclick="cancelPayment(\\''+p.id+'\\')">Annuler</button>'):'Actions financières suspendues';
+  return '<tr><td>'+esc(client)+statusLabel+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td>'+actions+'</td></tr>';
+ });
+ document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)
+}
 function krediPaymentActionCheck(payment){
  if(!payment||!payment.id)return {issue:'Identifiant du remboursement absent.'};
  const matches=db.payments.filter(p=>p&&p.id===payment.id);
@@ -1422,8 +1438,10 @@ function krediPaymentActionCheck(payment){
  if(payment.status==='cancelled')return {issue:'Ce remboursement est déjà annulé.'};
  if(!isValidISODate(payment.date))return {issue:'Date du remboursement invalide.'};
  if(!Number.isSafeInteger(payment.amount)||payment.amount<=0)return {issue:'Montant du remboursement invalide.'};
- const debt=db.debts.find(d=>d&&d.id===payment.debtId);
- if(!debt||debt.status==='cancelled')return {issue:'Dette liée introuvable ou annulée.'};
+ const debtMatches=db.debts.filter(d=>d&&d.id===payment.debtId);
+ if(debtMatches.length!==1)return {issue:'Dette liée introuvable ou identifiant de dette dupliqué.'};
+ const debt=debtMatches[0];
+ if(debt.status==='cancelled')return {issue:'Dette liée annulée.'};
  const relationIssue=krediDebtRelationIssue(debt);
  if(relationIssue)return {issue:relationIssue};
  const paid=paidFor(debt.id);
@@ -1481,9 +1499,11 @@ function printPaymentReceipt(paymentId,isDuplicate=false){
  const paymentMatches=db.payments.filter(x=>x&&x.id===paymentId);
  if(paymentMatches.length!==1){alert('Reçu indisponible : remboursement introuvable ou identifiant dupliqué. Vérifiez le registre avant impression.');return}
  const payment=paymentMatches[0];
- const debt=db.debts.find(x=>x.id===payment.debtId);
- if(!debt){alert('Dette introuvable.');return}
+ const debtMatches=db.debts.filter(x=>x&&x.id===payment.debtId);
+ if(debtMatches.length!==1){alert('Reçu indisponible : dette liée introuvable ou identifiant de dette dupliqué. Vérifiez le registre avant impression.');return}
+ const debt=debtMatches[0];
  const cancelled=payment.status==='cancelled';
+ if(!cancelled&&debt.status==='cancelled'){alert('Reçu suspendu : la dette liée est annulée. Vérifiez le dossier avant impression.');return}
  const relationIssue=krediDebtRelationIssue(debt);
  const paymentValid=!!payment.id&&isValidISODate(payment.date)&&Number.isSafeInteger(payment.amount)&&payment.amount>0;
  const ordered=db.payments.filter(x=>x&&x.debtId===debt.id&&x.status!=='cancelled').slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
