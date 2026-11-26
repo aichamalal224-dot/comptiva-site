@@ -1426,7 +1426,7 @@ function renderPayments(){
   const ledgerValid=!duplicatePayment&&paymentValid&&!!debt&&!relationIssue&&(cancelled||debt.status!=='cancelled');
   const client=ledgerValid?clientName(debt.clientId):'À vérifier';
   const statusLabel=cancelled?' <span class="pill overdue">Annulé</span>':(!ledgerValid?' <span class="pill overdue">À vérifier</span>':'');
-  const actions=ledgerValid?'<button class="soft" onclick="printPaymentReceipt(\\''+p.id+'\\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\\''+p.id+'\\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\\''+p.id+'\\')">Modifier</button> <button class="danger" onclick="cancelPayment(\\''+p.id+'\\')">Annuler</button>'):'Actions financières suspendues';
+  const actions=ledgerValid?'<button class="soft" onclick="printPaymentReceipt(\''+p.id+'\')">🖨 Reçu</button> <button class="soft" onclick="printPaymentReceipt(\''+p.id+'\',true)">📄 Duplicata</button> '+(cancelled?'':'<button class="soft" onclick="editPayment(\''+p.id+'\')">Modifier</button> <button class="danger" onclick="cancelPayment(\''+p.id+'\')">Annuler</button>'):'Actions financières suspendues';
   return '<tr><td>'+esc(client)+statusLabel+'</td><td>'+money(p.amount)+'</td><td>'+dateFmt(p.date)+'</td><td>'+esc(p.method||'—')+'</td><td>'+esc(p.createdByName||'Historique antérieur')+'</td><td>'+actions+'</td></tr>';
  });
  document.getElementById('paymentsTable').innerHTML=table(['Client / statut','Montant','Date','Mode','Enregistré par','Actions'],rows)
