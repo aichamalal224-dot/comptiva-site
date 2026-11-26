@@ -3146,3 +3146,12 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Vérification statique : les trois blocs JavaScript de `application.html` compilent avec `new Function` après les modifications. Il ne s’agit pas d’un test navigateur, d’impression réelle, Firebase, ni d’un test de données corrompues.
 - Limite : aucune transaction atomique multi-appareils n’a été ajoutée ; les modifications restent soumises au mécanisme de synchronisation existant et aux conflits de concurrence déjà documentés.
 - Aucune donnée existante, règle Firebase, branche `main`, fusion ou publication n’a été modifiée.
+
+
+## Audit des soldes après annulation et des relevés — 26 novembre 2026
+- La relation d’une dette exige maintenant un seul client correspondant et, lorsqu’elle est liée à une vente, une seule vente d’origine. Les identifiants ambigus bloquent les contrôles financiers qui reposent sur cette relation.
+- Le reçu de remboursement calcule désormais le total payé jusqu’à la date du reçu en incluant tous les remboursements actifs du même jour. Il ne dépend plus de l’ordre d’insertion arbitraire entre plusieurs opérations datées le même jour.
+- La modification d’un remboursement applique le même ensemble de modes de paiement autorisés que la création : Espèces, Orange Money, Mobile Money, Virement bancaire ou Autre.
+- Le tableau de bord ne présente plus le nombre de remboursements comme un chiffre confirmé lorsque le registre global des dettes/remboursements est invalide. Les soldes des clients récents et les prochaines échéances sont également suspendus et signalés « À vérifier » au lieu de laisser croire qu’un client est à jour.
+- Vérification statique : les trois blocs JavaScript compilent. Aucun test réel de navigateur, impression, Firebase, concurrence ou jeu de données corrompues n’a été exécuté.
+- Aucune règle Firebase, donnée existante, branche `main`, fusion ou publication n’a été modifiée.
