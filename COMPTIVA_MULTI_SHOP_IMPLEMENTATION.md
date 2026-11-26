@@ -3155,3 +3155,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Le tableau de bord ne présente plus le nombre de remboursements comme un chiffre confirmé lorsque le registre global des dettes/remboursements est invalide. Les soldes des clients récents et les prochaines échéances sont également suspendus et signalés « À vérifier » au lieu de laisser croire qu’un client est à jour.
 - Vérification statique : les trois blocs JavaScript compilent. Aucun test réel de navigateur, impression, Firebase, concurrence ou jeu de données corrompues n’a été exécuté.
 - Aucune règle Firebase, donnée existante, branche `main`, fusion ou publication n’a été modifiée.
+
+
+### Audit des annulations et de la création des dettes — 26 novembre 2026
+- Les annulations de dettes et de ventes exigent désormais un identifiant correspondant à un seul enregistrement ; les doublons ou absences bloquent l'opération.
+- L'annulation d'une dette et celle d'une vente sont suspendues si le registre global des dettes/remboursements échoue à ses contrôles d'intégrité.
+- L'annulation d'un remboursement refuse désormais les identifiants absents ou dupliqués avant de sélectionner la ligne à annuler.
+- La création d'une dette vérifie l'intégrité globale du registre, l'unicité du client lié, la validité de la date et de l'échéance, ainsi que l'unicité de l'identifiant généré.
+- Ces protections conservent l'historique existant et privilégient le blocage plutôt qu'une modification ambiguë. Elles restent des contrôles applicatifs locaux : elles ne rendent pas les écritures atomiques entre plusieurs appareils et ne remplacent pas une transaction cloud côté serveur.
+- Vérifications réalisées : relecture du fichier après écriture ; compilation JavaScript des trois blocs script ; compilation isolée des fonctions d'annulation de dette, de vente et de remboursement.
+- Vérifications non réalisées : navigateur, impression réelle, Firebase Emulator, comptes Firebase réels, concurrence multi-appareils, données corrompues et déploiement.
