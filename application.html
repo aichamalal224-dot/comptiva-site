@@ -1011,7 +1011,7 @@ async function krediDiagnoseSharedShopAccess(){
  }
 }
 /* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
-let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null,krediPresenceStopping=false,krediPresenceRunEpoch=0;
+let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=new Map(),krediPresenceStopping=false,krediPresenceRunEpoch=0;
 const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
  krediPresenceRunEpoch++;
@@ -1026,12 +1026,16 @@ function krediStopSellerPresence(){
 }
 async function krediWritePresenceState(store,shopId,uid,state,isCurrent){
  if(!isCurrent()||(state==='active'&&krediPresenceStopping))return false;
- if(krediPresenceWriteInFlight){try{await krediPresenceWriteInFlight}catch(_){/* la tentative précédente a échoué ; une nouvelle peut être tentée */}}
+ // Une écriture lente d'un autre compte ou d'une autre boutique ne doit pas
+ // bloquer ce cycle de présence. La sérialisation reste propre à chaque UID/boutique.
+ const lockKey=JSON.stringify([shopId,uid]);
+ const previous=krediPresenceWriteInFlight.get(lockKey);
+ if(previous){try{await previous}catch(_){/* la tentative précédente a échoué ; une nouvelle peut être tentée */}}
  if(!isCurrent()||(state==='active'&&krediPresenceStopping))return false;
  const write=store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:state},{merge:true});
- krediPresenceWriteInFlight=write;
+ krediPresenceWriteInFlight.set(lockKey,write);
  try{await write;return true}
- finally{if(krediPresenceWriteInFlight===write)krediPresenceWriteInFlight=null}
+ finally{if(krediPresenceWriteInFlight.get(lockKey)===write)krediPresenceWriteInFlight.delete(lockKey)}
 }
 function krediRenderPatronPresence(){
  const card=document.getElementById('sellerPatronPresenceCard');
