@@ -3216,3 +3216,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Correction : les montants payés/restants et le statut financier des lignes concernées affichent désormais « À vérifier » tant que `reportDebtLedger()` ne valide pas le registre. Les dates, montants initiaux et historiques ne sont pas modifiés.
 - Vérifications réalisées : compilation des trois blocs script ; relecture du fichier après écriture ; contrôles statiques des quatre gardes d'affichage.
 - Vérifications non réalisées : tests navigateur/appareil, jeux de données réels avec corruption volontaire, Firebase Emulator, synchronisation multi-appareils, impression et déploiement.
+
+
+### Audit des rappels clients WhatsApp/SMS — 26 novembre 2026
+- Les actions de partage et de copie contrôlent désormais le registre global avec `reportDebtLedger()` au moment de l'action, pas uniquement lors de la génération du texte.
+- Le rappel exige une correspondance unique du client et de la dette, une dette active liée au client sélectionné, une relation valide et un solde positif entier.
+- La liste des dettes proposées est vidée si le registre global est invalide ; un ancien message affiché ne peut plus être copié, ouvert dans WhatsApp/SMS ou utilisé pour appeler sans revalidation.
+- Le rappel générique sans dette vérifiée est volontairement suspendu pour éviter d'affirmer à tort qu'un paiement est dû.
+- Les messages restent préparés manuellement ; aucun envoi automatique n'est introduit.
+- Vérifications réalisées : compilation des trois blocs script ; relecture après écriture ; contrôles statiques des gardes de sélection, registre, solde, copie et partage.
+- Vérifications non réalisées : tests navigateur/appareil, ouverture réelle WhatsApp/SMS/téléphone, jeux de données réels, Firebase Emulator, synchronisation multi-appareils et déploiement.
