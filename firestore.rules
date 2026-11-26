@@ -194,7 +194,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['uid', 'lastSeen', 'clientState'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.lastSeen == request.time
-          && request.resource.data.clientState == 'active';
+          && request.resource.data.clientState in ['active', 'disconnected'];
         allow delete: if false;
       }
 
