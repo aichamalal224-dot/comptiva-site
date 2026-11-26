@@ -1011,7 +1011,7 @@ async function krediDiagnoseSharedShopAccess(){
  }
 }
 /* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
-let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null;
+let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null;
 const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
@@ -1021,6 +1021,15 @@ function krediStopSellerPresence(){
  const patronCard=document.getElementById('sellerPatronPresenceCard');
  if(patronCard)patronCard.classList.add('hidden');
  krediPresenceShopId='';
+}
+async function krediWritePresenceState(store,shopId,uid,state,isCurrent){
+ if(!isCurrent())return false;
+ if(krediPresenceWriteInFlight){try{await krediPresenceWriteInFlight}catch(_){/* la tentative précédente a échoué ; une nouvelle peut être tentée */}}
+ if(!isCurrent())return false;
+ const write=store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:state},{merge:true});
+ krediPresenceWriteInFlight=write;
+ try{await write;return true}
+ finally{if(krediPresenceWriteInFlight===write)krediPresenceWriteInFlight=null}
 }
 function krediRenderPatronPresence(){
  const card=document.getElementById('sellerPatronPresenceCard');
@@ -1039,9 +1048,11 @@ function krediRenderPatronPresence(){
 async function krediMarkSellerDisconnected(expectedUid){
  const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId;
  if(!uid||!store||!shopId||!navigator.onLine||!krediUser||krediUser.uid!==uid)return false;
+ if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
+ const isCurrent=()=>!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
  try{
   await Promise.race([
-   store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'disconnected'},{merge:true}),
+   krediWritePresenceState(store,shopId,uid,'disconnected',isCurrent),
    new Promise((_,reject)=>setTimeout(()=>reject(new Error('presence-disconnect-timeout')),1500))
   ]);
   return true;
@@ -1081,6 +1092,13 @@ async function krediStartSellerPresence(){
    if(when)when.textContent='La lecture du statut du Patron est refusée ou indisponible.';
   });
   krediPatronPresenceRenderTimer=setInterval(()=>{if(isCurrent())krediRenderPatronPresence()},KREDI_PRESENCE_RENDER_MS);
+  const send=async()=>{
+   if(!isCurrent()||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
+   try{await krediWritePresenceState(store,shopId,uid,'active',isCurrent)}
+   catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence vendeur non confirmé.',error)}
+  };
+  await send();
+  if(isCurrent()&&krediPresenceShopId===shopId)krediPresenceHeartbeat=setInterval(send,KREDI_PRESENCE_HEARTBEAT_MS);
  }else{
   if(docs.length>1||krediShopRole.role!=='patron'||krediIsCreator())return;
   try{
@@ -1092,7 +1110,7 @@ async function krediStartSellerPresence(){
    krediPresenceShopId=shopId;
    const send=async()=>{
     if(!isCurrent()||krediPresenceShopId!==shopId||document.visibilityState==='hidden'||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked()))return;
-    try{await store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:'active'},{merge:true})}
+    try{await krediWritePresenceState(store,shopId,uid,'active',isCurrent)}
     catch(error){if(isCurrent())console.warn('[COMPTIVA] Signal de présence du Patron non confirmé.',error)}
    };
    await send();
