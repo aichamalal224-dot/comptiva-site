@@ -1319,3 +1319,41 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Cette correction ne marque pas artificiellement l'ancien compte comme déconnecté : si son signal de déconnexion n'a pas été confirmé, l'expiration des 3 minutes reste le mécanisme de repli.
 - Elle ne résout toujours pas la collision entre deux appareils partageant le même document parent `presence/{uid}`. La solution par sessions individuelles reste à implémenter et à tester.
 - Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel exécuté ; aucun déploiement, migration ou publication ; `main` reste intacte.
+
+## Audit complémentaire — architecture de présence multi-sessions et coût des lectures — 26 novembre 2026
+
+### Vérifications statiques de la version actuelle
+
+- Le suivi Patron utilise actuellement un écouteur sur `shops/{shopId}/members` et un écouteur sur toute la collection `shops/{shopId}/presence`. Le rendu local est recalculé chaque seconde ; cela ne signifie pas une lecture Firestore chaque seconde.
+- Le suivi côté vendeur écoute un seul document : `shops/{shopId}/presence/{patronUid}`.
+- Les écritures heartbeat Patron et vendeur ciblent le document parent unique `presence/{uid}`, avec `lastSeen` et `clientState`.
+- Aucun identifiant de session par onglet/appareil n'est actuellement créé dans `sessionStorage` ou `localStorage` pour la présence.
+- Les règles Firestore actuelles ne déclarent aucune règle imbriquée `presence/{memberUid}/sessions/{sessionId}`. Il ne faut donc pas commencer à écrire ces documents avant une mise à jour coordonnée des règles.
+
+### Décision d'architecture avant implémentation
+
+- Une sous-collection de sessions par UID est nécessaire pour éviter qu'une déconnexion sur un appareil écrase le statut d'un autre appareil actif.
+- Le Patron peut suivre les sessions de ses vendeurs avec des écouteurs ciblés par UID de membre ; le nombre d'écouteurs et de documents lus dépendra donc du nombre de vendeurs et des sessions actives. Cette charge doit être mesurée et limitée, et les écouteurs doivent être retirés lors de toute transition Auth, suspension ou changement de boutique.
+- Le vendeur ne doit écouter que les sessions de son Patron confirmé par l'affectation active. Aucune lecture globale de toutes les sessions de la boutique ne doit être accordée au vendeur.
+- Un agrégat écrit directement par les clients ne doit pas être considéré comme une vérité fiable : plusieurs appareils peuvent écrire simultanément et un client ne peut pas prouver à lui seul qu'aucune autre session n'est active.
+- Une agrégation serveur automatisée serait plus centralisée, mais elle dépendrait d'un service serveur et de son coût/configuration. Ne pas introduire de Cloud Function ni supposer qu'elle est disponible sur le projet Firebase actuel sans décision explicite sur le plan et les coûts.
+- Les identifiants de session devront être propres à chaque onglet, non prédictibles et conservés uniquement dans `sessionStorage` pour éviter qu'un onglet copie l'identité d'un autre. Ils ne doivent contenir aucune donnée personnelle ni servir d'empreinte d'appareil.
+- Pendant la transition, les documents parents existants devront rester compatibles. Un parent ancien ou absent ne doit pas être interprété comme une déconnexion volontaire certaine.
+
+### Prochaine mise en œuvre requise
+
+1. Ajouter la création et la validation locale d'un identifiant de session par onglet après vérification Auth, rôle et boutique.
+2. Écrire les heartbeats et déconnexions uniquement dans le document de cette session ; ne plus laisser une session déclarer seule l'ensemble du compte déconnecté.
+3. Ajouter des règles imbriquées strictes : écriture uniquement par l'UID propriétaire, lecture Patron limitée aux membres de sa boutique, lecture vendeur limitée au seul Patron affecté, champs autorisés minimaux et horodatage serveur obligatoire.
+4. Adapter l'affichage Patron pour agréger les sessions de chaque vendeur, avec un nombre d'écouteurs borné et un nettoyage garanti.
+5. Adapter l'encart vendeur pour agréger uniquement les sessions du Patron.
+6. Définir le vieillissement des sessions abandonnées sans supposer qu'un TTL Firebase est configuré ; ne pas supprimer automatiquement les sessions sans politique vérifiée.
+7. Exécuter les tests Emulator multi-appareils et d'isolation avant toute publication.
+
+### Résultat de cette passe
+
+- Le modèle parent unique, les lectures actuelles et l'absence de sessionId ont été vérifiés statiquement dans le code et les règles.
+- Aucun code applicatif ni aucune règle Firestore n'a été modifié dans cette passe : la migration doit être coordonnée pour ne pas laisser l'application écrire dans un chemin refusé ou ouvrir une lecture trop large.
+- La correction Auth précédente (arrêt des écouteurs et du heartbeat lors de chaque transition de compte) reste en place.
+- Aucun test Firebase Emulator, navigateur, compte réel ou appareil exécuté ; aucun déploiement, aucune migration de données, aucune publication.
+- La branche de travail reste distincte de `main` ; `main` n'est pas modifiée.
