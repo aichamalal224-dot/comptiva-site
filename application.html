@@ -2859,6 +2859,11 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
+    const previousUid=krediUser&&krediUser.uid||'';
+    const nextUid=activeUser&&activeUser.uid||'';
+    // La référence de version cloud est propre au compte. Ne jamais comparer
+    // le snapshot d'un nouveau compte à la dernière version d'un autre UID.
+    if(previousUid!==nextUid)krediLastWrite='';
     const sessionEpoch=++krediSessionEpoch;
     krediPresenceListEpoch++;
     // Arrêter aussi le heartbeat et l'écoute du Patron de l'ancienne session,
