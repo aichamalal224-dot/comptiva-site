@@ -1011,9 +1011,10 @@ async function krediDiagnoseSharedShopAccess(){
  }
 }
 /* Présence vendeur : heartbeat serveur 30 s, affichage local 1 s, hors ligne après 3 min sans signal. */
-let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null;
+let krediPresenceHeartbeat=null,krediPresenceShopId='',krediPatronPresenceUnsub=null,krediPatronPresenceRenderTimer=null,krediPatronPresenceSnapshot=null,krediPresenceWriteInFlight=null,krediPresenceStopping=false;
 const KREDI_PRESENCE_HEARTBEAT_MS=30000,KREDI_PRESENCE_OFFLINE_MS=180000,KREDI_PRESENCE_RENDER_MS=1000;
 function krediStopSellerPresence(){
+ krediPresenceStopping=false;
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
  if(krediPatronPresenceUnsub){krediPatronPresenceUnsub();krediPatronPresenceUnsub=null}
  if(krediPatronPresenceRenderTimer){clearInterval(krediPatronPresenceRenderTimer);krediPatronPresenceRenderTimer=null}
@@ -1023,9 +1024,9 @@ function krediStopSellerPresence(){
  krediPresenceShopId='';
 }
 async function krediWritePresenceState(store,shopId,uid,state,isCurrent){
- if(!isCurrent())return false;
+ if(!isCurrent()||(state==='active'&&krediPresenceStopping))return false;
  if(krediPresenceWriteInFlight){try{await krediPresenceWriteInFlight}catch(_){/* la tentative précédente a échoué ; une nouvelle peut être tentée */}}
- if(!isCurrent())return false;
+ if(!isCurrent()||(state==='active'&&krediPresenceStopping))return false;
  const write=store.collection('shops').doc(shopId).collection('presence').doc(uid).set({uid:uid,lastSeen:firebase.firestore.FieldValue.serverTimestamp(),clientState:state},{merge:true});
  krediPresenceWriteInFlight=write;
  try{await write;return true}
@@ -1046,10 +1047,11 @@ function krediRenderPatronPresence(){
  when.textContent=stamp?'Dernier signal : '+new Date(stamp).toLocaleString('fr-FR'):'Aucun signal reçu pour le moment';
 }
 async function krediMarkSellerDisconnected(expectedUid){
- const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId;
+ const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId,sessionEpoch=krediSessionEpoch;
  if(!uid||!store||!shopId||!navigator.onLine||!krediUser||krediUser.uid!==uid)return false;
+ krediPresenceStopping=true;
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
- const isCurrent=()=>!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
+ const isCurrent=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
  let timeoutId=null;
  try{
   await Promise.race([
