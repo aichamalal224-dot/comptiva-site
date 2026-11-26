@@ -1256,3 +1256,10 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - La tentative de déconnexion est aussi liée à l’époque de session (`krediSessionEpoch`) capturée au départ : un changement de session invalide l’ancienne tentative.
 - Cette correction réduit une course locale entre heartbeat et déconnexion. Elle ne résout pas le défaut multi-appareils dû au document unique `presence/{uid}` : les sous-documents `sessions/{sessionId}` restent à concevoir et implémenter avec leurs règles et leurs tests.
 - Vérification statique uniquement ; aucun test Firebase Emulator, navigateur, téléphone ou multi-appareils n’a été exécuté.
+
+
+## Correction complémentaire — confirmation réelle du signal de déconnexion (26 novembre 2026)
+
+- `krediWritePresenceState` peut renvoyer `false` lorsque la session a changé ou que le contexte n'est plus valide. La fonction d'appel ignorait auparavant cette valeur et renvoyait tout de même `true` dès que la promesse se terminait sans exception.
+- La fonction vérifie maintenant explicitement `confirmed === true`. Une écriture refusée ou abandonnée n'est donc plus présentée comme une déconnexion confirmée ; le délai de trois minutes sans signal reste le mécanisme de repli.
+- Vérification statique et compilation JavaScript uniquement ; aucun test Firebase réel ou multi-appareils n'a été effectué.
