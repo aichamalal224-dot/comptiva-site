@@ -1460,6 +1460,7 @@ function editPayment(paymentId){if(!krediRequirePatron('modifier un remboursemen
  if(paymentMatches.length!==1){alert('Correction bloquée : remboursement introuvable ou identifiant dupliqué.');return}
  const payment=paymentMatches[0];
  if(payment.status==='cancelled'){alert('Ce remboursement est déjà annulé.');return}
+ if(!reportDebtLedger(dayKey(new Date()))){alert('Correction bloquée : le registre global des dettes ou remboursements présente une anomalie. Vérifiez les dossiers avant toute modification.');return}
  const check=krediPaymentActionCheck(payment);
  if(check.issue){alert('Correction bloquée : '+check.issue);return}
  const debt=check.debt,currentPaid=check.paid;
@@ -2173,19 +2174,23 @@ function sumValidDatedAmounts(items,periodKey){
  return total;
 }
 function reportDebtLedger(periodKey){
- const activeDebts=[];
- for(const debt of db.debts){if(!debt)return null;if(debt.status!=='cancelled')activeDebts.push(debt);}
- const debtById=new Map(),paymentIds=new Set(),paidByDebt=new Map();
+ const activeDebts=[],allDebtIds=new Set(),paymentIds=new Set();
+ for(const debt of db.debts){
+  if(!debt||!debt.id||allDebtIds.has(String(debt.id)))return null;
+  allDebtIds.add(String(debt.id));
+  if(debt.status!=='cancelled')activeDebts.push(debt);
+ }
+ const debtById=new Map(),paidByDebt=new Map();
  let outstanding=0,refunds=0;
  for(const debt of activeDebts){
-  if(!debt.id||debtById.has(String(debt.id))||!Number.isSafeInteger(debt.amount)||debt.amount<=0||krediDebtRelationIssue(debt))return null;
+  if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||krediDebtRelationIssue(debt))return null;
   debtById.set(String(debt.id),debt);paidByDebt.set(String(debt.id),0);
  }
  for(const payment of db.payments){
-  if(!payment)return null;
-  if(payment.status==='cancelled')continue;
-  if(!payment.id||paymentIds.has(String(payment.id))||!isValidISODate(payment.date)||!Number.isSafeInteger(payment.amount)||payment.amount<=0)return null;
+  if(!payment||!payment.id||paymentIds.has(String(payment.id)))return null;
   paymentIds.add(String(payment.id));
+  if(payment.status==='cancelled')continue;
+  if(!isValidISODate(payment.date)||!Number.isSafeInteger(payment.amount)||payment.amount<=0)return null;
   const debt=debtById.get(String(payment.debtId));if(!debt)return null;
   const key=String(debt.id),paid=paidByDebt.get(key)+payment.amount;
   if(!Number.isSafeInteger(paid)||paid>debt.amount)return null;
