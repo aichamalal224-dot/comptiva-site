@@ -2801,3 +2801,13 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Limite : une écriture Firestore déjà soumise n'est pas annulée. Une écriture précédente du même UID et de la même boutique peut encore retarder l'écriture suivante tant qu'elle n'est pas résolue. La séparation par session individuelle et les tests multi-appareils restent nécessaires.
 - Vérifications : relecture GitHub, contrôle statique de l'absence de l'ancien verrou global, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, appareil ou compte réel n'est revendiqué.
 - Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; main reste intacte.
+
+
+## Correction — aucune initialisation de présence pendant le verrouillage d'inactivité — 26 novembre 2026
+
+- Défaut constaté : lors du retour d'Internet pendant que l'écran restait verrouillé après 2 minutes d'inactivité, le gestionnaire réseau pouvait relancer le démarrage de présence et effectuer la lecture serveur de l'index des boutiques, même si les signaux actifs étaient ensuite ignorés par le contrôle du verrou.
+- Correction : `krediStartSellerPresence()` quitte maintenant immédiatement si `window.comptivaIsIdleLocked()` indique que l'écran est verrouillé. Aucun chargement de l'index ni écouteur de présence n'est démarré dans cet état. Le déverrouillage réussi appelle déjà `krediStartSellerPresence()` et reprend le suivi.
+- Comportement conservé : le verrouillage reste local à l'appareil ; l'absence de heartbeat fait vieillir le dernier signal et le statut distant devient « Hors ligne » après 3 minutes. Aucune déconnexion Firebase n'est provoquée.
+- Limite : la présence multi-appareils partage toujours un document par UID et doit faire l'objet de la correction par sessions individuelles. Les transitions réelles doivent être testées sur navigateur et Firebase Emulator avant production.
+- Vérifications : relecture du fichier enregistré, contrôle de la condition de verrouillage, compilation des trois blocs JavaScript et comparaison de branche. Aucun test Firebase Emulator, navigateur, téléphone ou compte réel n'est revendiqué.
+- Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
