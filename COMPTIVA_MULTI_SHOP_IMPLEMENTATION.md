@@ -1148,3 +1148,34 @@ Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne 
 - Les contrôles statiques confirment le heartbeat 30 s, le rafraîchissement visuel 1 s, le seuil 180 s, l'écriture de déconnexion, la reprise après reconnexion et la règle Firestore correspondante.
 - Aucun test Firebase Emulator, navigateur ou appareil réel n'a été exécuté.
 - Aucune donnée réelle, aucun compte réel, aucune migration ni aucun déploiement n'ont été modifiés ; `main` reste intacte.
+
+
+## Présence réciproque Patron ↔ vendeur — 26 novembre 2026
+
+### Correction applicative
+
+- Le Patron démarre maintenant son propre heartbeat de présence dans le document shops/{shopId}/presence/{patronUid} après vérification serveur de sa boutique principale, de son UID propriétaire et du statut actif de la boutique.
+- Le vendeur déjà vérifié par le rôle et les deux documents d'affectation peut afficher un encart « Présence de votre Patron » sur son tableau de bord.
+- L'application écoute uniquement le document de présence du Patron correspondant à l'affectation confirmée ; elle ne charge pas la liste des présences de la boutique.
+- Le statut est recalculé localement chaque seconde, avec heartbeat réseau toutes les 30 secondes et bascule « Hors ligne » après 3 minutes sans signal.
+- Les états « Connecté », « Déconnecté » et « Hors ligne » sont présentés sans exposer les ventes, les finances, les actions ni l'activité privée du Patron.
+- Le nettoyage du suivi retire aussi l'écoute temps réel du statut Patron lors d'un changement de session.
+
+### Règles Firestore
+
+- Le Patron conserve la lecture de la collection de présences de sa boutique.
+- Un vendeur actif peut effectuer un get uniquement sur le document dont l'identifiant est le patronUid de sa boutique ; list reste interdit au vendeur.
+- Le Patron peut écrire uniquement son propre document de présence si son abonnement est actif.
+- Le vendeur peut toujours écrire uniquement son propre document, avec affectation active et abonnement Patron valide.
+- Les champs autorisés restent strictement uid, lastSeen, clientState, avec horodatage serveur obligatoire ; suppression interdite.
+
+### Limite connue à ne pas masquer
+
+- Le modèle actuel utilise un document unique par UID et par boutique. Si le même compte Patron ouvre plusieurs appareils simultanément, la déconnexion d'un appareil peut marquer « Déconnecté » alors qu'un autre appareil est encore actif. Une présence multi-appareils exacte nécessitera des documents de session par appareil et un agrégat ; cette correction ne prétend pas résoudre ce cas.
+- Si le réseau est coupé ou l'application arrêtée brutalement, le statut passe à « Hors ligne » après expiration du dernier signal ; la déconnexion immédiate ne peut pas être garantie.
+
+### Vérifications
+
+- Vérification statique des chemins de lecture/écriture, du contrôle UID/Patron, du heartbeat, de l'écoute limitée au document Patron et du nettoyage de l'écoute.
+- Compilation JavaScript et tests Firebase Emulator à exécuter après écriture de la version finale ; aucune vérification sur compte réel ou appareil n'est revendiquée.
+- Aucun déploiement Firebase, aucune migration de données, aucun changement de main.
