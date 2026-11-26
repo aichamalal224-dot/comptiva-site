@@ -1048,11 +1048,12 @@ function krediRenderPatronPresence(){
  when.textContent=stamp?'Dernier signal : '+new Date(stamp).toLocaleString('fr-FR'):'Aucun signal reçu pour le moment';
 }
 async function krediMarkSellerDisconnected(expectedUid){
- const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId,sessionEpoch=krediSessionEpoch;
+ const uid=expectedUid||krediUser&&krediUser.uid,store=krediStore,shopId=krediPresenceShopId,sessionEpoch=krediSessionEpoch,presenceRunEpoch=krediPresenceRunEpoch;
  if(!uid||!store||!shopId||!navigator.onLine||!krediUser||krediUser.uid!==uid)return false;
  krediPresenceStopping=true;
  if(krediPresenceHeartbeat){clearInterval(krediPresenceHeartbeat);krediPresenceHeartbeat=null}
- const isCurrent=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
+ // Une déconnexion différée ne doit pas agir sur un cycle de présence redémarré entre-temps.
+ const isCurrent=()=>krediSessionEpoch===sessionEpoch&&krediPresenceRunEpoch===presenceRunEpoch&&!!krediUser&&krediUser.uid===uid&&krediStore===store&&krediPresenceShopId===shopId;
  let timeoutId=null;
  try{
   const confirmed=await Promise.race([
