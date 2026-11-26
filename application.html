@@ -1455,8 +1455,10 @@ function krediPaymentActionCheck(payment){
  return {debt,paid};
 }
 function editPayment(paymentId){if(!krediRequirePatron('modifier un remboursement'))return;
- const payment=db.payments.find(p=>p&&p.id===paymentId);
- if(!payment||payment.status==='cancelled'){alert('Ce remboursement est introuvable ou déjà annulé.');return}
+ const paymentMatches=db.payments.filter(p=>p&&p.id===paymentId);
+ if(paymentMatches.length!==1){alert('Correction bloquée : remboursement introuvable ou identifiant dupliqué.');return}
+ const payment=paymentMatches[0];
+ if(payment.status==='cancelled'){alert('Ce remboursement est déjà annulé.');return}
  const check=krediPaymentActionCheck(payment);
  if(check.issue){alert('Correction bloquée : '+check.issue);return}
  const debt=check.debt,currentPaid=check.paid;
@@ -1477,9 +1479,11 @@ function editPayment(paymentId){if(!krediRequirePatron('modifier un remboursemen
  }
  if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||otherPaid+amount>debt.amount){alert('Correction refusée : ce remboursement ferait dépasser le montant initial de la dette. Réduisez le montant ou vérifiez les autres remboursements.');return}
  if(!confirm('Confirmer la correction de ce remboursement ?'))return;
+ const auditId=id('AUD');
+ if(!auditId||db.auditLog.some(x=>x&&String(x.id)===String(auditId))){alert('Correction bloquée : impossible de générer un identifiant d’audit unique. Aucune donnée n’a été modifiée.');return}
  const before=JSON.stringify(db),previous={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method},now=new Date().toISOString(),actor=krediActorStamp();
  payment.amount=amount;payment.date=date;payment.method=method.trim();payment.updatedAt=now;
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{status:payment.status,amount,date,method:method.trim(),updatedAt:now},at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
+ db.auditLog.push({id:auditId,entityType:'payment',entityId:payment.id,action:'updated',reason:reason.trim(),before:previous,after:{status:payment.status,amount,date,method:method.trim(),updatedAt:now},at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Correction non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Correction enregistrée sur cet appareil. Synchronisation cloud en cours ou en attente : vérifiez son statut avant de changer d’appareil.');
 }
@@ -1487,6 +1491,7 @@ function cancelPayment(paymentId){if(!krediRequirePatron('annuler un rembourseme
  const paymentMatches=db.payments.filter(p=>p&&p.id===paymentId);
  if(paymentMatches.length!==1){alert('Annulation bloquée : remboursement introuvable ou identifiant dupliqué. Vérifiez l’historique avant toute opération.');return}
  const payment=paymentMatches[0];
+ if(!reportDebtLedger(dayKey(new Date()))){alert('Annulation bloquée : le registre global des dettes ou des remboursements présente une anomalie. Vérifiez les dossiers avant toute annulation.');return}
  if(payment.status==='cancelled'){flash('Ce remboursement est déjà annulé.');return}
  const check=krediPaymentActionCheck(payment);
  if(check.issue){alert('Annulation bloquée : '+check.issue);return}
@@ -1494,11 +1499,13 @@ function cancelPayment(paymentId){if(!krediRequirePatron('annuler un rembourseme
  if(reason===null)return;
  if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation du remboursement de '+money(payment.amount)+' ? Le solde de la dette sera recalculé.'))return;
+ const auditId=id('AUD');
+ if(!auditId||db.auditLog.some(x=>x&&String(x.id)===String(auditId))){alert('Annulation bloquée : impossible de générer un identifiant d’audit unique. Aucune donnée n’a été modifiée.');return}
  const before=JSON.stringify(db),now=new Date().toISOString(),actor=krediActorStamp();
  const previous={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method};
  payment.status='cancelled';payment.cancelledAt=now;payment.cancelReason=reason.trim();payment.cancelledBy=actor.createdByUid||'merchant';
  const after={status:payment.status,amount:payment.amount,date:payment.date,method:payment.method,cancelledAt:now,cancelReason:reason.trim(),cancelledBy:payment.cancelledBy};
- db.auditLog.push({id:id('AUD'),entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),before:previous,after,at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
+ db.auditLog.push({id:auditId,entityType:'payment',entityId:payment.id,action:'cancelled',reason:reason.trim(),before:previous,after,at:now,actor:actor.createdByUid||'merchant',actorUid:actor.createdByUid||'',actorName:actor.createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Annulation enregistrée sur cet appareil. Synchronisation cloud en cours ou en attente : vérifiez son statut avant de changer d’appareil.');
 }
