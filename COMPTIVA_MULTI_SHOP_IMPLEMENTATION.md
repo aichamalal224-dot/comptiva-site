@@ -1186,4 +1186,5 @@ Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne 
 - Le suivi vendeur est maintenu après l'ajout de l'écoute du Patron : le vendeur continue d'émettre son propre heartbeat.
 - Les écritures de présence sont sérialisées côté client afin d'éviter qu'un heartbeat déjà lancé ne termine après l'écriture « Déconnecté ».
 - Lors d'une déconnexion volontaire, l'intervalle heartbeat est arrêté avant l'écriture de l'état « Déconnecté ».
-- Vérification statique et compilation des trois scripts à refaire après cette correction ; aucun test Emulator ou appareil réel n'est revendiqué.
+- Vérification statique des deux heartbeat, de leur sérialisation, de l'arrêt avant déconnexion et compilation des trois blocs JavaScript : 3/3 réussie après cette correction.
+- Aucun test Firebase Emulator, navigateur, compte réel ou appareil n'a été exécuté ; aucun déploiement ni changement de main.
