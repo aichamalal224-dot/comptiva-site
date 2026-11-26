@@ -996,7 +996,7 @@ Une initialisation asynchrone d'un compte pouvait se poursuivre après que l'uti
 
 ### Vérifications après correction
 
-- Compilation des trois blocs JavaScript de application.html : à confirmer après relecture du fichier final.
+- Compilation des trois blocs JavaScript de application.html après relecture du fichier final : 3/3 réussie.
 - Règles Firestore non modifiées.
 - Aucun compte réel, aucune donnée réelle, aucune migration et aucun déploiement modifiés.
 - Branche de travail uniquement ; main reste intacte.
