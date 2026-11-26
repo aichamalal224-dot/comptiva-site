@@ -1076,7 +1076,7 @@ async function krediStartSellerPresence(){
  const sellerCard=document.getElementById('sellerPatronPresenceCard');
  if(patronCard)patronCard.classList.add('hidden');
  if(sellerCard)sellerCard.classList.add('hidden');
- if(!uid||!store||!navigator.onLine||krediShopRole.status!=='verified'||krediShopRole.uid!==uid)return;
+ if(!uid||!store||!navigator.onLine||(window.comptivaIsIdleLocked&&window.comptivaIsIdleLocked())||krediShopRole.status!=='verified'||krediShopRole.uid!==uid)return;
  let memberships;
  try{memberships=await store.collection('userShopMemberships').doc(uid).collection('shops').limit(2).get({source:'server'})}
  catch(error){if(isCurrent())console.warn('[COMPTIVA] Index de boutique vendeur indisponible.',error);return}
