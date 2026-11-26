@@ -3020,3 +3020,16 @@ L'examen de `cancelSale()`, des mouvements de stock et des écritures de caisse 
 4. Aucun test de restauration avec sauvegarde ancienne, sauvegarde modifiée, fichier volumineux, stockage saturé, synchronisation en attente ou second appareil n'a été exécuté.
 
 **Portée et tests :** correction du seul chemin d'export de sauvegarde ; le chemin de restauration n'a pas été modifié dans cette étape, car la politique de remplacement cloud doit être conçue séparément pour éviter une écriture destructive. Relecture du code et compilation statique après commit ; aucun test navigateur/appareil, Firebase Emulator ou compte réel n'est revendiqué. Aucune donnée métier modifiée, aucune règle Firestore, migration, fusion, publication ou déploiement ; `main` reste intacte.
+
+
+### Garde-fou de restauration avant remplacement cloud — 26 novembre 2026
+
+**Correction appliquée dans `restoreData()` :**
+- La restauration est refusée si la synchronisation cloud n'est pas confirmée prête, si la base locale est marquée modifiée, si une écriture est en cours, si un conflit cloud est ouvert, si la version cloud de référence est inconnue ou si le marqueur de synchronisation en attente est présent (ou illisible).
+- La confirmation prévient explicitement que la restauration remplace les données locales et demande aussi le remplacement de la base cloud.
+- L'état de session et de synchronisation est revérifié après la confirmation et avant la sauvegarde locale.
+- L'écriture cloud conserve la transaction existante `krediWriteCloudIfUnchanged()`, qui compare la version cloud actuelle à la dernière référence connue et bloque si elle a changé.
+
+**Limites restantes :** ce garde-fou réduit le risque d'écraser des modifications locales en attente, mais ne constitue pas une comparaison sémantique entre les dates de la sauvegarde et les transactions cloud. Le marqueur local peut être absent après effacement du stockage ; dans ce cas, le contrôle `krediCloudReady`, `krediLocalDirty`, `krediLastWrite` et la transaction cloud restent essentiels. La procédure ne réalise pas de fusion automatique. Aucun test réel de restauration, de concurrence multi-appareils, de stockage effacé ou de course réseau n'a été exécuté.
+
+**Tests statiques après commit :** relecture des fichiers modifiés et compilation des trois blocs JavaScript. Aucune modification de règles Firestore, migration, fusion, déploiement ou publication ; `main` reste intacte.
