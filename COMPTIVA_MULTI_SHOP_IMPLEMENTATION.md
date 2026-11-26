@@ -3254,3 +3254,10 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Si l’élément est supprimé des deux côtés, ce contrôle ne crée pas de conflit artificiel.
 - Vérifications réalisées : relecture après écriture, contrôles statiques des quatre cas de suppression et compilation JavaScript des trois blocs script.
 - Vérifications non réalisées : essais navigateur/appareils simultanés, scénarios hors ligne/réseau instable, données de production, Firebase Emulator, synchronisation réelle et déploiement. Aucune donnée métier, règle Firestore, migration, fusion, publication ou branche `main` n’a été modifiée.
+
+
+### Audit session et changement de compte — 26 novembre 2026
+- Vérification statique du mécanisme `krediSessionEpoch` : la file de sauvegarde capture UID/génération/espace de stockage, contrôle la session avant l’écriture différée, la transaction Firestore revérifie la session après lecture transactionnelle et après son retour l’appelant ne modifie l’état local que si la session est toujours courante.
+- Le callback `onSnapshot` vérifie la session avant traitement ; son chemin de fusion est synchrone jusqu’à l’écriture locale, puis le chemin d’écriture cloud revérifie la session dans la transaction et après `await`. Les callbacks devenus obsolètes sont donc abandonnés avant toute mutation locale observable.
+- Correction ciblée : `restoreData()` capture désormais aussi la génération de session, et le callback asynchrone `FileReader.onload` refuse une restauration si la session a changé, même si le même UID est reconnecté entre-temps. Le contrôle est répété avant remplacement de la base.
+- Limite : cette revue est statique. Aucun test réel de bascule A→B, déconnexion pendant transaction, Firestore Emulator, réseau interrompu ou appareils simultanés n’a été exécuté.
