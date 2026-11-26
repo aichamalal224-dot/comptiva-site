@@ -1398,9 +1398,11 @@ function cancelDebt(debtId){if(!krediRequirePatron('annuler une dette'))return;
  const paid=paidFor(debt.id);if(!Number.isSafeInteger(debt.amount)||debt.amount<=0||!Number.isSafeInteger(paid)||paid<0||paid>debt.amount||paid>0){alert('Annulation impossible : les remboursements liés à cette dette sont incohérents ou encore actifs. Vérifiez et régularisez l’historique avant de réessayer.');return}
  const reason=prompt('Indiquez la raison de l’annulation de cette dette :');if(reason===null)return;if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cette dette de '+money(debt.amount)+' ? Elle sera retirée des soldes, mais son historique sera conservé.'))return;
+ const auditId=id('AUD');
+ if(!auditId||db.auditLog.some(x=>x&&String(x.id)===String(auditId))){alert('Annulation bloquée : impossible de générer un identifiant d’audit unique. Aucune donnée n’a été modifiée.');return}
  const before=JSON.stringify(db),now=new Date().toISOString();
  debt.status='cancelled';debt.cancelledAt=now;debt.cancelReason=reason.trim();debt.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
- db.auditLog.push({id:id('AUD'),entityType:'debt',entityId:debt.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
+ db.auditLog.push({id:auditId,entityType:'debt',entityId:debt.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées.');return}
  flash('Dette annulée. Les soldes et indicateurs ont été recalculés ; historique conservé.');
 }
@@ -1624,8 +1626,9 @@ function cancelSale(saleId){if(!krediRequirePatron('annuler une vente'))return;
  let stockProduct=null;
  if(sale.stockProductId){
   if(!sale.stockDeductedAt||!Number.isFinite(Number(sale.stockDeductedQuantity))||Number(sale.stockDeductedQuantity)<=0||Math.abs(Number(sale.stockDeductedQuantity)-Number(sale.quantity))>1e-9){alert('Annulation bloquée : cette vente possède un lien de stock, mais aucune preuve fiable de la quantité réellement déduite. Aucune réintégration automatique ne sera effectuée. Vérifiez le stock manuellement.');return}
-  stockProduct=db.products.find(p=>p.id===sale.stockProductId);
-  if(!stockProduct){alert('Annulation bloquée : le produit de stock lié à cette vente est introuvable. Vérifiez le stock avant toute correction.');return}
+  const stockMatches=db.products.filter(p=>p&&p.id===sale.stockProductId);
+  if(stockMatches.length!==1){alert('Annulation bloquée : produit de stock introuvable ou identifiant produit dupliqué. Vérifiez le stock avant toute correction.');return}
+  stockProduct=stockMatches[0];
  }else{
   const possible=db.products.find(p=>String(p.name||'').trim().toLowerCase()===String(sale.product||'').trim().toLowerCase());
   if(possible){alert('Annulation bloquée pour cette ancienne vente : le lien exact avec le stock n’est pas enregistré. Corrigez le stock manuellement après vérification, ou contactez le support.');return}
@@ -1634,12 +1637,15 @@ function cancelSale(saleId){if(!krediRequirePatron('annuler une vente'))return;
  if(reason===null)return;
  if(!reason.trim()){alert('La raison de l’annulation est obligatoire.');return}
  if(!confirm('Confirmer l’annulation de cette vente de '+money(sale.total)+' ? Le chiffre d’affaires sera recalculé et le stock restauré si le produit est lié.'))return;
+ const saleAuditId=id('AUD'),stockAuditId=stockProduct?id('AUD'):null;
+ const auditIds=[saleAuditId,stockAuditId].filter(Boolean);
+ if(!saleAuditId||auditIds.length!==(stockProduct?2:1)||new Set(auditIds.map(String)).size!==auditIds.length||db.auditLog.some(x=>x&&auditIds.includes(String(x.id)))){alert('Annulation bloquée : impossible de générer des identifiants d’audit uniques. Aucune donnée n’a été modifiée.');return}
  const before=JSON.stringify(db);
  const now=new Date().toISOString();
- if(stockProduct){const current=Number(stockProduct.quantity),sold=Number(sale.quantity);if(sale.stockRestoredAt||sale.stockRestored===true){alert('Annulation bloquée : le stock de cette vente a déjà été réintégré.');return}if(!Number.isFinite(current)||current<0||!Number.isFinite(sold)||sold<=0){alert('Annulation bloquée : quantité actuelle ou quantité vendue incohérente. Aucun stock n’a été modifié.');return}const restored=current+sold;if(!Number.isFinite(restored)||restored<current){alert('Annulation bloquée : le calcul de réintégration du stock est invalide.');return}stockProduct.quantity=restored;sale.stockRestored=true;sale.stockRestoredAt=now;sale.stockRestoredQuantity=sold;sale.stockRestoredProductId=stockProduct.id;db.auditLog.push({id:id('AUD'),entityType:'stock',entityId:stockProduct.id,action:'sale_cancellation_restoration',relatedSaleId:sale.id,quantity:sold,before:current,after:restored,at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});}
+ if(stockProduct){const current=Number(stockProduct.quantity),sold=Number(sale.quantity);if(sale.stockRestoredAt||sale.stockRestored===true){alert('Annulation bloquée : le stock de cette vente a déjà été réintégré.');return}if(!Number.isFinite(current)||current<0||!Number.isFinite(sold)||sold<=0){alert('Annulation bloquée : quantité actuelle ou quantité vendue incohérente. Aucun stock n’a été modifié.');return}const restored=current+sold;if(!Number.isFinite(restored)||restored<current){alert('Annulation bloquée : le calcul de réintégration du stock est invalide.');return}stockProduct.quantity=restored;sale.stockRestored=true;sale.stockRestoredAt=now;sale.stockRestoredQuantity=sold;sale.stockRestoredProductId=stockProduct.id;db.auditLog.push({id:stockAuditId,entityType:'stock',entityId:stockProduct.id,action:'sale_cancellation_restoration',relatedSaleId:sale.id,quantity:sold,before:current,after:restored,at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});}
  sale.status='cancelled';sale.cancelledAt=now;sale.cancelReason=reason.trim();sale.cancelledBy=(krediUser&&krediUser.uid)||'merchant';
  linkedDebts.forEach(d=>{d.status='cancelled';d.cancelledAt=now;d.cancelReason='Annulation de la vente liée : '+reason.trim();});
- db.auditLog.push({id:id('AUD'),entityType:'sale',entityId:sale.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
+ db.auditLog.push({id:saleAuditId,entityType:'sale',entityId:sale.id,action:'cancelled',reason:reason.trim(),at:now,actor:(krediUser&&krediUser.uid)||'merchant',actorName:krediActorStamp().createdByName});
  if(!saveDB()){db=JSON.parse(before);renderAll();alert('Annulation non enregistrée. Les données précédentes ont été restaurées. Vérifiez votre abonnement et le stockage de l’appareil.');return}
  flash('Vente annulée. Historique conservé, chiffres recalculés'+(stockProduct?' et stock restauré.':'.'));
 }
