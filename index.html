@@ -760,10 +760,14 @@ async function krediInitFirebase(){try{
       krediServerReady=true;
       const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
       const localData=loadDB();
+      if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : la lecture locale a détecté des données illisibles. Aucune fusion ni écriture distante ne sera effectuée.');return}
       const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
-      krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
+      krediApplyingCloud=true;
+      try{localStorage.setItem(STORE,JSON.stringify(merged));db=merged;renderAll()}
+      catch(storageError){krediCloudReady=false;krediLocalDirty=true;krediStatus('Réception Firebase suspendue : impossible d’enregistrer les données sur cet appareil. Vérifiez l’espace de stockage avant de réessayer.');console.error('[COMPTIVA] Enregistrement local après réception Firebase impossible.',storageError);return}
+      finally{krediApplyingCloud=false}
       if(!snap.exists||mergedText!==remoteText){
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
