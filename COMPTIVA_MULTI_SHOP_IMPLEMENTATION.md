@@ -2999,3 +2999,24 @@ L'examen de `cancelSale()`, des mouvements de stock et des écritures de caisse 
 **Limites restantes :** cette protection détecte les divergences, mais ne fournit pas encore d'interface de résolution champ par champ. Les conflits doivent être sauvegardés puis examinés avant reprise. La sauvegarde locale des instantanés dépend toujours de la capacité du navigateur à écrire dans `localStorage`. Les données déjà perdues avant cette version ne peuvent pas être recréées par ce contrôle.
 
 **Vérifications :** compilation statique des trois blocs JavaScript, relecture du fichier modifié, relecture de cette note après commit et comparaison de la branche de travail avec `main`. Aucun test multi-appareils réel, navigateur, Firebase Emulator ou compte Firebase n'a été exécuté. Aucun déploiement ni fusion ; `main` reste intacte.
+
+
+### Audit des sauvegardes et restaurations locales — 26 novembre 2026
+
+**Défaut corrigé :** lorsque `loadDB()` détecte une base locale illisible, il conserve un indicateur d'erreur et renvoie une structure vide en mémoire pour empêcher les écritures ordinaires. La fonction `backupData()` ne contrôlait pas cet indicateur et pouvait donc exporter cette structure vide comme si elle représentait les données du compte.
+
+**Correction appliquée dans `application.html` :**
+- La sauvegarde est maintenant refusée si l'indicateur `krediDBStorageIssue` concerne le magasin actif.
+- Avant export, la structure de la base en mémoire est contrôlée par `krediDatabaseShapeIssue()`.
+- Les données sérialisées sont relues en JSON et leur structure est contrôlée une seconde fois avant la création du fichier.
+- Le message de refus avertit que la copie brute de secours, si elle a pu être créée, doit être récupérée avant tout export. Aucun fichier vide ne doit être présenté comme une sauvegarde valide dans ce cas.
+
+**Protections de restauration constatées :** compte propriétaire obligatoire, contrôle de l'identifiant propriétaire et de la version de schéma, validation des collections et identifiants, confirmation explicite du remplacement local, vérification de session avant écriture et copie préalable du contenu local brut avec relecture de cette copie.
+
+**Risques restants à traiter avant de considérer la restauration comme sûre sur plusieurs appareils :**
+1. La restauration remplace la base locale entière. Le message de confirmation parle du remplacement sur cet appareil, mais `saveDB()` déclenche ensuite la synchronisation cloud. Il faut une étape distincte qui compare la sauvegarde, la base locale, l'état des modifications en attente et la version cloud, puis demande une confirmation explicite avant tout remplacement cloud. Tant que cette séparation n'est pas implémentée et testée, ne pas considérer une restauration comme une opération de fusion sans perte.
+2. Le fichier de sauvegarde ne contient pas encore de mécanisme cryptographique d'intégrité ou de signature. La validation de structure ne prouve pas que son contenu est authentique ou complet.
+3. Les copies de secours `localStorage` restent soumises aux limites de quota, à l'effacement des données du navigateur et à la disponibilité du stockage. Elles ne remplacent pas une sauvegarde externe vérifiée.
+4. Aucun test de restauration avec sauvegarde ancienne, sauvegarde modifiée, fichier volumineux, stockage saturé, synchronisation en attente ou second appareil n'a été exécuté.
+
+**Portée et tests :** correction du seul chemin d'export de sauvegarde ; le chemin de restauration n'a pas été modifié dans cette étape, car la politique de remplacement cloud doit être conçue séparément pour éviter une écriture destructive. Relecture du code et compilation statique après commit ; aucun test navigateur/appareil, Firebase Emulator ou compte réel n'est revendiqué. Aucune donnée métier modifiée, aucune règle Firestore, migration, fusion, publication ou déploiement ; `main` reste intacte.
