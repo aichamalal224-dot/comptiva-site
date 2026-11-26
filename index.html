@@ -754,7 +754,7 @@ async function krediInitFirebase(){try{
     });
     krediUnsubscribe=ref.onSnapshot({includeMetadataChanges:true},async snap=>{
       if(!krediUser||krediUser.uid!==activeUid)return;
-      if(krediStorageBlocked(STORE)||krediStorageBlocked(SUB_STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : stockage local à récupérer. Aucune donnée distante ne sera écrasée.');return}
+      if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : base commerciale locale à récupérer. Aucune donnée distante ne sera écrasée.');return}
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
@@ -787,7 +787,7 @@ async function krediInitFirebase(){try{
   console.error('[COMPTIVA] Initialisation Firebase',e);
 }}
 function krediQueueCloudSave(){
-  if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE)||krediStorageBlocked(SUB_STORE))return;
+  if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE))return;
   const uid=krediUser.uid;
   krediLocalDirty=true;
   localStorage.setItem('comptiva_pending_'+uid,'1');
