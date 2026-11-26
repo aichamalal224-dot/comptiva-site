@@ -3174,3 +3174,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Évolution nécessaire avant d'autoriser ces annulations : registre indépendant et append-only des remboursements clients, relié à la vente, avec montant total, date, motif, acteur, référence externe et ventilation des moyens (espèces / Orange Money / Mobile Money), contrôles de plafonds cumulés et affichage distinct du chiffre d'affaires et des sorties de trésorerie. La vente ne doit être marquée annulée qu'après preuve/confirmation du remboursement, avec écriture atomique et historique conservé.
 - Vérifications réalisées : relecture du fichier après écriture ; compilation de `cancelSale()` et des trois blocs `<script>` ; contrôle statique que le blocage intervient avant toute mutation de la vente ou du stock.
 - Vérifications non réalisées : scénario navigateur, remboursement réel, impression, Firebase Emulator, synchronisation multi-appareils, migration et déploiement.
+
+
+### Audit des reçus historiques après annulation de vente — 26 novembre 2026
+- Constat : `saleFinancialAmounts()` renvoie volontairement zéro pour une vente annulée afin de l'exclure des agrégats actifs. `printReceipt()` réutilisait ces valeurs, ce qui pouvait imprimer un reçu historique avec encaissé et crédit à zéro malgré les montants d'origine conservés sur la vente.
+- Correction : le reçu d'une vente annulée revalide désormais ses montants d'origine sans la réactiver dans les agrégats financiers. Le reçu conserve le bandeau « VENTE ANNULÉE » et distingue l'« encaissé à l'origine ». Les valeurs invalides restent affichées « À vérifier ».
+- Le nom du client n'est plus choisi arbitrairement en cas d'identifiant client dupliqué : le reçu indique « Client à vérifier ».
+- Vérifications réalisées : relecture après écriture ; compilation isolée de `printReceipt()` et des trois blocs script ; contrôles statiques sur montants d'origine, bannière/label et unicité du client.
+- Vérifications non réalisées : aperçu navigateur, impression physique/PDF, tests sur anciennes données réelles, Firebase Emulator, synchronisation multi-appareils et déploiement.
