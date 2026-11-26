@@ -758,7 +758,14 @@ async function krediInitFirebase(){try{
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
-      const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
+      const remoteDataRaw=snap.exists&&snap.data()?snap.data().db:krediEmptyDB();
+      if(!remoteDataRaw||typeof remoteDataRaw!=='object'||Array.isArray(remoteDataRaw)||Object.keys(krediEmptyDB()).some(key=>key in remoteDataRaw&&!Array.isArray(remoteDataRaw[key]))){
+        krediCloudReady=false;
+        krediStatus('Synchronisation suspendue : la structure des données reçues de Firebase est invalide. Les données locales sont conservées et aucune écriture distante ne sera effectuée.');
+        console.error('[COMPTIVA] Structure distante invalide : synchronisation bloquée pour éviter un écrasement.',remoteDataRaw);
+        return;
+      }
+      const remoteData=remoteDataRaw;
       const localData=loadDB();
       if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : la lecture locale a détecté des données illisibles. Aucune fusion ni écriture distante ne sera effectuée.');return}
       const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
