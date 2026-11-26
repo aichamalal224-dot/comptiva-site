@@ -2253,8 +2253,9 @@ function backupData(){
 }
 function restoreData(event){
  const file=event.target.files&&event.target.files[0];if(!file)return;
- const restoreUid=krediUser&&krediUser.uid;
- if(!restoreUid||!krediStoreMatchesActiveUser()){
+ const restoreUid=krediUser&&krediUser.uid,restoreSessionEpoch=krediSessionEpoch;
+ const isCurrentRestoreSession=()=>krediSessionEpoch===restoreSessionEpoch&&!!restoreUid&&!!krediUser&&krediUser.uid===restoreUid&&krediStoreMatchesActiveUser();
+ if(!isCurrentRestoreSession()){
   event.target.value='';
   alert('Restauration refusée : connectez-vous au compte propriétaire des données.');
   return;
@@ -2263,7 +2264,7 @@ function restoreData(event){
  reader.onload=function(){
   const previousDb=JSON.stringify(db),previousIssue=window.krediDBStorageIssue||null;
   try{
-   if(!krediUser||krediUser.uid!==restoreUid||!krediStoreMatchesActiveUser())throw new Error('Le compte connecté a changé pendant la lecture. Recommencez la restauration.');
+   if(!isCurrentRestoreSession())throw new Error('La session a changé pendant la lecture. Reconnectez le compte d’origine et recommencez la restauration.');
    const parsed=JSON.parse(reader.result);
    if(!parsed||typeof parsed!=='object'||Array.isArray(parsed)||parsed.app!=='COMPTIVA'||parsed.scope!=='account'||!Number.isInteger(parsed.version)||!parsed.data)throw new Error('Format de sauvegarde COMPTIVA invalide ou ancien.');
    if(parsed.ownerUid!==restoreUid)throw new Error('Cette sauvegarde appartient à un autre compte. Aucune donnée n’a été importée.');
@@ -2274,7 +2275,7 @@ function restoreData(event){
    const pending=krediSafeStorageGet('comptiva_pending_'+restoreUid);
    if(!krediCloudReady||krediLocalDirty||krediSaveInFlight||krediCloudConflictUid===restoreUid||!krediLastWrite||!pending.ok||pending.value==='1')throw new Error('Restauration suspendue : les données cloud ne sont pas confirmées comme synchronisées ou des modifications sont en attente. Reconnectez-vous, résolvez les conflits et attendez la synchronisation complète avant de réessayer.');
    if(!confirm('ATTENTION : cette restauration remplacera les données locales ET demandera le remplacement de la base cloud du compte connecté. COMPTIVA vérifiera que la version cloud n’a pas changé depuis sa dernière lecture ; sinon l’écriture sera bloquée. Avez-vous téléchargé une sauvegarde de sécurité et souhaitez-vous continuer ?'))return;
-   if(!krediUser||krediUser.uid!==restoreUid||!krediStoreMatchesActiveUser()||!krediCloudReady||krediLocalDirty||krediSaveInFlight||krediCloudConflictUid===restoreUid)throw new Error('La session ou l’état de synchronisation a changé. Restauration interrompue.');
+   if(!isCurrentRestoreSession()||!krediCloudReady||krediLocalDirty||krediSaveInFlight||krediCloudConflictUid===restoreUid)throw new Error('La session ou l’état de synchronisation a changé. Restauration interrompue.');
    const current=krediSafeStorageGet(STORE);if(!current.ok)throw new Error('Lecture de la base actuelle impossible : restauration interrompue.');
    if(current.value!==null){const backupKey=STORE+'_pre_restore_'+Date.now();if(!krediSafeStorageSet(backupKey,current.value)||krediSafeStorageGet(backupKey).value!==current.value)throw new Error('Copie de sécurité préalable impossible : aucune donnée ne sera remplacée.');}
    const next={...restored,clients:restored.clients,sales:restored.sales,debts:restored.debts,payments:Array.isArray(restored.payments)?restored.payments:[],purchases:Array.isArray(restored.purchases)?restored.purchases:[],expenses:Array.isArray(restored.expenses)?restored.expenses:[],products:Array.isArray(restored.products)?restored.products:[],auditLog:Array.isArray(restored.auditLog)?restored.auditLog:[]};
