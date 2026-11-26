@@ -3208,3 +3208,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Les lignes de l'historique contrôlent les dates, montants et modes ; une ligne mal formée est explicitement affichée « À vérifier » au lieu d'un montant trompeur.
 - Vérifications réalisées : compilation isolée des deux fonctions ; compilation des trois blocs script ; relecture du fichier et contrôles statiques des gardes.
 - Vérifications non réalisées : tests d'impression sur navigateur/appareil, données réelles, Firebase Emulator, synchronisation et concurrence multi-appareils.
+
+
+### Audit des soldes individuels des clients — 26 novembre 2026
+- Le tableau de bord pouvait encore afficher le solde d'une dette récente et son statut individuel lorsque le registre global était invalide, alors que les indicateurs globaux étaient suspendus.
+- La liste des dettes pouvait également afficher le total payé et le solde d'une ligne malgré l'invalidité du registre global.
+- Correction : les montants payés/restants et le statut financier des lignes concernées affichent désormais « À vérifier » tant que `reportDebtLedger()` ne valide pas le registre. Les dates, montants initiaux et historiques ne sont pas modifiés.
+- Vérifications réalisées : compilation des trois blocs script ; relecture du fichier après écriture ; contrôles statiques des quatre gardes d'affichage.
+- Vérifications non réalisées : tests navigateur/appareil, jeux de données réels avec corruption volontaire, Firebase Emulator, synchronisation multi-appareils, impression et déploiement.
