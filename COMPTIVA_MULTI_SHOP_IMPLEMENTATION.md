@@ -3182,3 +3182,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Le nom du client n'est plus choisi arbitrairement en cas d'identifiant client dupliqué : le reçu indique « Client à vérifier ».
 - Vérifications réalisées : relecture après écriture ; compilation isolée de `printReceipt()` et des trois blocs script ; contrôles statiques sur montants d'origine, bannière/label et unicité du client.
 - Vérifications non réalisées : aperçu navigateur, impression physique/PDF, tests sur anciennes données réelles, Firebase Emulator, synchronisation multi-appareils et déploiement.
+
+
+### Audit complémentaire des annulations : identifiants d'audit et produit de stock — 26 novembre 2026
+- L'annulation d'une dette préalloue désormais un identifiant d'audit et vérifie qu'il n'existe pas déjà avant de modifier la dette.
+- L'annulation d'une vente exige désormais un seul produit correspondant à `stockProductId` ; un produit absent ou dupliqué bloque la réintégration du stock.
+- Avant toute mutation, l'annulation d'une vente préalloue les identifiants d'audit de la vente et, si nécessaire, du mouvement de stock ; les identifiants doivent être présents, distincts et absents de l'historique existant.
+- Vérifications réalisées : relecture du fichier ; compilation isolée de `cancelDebt()` et `cancelSale()` ; compilation des trois blocs script ; contrôles statiques sur l'unicité du produit et des identifiants d'audit.
+- Vérifications non réalisées : navigateur, stockage réel, Firebase Emulator, concurrence multi-appareils, impression et déploiement.
