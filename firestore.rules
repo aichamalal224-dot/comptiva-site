@@ -248,7 +248,10 @@ service cloud.firestore {
       }
 
       match /products/{productId} {
-        allow read: if canUseShop(shopId);
+        // Les documents produit peuvent contenir purchasePrice et d'autres données de marge.
+        // Firestore ne sait pas masquer des champs : lecture Patron uniquement jusqu'à séparation
+        // en catalogue public vendeur et coûts privés Patron.
+        allow read: if isShopPatron(shopId);
         // Stock mutations are Patron-only until atomic sale/inventory operations
         // have been migrated and verified. This intentionally blocks direct seller edits.
         allow create, update, delete: if canWriteShop(shopId) && isShopPatron(shopId);
