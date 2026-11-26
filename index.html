@@ -810,7 +810,7 @@ async function krediInitFirebase(){try{
 }}
 function krediHasPendingSync(uid){
   try{return localStorage.getItem('comptiva_pending_'+uid)==='1'}
-  catch(storageError){console.warn('[COMPTIVA] Lecture du marqueur de synchronisation impossible pour '+uid,storageError);return false}
+  catch(storageError){console.warn('[COMPTIVA] Lecture du marqueur de synchronisation impossible pour '+uid,storageError);return true}
 }
 function krediMarkPendingSync(uid){
   try{localStorage.setItem('comptiva_pending_'+uid,'1');return true}
