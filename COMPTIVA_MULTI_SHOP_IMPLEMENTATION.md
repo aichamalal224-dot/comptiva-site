@@ -1179,3 +1179,11 @@ Cette revue porte uniquement sur le modèle cible `shops/{shopId}/...`. Elle ne 
 - Vérification statique des chemins de lecture/écriture, du contrôle UID/Patron, du heartbeat, de l'écoute limitée au document Patron et du nettoyage de l'écoute.
 - Compilation JavaScript et tests Firebase Emulator à exécuter après écriture de la version finale ; aucune vérification sur compte réel ou appareil n'est revendiquée.
 - Aucun déploiement Firebase, aucune migration de données, aucun changement de main.
+
+
+### Vérification complémentaire — course entre heartbeat et déconnexion
+
+- Le suivi vendeur est maintenu après l'ajout de l'écoute du Patron : le vendeur continue d'émettre son propre heartbeat.
+- Les écritures de présence sont sérialisées côté client afin d'éviter qu'un heartbeat déjà lancé ne termine après l'écriture « Déconnecté ».
+- Lors d'une déconnexion volontaire, l'intervalle heartbeat est arrêté avant l'écriture de l'état « Déconnecté ».
+- Vérification statique et compilation des trois scripts à refaire après cette correction ; aucun test Emulator ou appareil réel n'est revendiqué.
