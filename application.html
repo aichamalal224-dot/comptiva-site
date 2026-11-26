@@ -610,7 +610,7 @@ function saveSubscription(){try{localStorage.setItem(SUB_STORE,JSON.stringify(su
 function loadDB(){const empty={clients:[],debts:[],payments:[],sales:[],purchases:[],expenses:[],products:[],auditLog:[],businessProfile:{}};try{const raw=localStorage.getItem(STORE);if(raw===null){window.krediDBStorageIssue=null;return empty}const parsed=JSON.parse(raw);const shapeIssue=krediDatabaseShapeIssue(parsed);if(shapeIssue)throw new Error('invalid-local-database:'+shapeIssue);window.krediDBStorageIssue=null;return parsed}catch(e){let backupSaved=false;try{const raw=localStorage.getItem(STORE);if(raw!==null){const backupKey=STORE+'_corrupt_backup_'+Date.now();localStorage.setItem(backupKey,raw);backupSaved=localStorage.getItem(backupKey)===raw}}catch(backupError){console.error('[COMPTIVA] Copie de secours des données locales impossible :',backupError)}window.krediDBStorageIssue={store:STORE,backupSaved:backupSaved,error:e&&e.message?e.message:String(e)};console.error('[COMPTIVA] Base locale illisible : aucune écriture ni synchronisation ne doit la remplacer.',e);return empty}}
 if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients=[];if(!Array.isArray(db.debts))db.debts=[];if(!Array.isArray(db.payments))db.payments=[];if(!Array.isArray(db.purchases))db.purchases=[];if(!Array.isArray(db.expenses))db.expenses=[];if(!Array.isArray(db.products))db.products=[];if(!Array.isArray(db.auditLog))db.auditLog=[];
 function krediExpectedStoreForUser(user){return user&&user.uid?'comptiva_user_v1_'+user.uid:'comptiva_guest_v1'}
-function krediStoreMatchesActiveUser(){return STORE===krediExpectedStoreForUser(krediUser)}
+function krediStoreMatchesActiveUser(){const currentAuthUser=krediAuth&&krediAuth.currentUser;return STORE===krediExpectedStoreForUser(krediUser)&&(krediUser?!!currentAuthUser&&currentAuthUser.uid===krediUser.uid:!currentAuthUser)}
 // Métadonnées d'auteur pour les nouvelles opérations. Les anciennes lignes restent inchangées : aucun auteur historique n'est inventé.
 function krediActorStamp(){const user=krediUser||null;const uid=user&&user.uid?String(user.uid):'';const name=String(user&&user.displayName||user&&user.email&&user.email.split('@')[0]||'Commerçant').trim();const at=new Date().toISOString();return{createdByUid:uid,createdByName:name||'Commerçant',createdAt:at,updatedAt:at}}
 // Pré-contrôle non destructif : prépare la migration multi-boutiques sans écrire dans Firestore ni modifier la base.
@@ -2695,7 +2695,7 @@ async function krediInitFirebase(){try{
     if(krediPresenceMembersUnsub){krediPresenceMembersUnsub();krediPresenceMembersUnsub=null}
     if(krediPresenceDataUnsub){krediPresenceDataUnsub();krediPresenceDataUnsub=null}
     if(krediPresenceRenderTimer){clearInterval(krediPresenceRenderTimer);krediPresenceRenderTimer=null}
-    const isCurrentSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===activeUser?.uid&&STORE===(activeUser?'comptiva_user_v1_'+activeUser.uid:'comptiva_guest_v1');
+    const isCurrentSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===activeUser?.uid&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===activeUser?.uid&&STORE===(activeUser?'comptiva_user_v1_'+activeUser.uid:'comptiva_guest_v1');
     if(krediSaveTimer){clearTimeout(krediSaveTimer);krediSaveTimer=null}krediUser=activeUser;krediCloudReady=false;krediServerReady=false;krediSubscriptionAccess=activeUser&&krediIsCreator()?'active':'checking';krediSubscriptionEndMillis=0;krediNeedsSubscriptionRecheck=!!(activeUser&&!navigator.onLine);clearTimeout(window.krediSubscriptionExpiryTimer);
     // Le bouton de récupération est lié au compte actuellement connecté :
     // le masquer immédiatement lors d'une déconnexion ou d'un changement de compte.
@@ -2831,7 +2831,7 @@ async function krediInitFirebase(){try{
   });
   window.addEventListener('online',async()=>{
     const uid=krediUser&&krediUser.uid,sessionEpoch=krediSessionEpoch;if(!uid)return;
-    const isCurrentNetworkSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStoreMatchesActiveUser();
+    const isCurrentNetworkSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===uid&&krediStoreMatchesActiveUser();
     krediStatus('Internet revenu. Vérification de l’abonnement avant toute synchronisation…');
     if(!krediIsCreator()){
       const allowed=await krediLoadMerchantSubscription();
@@ -2914,7 +2914,7 @@ function krediQueueCloudSave(){
   if(!krediIsCreator()&&!krediCanUseMerchantApp()){krediStatus('Abonnement non actif : aucune modification commerciale ne sera synchronisée. Vos données existantes sont conservées.');return}
   const uid=krediUser.uid,sessionEpoch=krediSessionEpoch,expectedStore='comptiva_user_v1_'+uid;
   if(krediCloudConflictUid===uid){krediShowConflictRecoveryButton();krediCloudReady=false;krediLocalDirty=true;krediStatus('Synchronisation suspendue pour ce compte : conflit entre appareils. Vos modifications locales sont conservées ; aucune nouvelle écriture automatique ne sera tentée.');return}
-  const isCurrentSaveSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&STORE===expectedStore;
+  const isCurrentSaveSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===uid&&STORE===expectedStore;
   krediLocalDirty=true;
   if(!krediSafeStorageSet('comptiva_pending_'+uid,'1')){
     krediCloudReady=false;
