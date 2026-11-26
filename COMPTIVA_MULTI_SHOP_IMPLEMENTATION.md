@@ -3165,3 +3165,12 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Ces protections conservent l'historique existant et privilégient le blocage plutôt qu'une modification ambiguë. Elles restent des contrôles applicatifs locaux : elles ne rendent pas les écritures atomiques entre plusieurs appareils et ne remplacent pas une transaction cloud côté serveur.
 - Vérifications réalisées : relecture du fichier après écriture ; compilation JavaScript des trois blocs script ; compilation isolée des fonctions d'annulation de dette, de vente et de remboursement.
 - Vérifications non réalisées : navigateur, impression réelle, Firebase Emulator, comptes Firebase réels, concurrence multi-appareils, données corrompues et déploiement.
+
+
+### Audit des ventes encaissées et de la preuve de remboursement client — 26 novembre 2026
+- Constat : l'application ne contient pas encore de registre distinct de remboursement client lié à une vente annulée. Les paiements mixtes ne disposent donc pas d'une preuve de restitution séparée par moyen de paiement.
+- Correction de sécurité : `cancelSale()` valide désormais les montants de la vente avant mutation et bloque l'annulation si une partie a déjà été encaissée (`paidAmount > 0`). Les ventes à crédit intégral sans encaissement initial peuvent continuer dans le flux d'annulation existant, sous réserve des contrôles de dette et de stock.
+- Le blocage évite qu'une vente encaissée soit exclue des indicateurs sans qu'un remboursement réel soit enregistré et traçable. Il ne prétend pas enregistrer ni effectuer un remboursement.
+- Évolution nécessaire avant d'autoriser ces annulations : registre indépendant et append-only des remboursements clients, relié à la vente, avec montant total, date, motif, acteur, référence externe et ventilation des moyens (espèces / Orange Money / Mobile Money), contrôles de plafonds cumulés et affichage distinct du chiffre d'affaires et des sorties de trésorerie. La vente ne doit être marquée annulée qu'après preuve/confirmation du remboursement, avec écriture atomique et historique conservé.
+- Vérifications réalisées : relecture du fichier après écriture ; compilation de `cancelSale()` et des trois blocs `<script>` ; contrôle statique que le blocage intervient avant toute mutation de la vente ou du stock.
+- Vérifications non réalisées : scénario navigateur, remboursement réel, impression, Firebase Emulator, synchronisation multi-appareils, migration et déploiement.
