@@ -2840,3 +2840,12 @@ L'audit a identifié une fenêtre de course : Firebase peut déjà avoir changé
 Cette barrière bloque les opérations locales et cloud dès que l'identité Auth courante ne correspond plus à l'identité applicative, même avant la fin du rappel de transition. Elle ne peut pas annuler une écriture Firestore déjà envoyée au serveur ; les règles Firestore restent indispensables.
 
 Vérifications prévues après modification : compilation des trois scripts intégrés, recherche des gardes modifiées et comparaison de la branche avec `main`. Aucun test navigateur, appareil, Firebase Emulator, compte réel, ni déploiement n'est couvert par cette correction.
+
+
+### Marqueur durable avant déconnexion avec synchronisation non confirmée — 26 novembre 2026
+
+L'audit de `krediSignOut()` a relevé qu'une déconnexion pouvait être considérée comme risquée (modifications locales, sauvegarde différée/en cours, synchronisation cloud non confirmée) sans garantir que le marqueur `comptiva_pending_{uid}` soit présent. Or ce marqueur permet à la prochaine session du même compte de traiter la base locale comme des données en attente et d'appliquer les protections de conflit au lieu de considérer trop tôt la copie cloud comme seule référence.
+
+Avant la déconnexion, l'application tente maintenant d'écrire durablement ce marqueur lorsque `cloudPending` est vrai. Si l'écriture échoue, elle affiche un avertissement distinct demandant de ne pas changer de compte sur cet appareil et de faire une copie de récupération avant reprise. La copie locale de la base reste effectuée avant l'appel à Firebase Auth, comme auparavant. Cette correction ne garantit pas que le serveur ait reçu les opérations ; elle préserve explicitement leur état d'attente pour la prochaine connexion lorsque le stockage local accepte l'écriture.
+
+Contrôles statiques : présence du marqueur avant `signOut()`, message d'avertissement adapté à l'échec du marqueur et compilation des trois scripts intégrés. Aucun test réel navigateur, stockage saturé, Firebase Emulator ou compte Firebase n'a été effectué.
