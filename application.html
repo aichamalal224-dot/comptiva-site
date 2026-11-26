@@ -1415,10 +1415,10 @@ function printDebtStatement(id,isDuplicate=false){
  w.document.close()
 }
 function renderPayments(){
- const paymentIds=new Set(),rows=db.payments.slice().reverse().map(p=>{
+ const paymentCounts=new Map();db.payments.forEach(p=>{if(p&&p.id){const key=String(p.id);paymentCounts.set(key,(paymentCounts.get(key)||0)+1)}});
+ const rows=db.payments.slice().reverse().map(p=>{
   if(!p||typeof p!=='object')return '<tr><td>Enregistrement invalide</td><td>À vérifier</td><td>À vérifier</td><td>—</td><td>—</td><td>Actions suspendues</td></tr>';
-  const idKey=String(p.id||''),duplicatePayment=!idKey||paymentIds.has(idKey);
-  if(idKey)paymentIds.add(idKey);
+  const idKey=String(p.id||''),duplicatePayment=!idKey||paymentCounts.get(idKey)!==1;
   const debtMatches=db.debts.filter(d=>d&&d.id===p.debtId),debt=debtMatches.length===1?debtMatches[0]:null;
   const cancelled=p.status==='cancelled';
   const paymentValid=!!p.id&&isValidISODate(p.date)&&Number.isSafeInteger(p.amount)&&p.amount>0;
