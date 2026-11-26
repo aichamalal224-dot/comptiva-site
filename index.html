@@ -820,7 +820,9 @@ function krediQueueCloudSave(){
       krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
     }finally{
       krediSaveInFlight=false;
-      if(krediUser&&krediUser.uid===uid&&krediLocalDirty&&navigator.onLine){clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),3000)}
+      // Une écriture de l'ancien compte peut se terminer après un changement de session.
+      // Relancer uniquement la file du compte actuellement actif ; son UID est relu par krediQueueCloudSave().
+      if(krediUser&&krediLocalDirty&&navigator.onLine){clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),3000)}
     }
   },650);
 }
