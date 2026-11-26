@@ -1273,3 +1273,20 @@ Ne pas activer une migration partielle des présences vers des sessions avant de
 - Vérifications prévues dans cette passe : relecture du fichier modifié, compilation des trois blocs JavaScript, contrôle statique du nouveau chemin et comparaison avec `main`.
 - Aucun test Firebase Emulator, navigateur, appareil réel ou compte réel ; aucun déploiement, aucune migration et aucune publication.
 - `main` reste intacte.
+
+
+## Audit complémentaire — cycle de vie de présence et verrouillage — 26 novembre 2026
+
+### Comportements confirmés par lecture du code
+- Le verrouillage après 2 minutes d'inactivité conserve la session Firebase : il ne s'agit pas d'une déconnexion du compte.
+- Pendant le verrouillage, le heartbeat de présence ne transmet plus de signal, car l'envoi vérifie l'état verrouillé. Le statut distant passe donc à `Hors ligne` après 3 minutes sans signal serveur.
+- Après réauthentification réussie au déverrouillage, le code relance le suivi de présence et reprogramme le verrouillage d'inactivité.
+- Le retour d'Internet vérifie l'abonnement du commerçant avant de reprendre la synchronisation, puis relance le suivi de présence. La perte d'Internet arrête le heartbeat local ; le statut distant dépend du vieillissement du dernier signal serveur.
+- Les callbacks du suivi du Patron vérifient l'UID, l'époque de session et la boutique active avant de modifier l'interface ; les écouteurs sont retirés lors de l'arrêt du suivi.
+- Le suivi du Patron côté vendeur lit uniquement le document de présence du Patron affecté. Les règles Firestore inspectées limitent également le `get` du vendeur au Patron indiqué dans les données de la boutique et réservent le `list` des présences au Patron.
+
+### Limites et tests encore nécessaires
+- Ces conclusions sont des vérifications statiques du code et des règles ; elles ne prouvent pas le comportement réel du SDK Firebase dans un navigateur ou sur plusieurs appareils.
+- Le document parent `presence/{uid}` reste partagé entre tous les onglets/appareils d'un même compte. Un appareil qui se déconnecte peut donc encore écraser l'état d'un autre appareil actif. C'est la priorité de correction suivante : sessions individuelles sous `presence/{uid}/sessions/{sessionId}`.
+- Les scénarios à tester sur Firebase Emulator puis sur appareils réels restent : verrouillage/déverrouillage, onglet masqué puis visible, coupure réseau, reconnexion, déconnexion refusée, changement de compte pendant une écriture, deux appareils simultanés, et vérification qu'un vendeur ne peut lire aucune présence d'un autre vendeur.
+- Aucun test Emulator, navigateur, appareil réel, ni compte Firebase réel n'a été exécuté dans cet audit. Aucun changement des règles Firestore n'a été fait dans cette passe.
