@@ -3238,3 +3238,11 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 - Contrôle complémentaire de la modification d'une vente : le registre global est également requis dès qu'une dette active est liée, même si la vente est transformée en vente payée. Les identifiants d'audit de la vente et, le cas échéant, du mouvement de stock sont préalloués, distincts et vérifiés avant toute mutation.
 - Vérifications réalisées : relecture du fichier après chaque écriture ; contrôles statiques des garde-fous et compilation JavaScript des blocs script.
 - Vérifications non réalisées : scénario fonctionnel dans un navigateur/appareil, jeux de données réelles ou corrompues, paiements partiels réels, Firebase Emulator, synchronisation/concurrence multi-appareils et déploiement. Aucune règle Firestore, donnée métier, migration, fusion, publication ou branche main n'a été modifiée.
+
+
+### Audit des remboursements partiels et de l’intégrité des identifiants historiques — 26 novembre 2026
+- `reportDebtLedger()` vérifie désormais l’unicité et la présence des identifiants de toutes les dettes et de tous les remboursements, y compris les entrées annulées conservées dans l’historique. Une collision d’identifiant historique bloque les opérations sur le registre au lieu de laisser une sélection ambiguë.
+- La modification d’un remboursement exige désormais la cohérence préalable du registre global, comme les autres opérations sensibles sur les dettes et paiements.
+- Les remboursements annulés restent exclus du calcul des soldes et des totaux encaissés de la période ; leur identifiant demeure toutefois soumis à l’unicité historique.
+- Vérifications réalisées : relecture après écriture, contrôles statiques des nouveaux garde-fous et compilation JavaScript des trois blocs script.
+- Vérifications non réalisées : scénarios navigateur/appareil, données de production, tests Firebase Emulator, concurrence multi-appareils, synchronisation réelle et déploiement. Aucune règle Firestore, donnée métier, migration, fusion, publication ou branche `main` n’a été modifiée.
