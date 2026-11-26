@@ -3072,3 +3072,13 @@ Cette mesure **ne constitue pas encore un système de suppression synchronisée*
 **Règle de protection retenue :** ne pas supprimer physiquement un client, produit, vente, dette ou remboursement tant que les dépendances et l'historique ne sont pas vérifiés. La correction durable devra privilégier l'archivage/désactivation, conserver les identifiants et les reçus, et empêcher la suppression d'une fiche encore référencée. Les ventes annulées et les remboursements réels doivent rester des événements financiers distincts.
 
 **Tests :** relecture du code et de la documentation uniquement pour cet audit. Aucun test fonctionnel de suppression, aucune base réelle, aucun émulateur Firebase ni appareil secondaire n'a été utilisé. Aucun changement de règles Firestore, migration, publication ou déploiement.
+
+### Garde-fou d'affichage des dettes incohérentes — 26 novembre 2026
+
+**Constat :** le calcul du solde renvoie déjà une valeur non exploitable (NaN) lorsqu'un montant, un remboursement ou un total est incohérent. Toutefois, l'ancien rendu du statut testait uniquement « solde inférieur ou égal à zéro » puis affichait par défaut « En cours ». En JavaScript, les comparaisons avec NaN sont fausses : une dette dont le solde ne pouvait pas être calculé pouvait donc apparaître comme normalement « En cours », même si les colonnes de montant affichaient « À vérifier ».
+
+**Correction appliquée dans application.html :** le statut d'une dette affiche maintenant « À vérifier » si sa relation client/vente est invalide, si son solde n'est pas un entier sûr ou si le solde est négatif. Le statut « Soldé » n'est attribué qu'à un solde exactement égal à zéro. Les statuts « En retard » et « En cours » ne sont affichés qu'après ces contrôles.
+
+**Portée et limites :** correction d'affichage uniquement ; aucun montant, remboursement, statut métier ou historique n'est modifié. Le registre des rapports avait déjà son propre contrôle strict et renvoie un résultat non exploitable en cas d'incohérence. Le tableau de bord global doit encore être audité pour s'assurer qu'il signale explicitement les dettes invalides au lieu de les omettre des agrégats.
+
+**Vérifications :** relecture du code et compilation statique des trois blocs JavaScript après modification ; relecture de la documentation après commit et comparaison de la branche avec main. Aucun test fonctionnel navigateur/appareil, Firebase Emulator, compte réel ou scénario de remboursement n'a été exécuté. Aucune règle Firestore, migration, donnée métier, fusion, publication ou déploiement n'a été modifié ; main reste intacte.
