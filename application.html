@@ -2634,7 +2634,8 @@ async function krediInitFirebase(){try{
     overlay.appendChild(panel);document.body.appendChild(overlay);krediIdleOverlay=overlay;
     panel.addEventListener('submit',async event=>{
       event.preventDefault();if(krediIdleUnlockBusy)return;
-      const currentUser=krediUser,uid=currentUser&&currentUser.uid,password=panel.querySelector('#comptivaIdlePassword').value;
+      const currentUser=krediUser,uid=currentUser&&currentUser.uid,sessionEpoch=krediSessionEpoch,password=panel.querySelector('#comptivaIdlePassword').value;
+       const isCurrentUnlock=()=>krediSessionEpoch===sessionEpoch&&!!uid&&!!krediUser&&krediUser.uid===uid&&!!krediAuth&&!!krediAuth.currentUser&&krediAuth.currentUser.uid===uid&&krediIdleLocked;
       const message=panel.querySelector('#comptivaIdleMessage'),button=panel.querySelector('#comptivaIdleUnlock');
       if(!currentUser||!uid||!password){message.textContent='Saisissez votre mot de passe.';return}
       if(!currentUser.email||!firebase.auth.EmailAuthProvider){message.textContent='Ce compte ne permet pas ce mode de déverrouillage. Contactez le Créateur pour assistance.';return}
@@ -2642,9 +2643,10 @@ async function krediInitFirebase(){try{
       try{
         const credential=firebase.auth.EmailAuthProvider.credential(currentUser.email,password);
         await currentUser.reauthenticateWithCredential(credential);
-        if(!krediUser||krediUser.uid!==uid)return;
+        if(!isCurrentUnlock())return;
         krediIdleHideOverlay();krediIdleSchedule();krediRecheckSubscriptionOnResume();krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Reprise de présence après déverrouillage impossible.',error));
       }catch(error){
+        if(!isCurrentUnlock())return;
         message.textContent='Mot de passe incorrect ou vérification impossible. Réessayez.';
         panel.querySelector('#comptivaIdlePassword').value='';krediIdleUnlockBusy=false;button.disabled=false;button.textContent='Déverrouiller';panel.querySelector('#comptivaIdlePassword').focus();
       }
@@ -2828,13 +2830,15 @@ async function krediInitFirebase(){try{
     krediShowDiagnostic(err,'ERREUR AUTHENTICATION');
   });
   window.addEventListener('online',async()=>{
-    const uid=krediUser&&krediUser.uid;if(!uid)return;
+    const uid=krediUser&&krediUser.uid,sessionEpoch=krediSessionEpoch;if(!uid)return;
+    const isCurrentNetworkSession=()=>krediSessionEpoch===sessionEpoch&&!!krediUser&&krediUser.uid===uid&&krediStoreMatchesActiveUser();
     krediStatus('Internet revenu. Vérification de l’abonnement avant toute synchronisation…');
     if(!krediIsCreator()){
       const allowed=await krediLoadMerchantSubscription();
-      if(!krediUser||krediUser.uid!==uid||!allowed){krediStatus('Synchronisation suspendue : abonnement non confirmé par le serveur. Les données locales sont conservées.');return}
+      if(!isCurrentNetworkSession())return;
+      if(!allowed){krediStatus('Synchronisation suspendue : abonnement non confirmé par le serveur. Les données locales sont conservées.');return}
     }
-    if(!krediUser||krediUser.uid!==uid||!krediStoreMatchesActiveUser())return;
+    if(!isCurrentNetworkSession())return;
     krediNeedsSubscriptionRecheck=false;clearTimeout(krediSaveTimer);krediQueueCloudSave();
     krediStartSellerPresence().catch(error=>console.warn('[COMPTIVA] Reprise de présence après reconnexion impossible.',error));
   });
