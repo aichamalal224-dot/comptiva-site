@@ -969,3 +969,34 @@ La prochaine implémentation doit former un seul ensemble cohérent :
 - Vérification statique du précontrôle des deux documents, de la concordance des champs et du retour arrière après échec de l'index.
 - Compilation des trois blocs JavaScript de `application.html` après relecture : 3/3 réussie.
 - Aucun test Firebase Emulator ou compte réel dans cette passe ; aucune règle Firestore ni donnée réelle modifiée ; aucun déploiement ; `main` intacte.
+
+
+## Audit et correction des sessions Firebase et de la présence vendeur — 26 novembre 2026
+
+### Risque identifié
+
+Une initialisation asynchrone d'un compte pouvait se poursuivre après que l'utilisateur avait changé de compte ou s'était déconnecté. En particulier, la lecture de l'abonnement pouvait se terminer tardivement, puis l'ancien callback pouvait encore demander le démarrage du suivi de présence.
+
+### Correction applicative
+
+- Le callback d'authentification vérifie de nouveau son jeton de session (isCurrentSession) immédiatement après l'attente de la vérification d'abonnement, avant de démarrer la présence.
+- Les erreurs de démarrage de présence ne sont journalisées que si le callback appartient toujours à la session courante.
+- krediStartSellerPresence capture UID, instance Firestore et epoch de session dès son entrée.
+- Après chaque lecture serveur asynchrone, la fonction vérifie que l'UID, l'instance Firestore et l'epoch sont toujours ceux de la session qui l'a lancée.
+- Le suivi vendeur exige une résolution de rôle confirmée et le même shopId ; une présence ancienne ne peut pas installer un heartbeat après changement de session.
+- Les lectures de boutique Patron vérifient aussi ownerUid et patronUid.
+- Le heartbeat vérifie la session avant chaque écriture et ne se programme que si la session reste valide après le premier signal.
+
+### Limites restantes
+
+- Cette correction protège l'initialisation et les écritures de présence côté client, mais ne remplace pas les règles Firestore ni un contrôle serveur de chaque opération métier.
+- Une présence déjà écrite peut rester visible jusqu'à expiration de sa fenêtre d'affichage si le navigateur est fermé brutalement ; le heartbeat s'arrête au prochain nettoyage local, mais aucune suppression serveur immédiate n'est garantie.
+- L'authentification Firebase et la vérification d'abonnement ont été inspectées statiquement. Aucun test multi-compte réel, navigateur, Android/iOS, ni test Firebase Emulator n'a été exécuté dans cette passe.
+- La déconnexion explicite continue de conserver les données locales et avertit lorsque la synchronisation n'est pas confirmée. Aucun changement au mécanisme de sauvegarde/déconnexion n'a été introduit ici.
+
+### Vérifications après correction
+
+- Compilation des trois blocs JavaScript de application.html : à confirmer après relecture du fichier final.
+- Règles Firestore non modifiées.
+- Aucun compte réel, aucune donnée réelle, aucune migration et aucun déploiement modifiés.
+- Branche de travail uniquement ; main reste intacte.
