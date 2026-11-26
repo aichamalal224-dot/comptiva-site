@@ -2944,3 +2944,25 @@ L'examen de `cancelSale()`, des mouvements de stock et des écritures de caisse 
 **Autres contrôles constatés :** la correction d'une vente avec stock ajuste la quantité et journalise l'écart ; elle bloque le changement de nom du produit lié au stock. La correction d'une vente à crédit refuse les dettes liées ayant déjà reçu des remboursements actifs ou incohérents. Ces contrôles restent des protections côté application locale : le journal local n'est pas une preuve inviolable et les règles Firestore multi-boutiques ne gouvernent pas encore les écritures commerciales quotidiennes.
 
 **Vérifications :** lecture de `editSale()`, `cancelSale()`, des mouvements de stock et de `krediStockConsistencyAudit()`. Compilation statique des blocs JavaScript intégrés et comparaison de branche à effectuer après l'enregistrement de cette note. Aucun test navigateur, appareil, Firebase Emulator, compte réel ou remboursement réel n'est revendiqué. Aucun changement des règles Firestore, aucune migration, aucun déploiement ni publication ; `main` reste intacte.
+
+
+### Audit des achats et de la cohérence chronologique des mouvements de stock — 26 novembre 2026
+
+**Contrôles examinés :** enregistrement d'un achat, `editPurchase()`, `cancelPurchase()`, création/modification des produits et `krediStockConsistencyAudit()`.
+
+**Protections constatées :**
+- Les achats sont réservés au Patron dans l'interface ; montant entier positif, quantité non négative et date validée par le contrôle commun du formulaire.
+- Un achat augmente le stock uniquement si le nom correspond à un produit existant ; l'écriture enregistre le produit lié, l'heure, la quantité et les valeurs avant/après.
+- La correction exige une preuve unique de l'ajout initial lorsque l'achat avait déjà augmenté le stock. Elle conserve le lien produit, refuse de renommer l'article lié, calcule l'écart entre ancienne et nouvelle quantité et bloque un stock négatif.
+- L'annulation exige une preuve unique de l'ajout initial pour les achats liés, refuse un retrait qui rendrait le stock négatif, marque l'achat annulé et ajoute un mouvement de retrait. Une seconde annulation est refusée.
+- Les achats historiques sans lien fiable avec un produit ne déclenchent pas de correction automatique du stock ; c'est une précaution utile contre les rapprochements hasardeux.
+
+**Limites et risques restants :**
+1. Le contrôle de cohérence vérifie l'arithmétique individuelle de nombreux mouvements (avant + quantité, ou avant + delta = après), mais ne vérifie pas encore systématiquement que le `after` d'un mouvement est égal au `before` du mouvement suivant pour un même produit, dans l'ordre chronologique. Une suite de mouvements localement cohérents mais discontinus peut donc échapper au contrôle.
+2. Le contrôle vérifie les achats à partir de leurs mouvements attendus, mais il ne vérifie pas systématiquement, dans le sens inverse, que chaque mouvement d'achat ou d'annulation référence un achat existant et cohérent. Un mouvement orphelin peut ne pas être détecté par les vérifications centrées sur les achats.
+3. Le stock courant est contrôlé pour être numérique et non négatif, mais il n'est pas recalculé à partir d'un solde d'ouverture fiable et de l'intégralité du journal. Les stocks historiques ou les ajustements manuels non journalisés empêchent de certifier un solde global uniquement à partir des traces actuelles.
+4. L'annulation d'un achat retire la quantité du stock courant si le solde le permet. Cela maintient une quantité totale non négative, mais ne constitue pas une preuve physique que les unités provenant de cet achat sont encore présentes ; le stock étant fongible, un contrôle d'inventaire reste nécessaire.
+
+**Décision de correction :** aucune modification fonctionnelle ou des règles Firestore n'est faite dans cette étape. Avant de renforcer le vérificateur, il faut définir comment ordonner les mouvements (horodatage serveur, séquence monotone ou identifiant d'opération), comment traiter les égalités d'horodatage, les corrections manuelles et les anciens historiques incomplets. Sans cette base, une règle de continuité naïve pourrait signaler de fausses anomalies ou valider un ordre incorrect. Ajouter ensuite un contrôle bidirectionnel des références (mouvement vers achat/vente, achat/vente vers mouvements), un rapprochement par produit à partir d'un solde d'ouverture explicite, et une procédure d'inventaire physique documentée.
+
+**Portée et tests :** audit statique du code de formulaire achat, des fonctions de modification/annulation et du vérificateur de stock. Ces protections sont côté application locale ; elles ne rendent pas le journal inviolable et ne remplacent pas les règles serveur. Compilation statique et relecture du document après commit ; aucun test de scénario dans navigateur/appareil, Firebase Emulator, compte réel ou inventaire physique n'est revendiqué. Aucune donnée métier n'a été modifiée ; aucune règle Firestore, migration, fusion, publication ou déploiement n'a été effectué ; `main` reste intacte.
