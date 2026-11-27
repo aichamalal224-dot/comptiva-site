@@ -570,4 +570,4 @@ assert.equal(validateAuditEvent(bundle, 'owner-1',
   '2026-11-28T11:00:30.000Z').valid, true,
   'owner expense event is accepted');
 
-console.log('PASS: 145 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+console.log('PASS: 144 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
