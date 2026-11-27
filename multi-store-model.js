@@ -930,6 +930,73 @@ function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMo
   };
 }
 
+
+/**
+ * Validate a seller-readable operational record. Financial cost/profit fields
+ * are forbidden at every nesting level; this is a schema guard, not access control.
+ */
+function validateSellerOperationalRecord(record) {
+  if (!isRecord(record)) return { valid: false, reason: 'record_not_object' };
+  const forbidden = new Set([
+    'purchaseprice', 'purchasecost', 'unitpurchaseprice', 'buyprice', 'buyingprice',
+    'unitcost', 'costperunit', 'costprice', 'suppliercost', 'costamount',
+    'cost', 'costtotal', 'totalcost', 'costsnapshot', 'averagecost', 'lastpurchaseprice', 'stockcost',
+    'margin', 'profitmargin', 'grossmargin', 'netmargin', 'profit', 'profitamount',
+    'grossprofit', 'netprofit', 'inventoryvalue', 'stockvalue', 'financials'
+  ]);
+  const found = [];
+  const visited = new Set();
+  function inspect(value, path) {
+    if (value === null || typeof value !== 'object') return;
+    if (visited.has(value)) { found.push(path || '<root>'); return; }
+    visited.add(value);
+    for (const [key, child] of Object.entries(value)) {
+      const normalized = key.toLowerCase().replace(/[_-]/g, '');
+      const childPath = path ? path + '.' + key : key;
+      if (forbidden.has(normalized)) found.push(childPath);
+      else inspect(child, childPath);
+    }
+    visited.delete(value);
+  }
+  inspect(record, '');
+  return found.length
+    ? { valid: false, reason: 'sensitive_financial_fields_present', fields: found }
+    : { valid: true, reason: 'seller_record_schema_safe' };
+}
+
+function projectSellerRecord(record, allowedFields) {
+  if (!isRecord(record)) return null;
+  const safe = {};
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(record, field)) safe[field] = record[field];
+  }
+  return safe;
+}
+
+// Sales, debts and repayments expose only fields required for store operations.
+// Profit, cost, supplier and internal financial-analysis fields are never projected.
+function projectSellerSale(sale) {
+  return projectSellerRecord(sale, [
+    'id', 'organizationId', 'storeId', 'product', 'productId', 'quantity',
+    'unitPrice', 'total', 'date', 'saleType', 'clientId', 'method',
+    'paidAmount', 'creditAmount', 'cashPart', 'mobilePart', 'createdBy', 'createdAt'
+  ]);
+}
+
+function projectSellerDebt(debt) {
+  return projectSellerRecord(debt, [
+    'id', 'organizationId', 'storeId', 'clientId', 'saleId', 'amount',
+    'total', 'paidAmount', 'remaining', 'status', 'date', 'createdBy', 'createdAt'
+  ]);
+}
+
+function projectSellerPayment(payment) {
+  return projectSellerRecord(payment, [
+    'id', 'organizationId', 'storeId', 'debtId', 'clientId', 'amount',
+    'method', 'date', 'createdBy', 'createdAt', 'idempotencyKey'
+  ]);
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -955,7 +1022,11 @@ const api = {
   validateAuditEvent,
   validateStockAdjustment,
   projectSellerProduct,
-  validateSellerOperationalProduct
+  validateSellerOperationalProduct,
+  validateSellerOperationalRecord,
+  projectSellerSale,
+  projectSellerDebt,
+  projectSellerPayment
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
