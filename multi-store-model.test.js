@@ -10,7 +10,7 @@ const {
   projectSellerProduct
 } = require('./multi-store-model');
 
-const bundle = {
+const modelAcceptance = require('./multi-store-model').validateSellerInvitationAcceptance;\nconst modelRevoke = require('./multi-store-model').validateSellerInvitationRevocation;\n\nconst bundle = {
   organization: { id: 'org-1', ownerUid: 'owner-1', status: 'active' },
   stores: [
     { id: 'store-A', organizationId: 'org-1', status: 'active' },
@@ -213,4 +213,32 @@ assert.equal(sellerProductView.salePrice, 50000, 'seller retains customer-facing
 assert.equal(sellerProductView.quantity, 12, 'seller retains assigned-store stock quantity');
 assert.equal(projectSellerProduct(null), null, 'invalid product projection rejected');
 
-console.log('PASS: 61 multi-store model, permission, provenance, invitation and seller-data projection assertions');
+
+const acceptanceInvite = { ...validInvite, tokenHash: 'sha256:example-hash' };
+assert.equal(modelAcceptance(bundle, acceptanceInvite, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').valid, true,
+  'matching authenticated identity and token can accept pending invitation');
+assert.equal(modelAcceptance(bundle, acceptanceInvite, {
+  uid: 'seller-new', email: 'attacker@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').valid, false,
+  'different authenticated email cannot accept invitation');
+assert.equal(modelAcceptance(bundle, acceptanceInvite, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'wrong-hash', '2026-11-27T14:00:00.000Z').valid, false,
+  'wrong one-time token hash is rejected');
+assert.equal(modelAcceptance(bundle, acceptanceInvite, {
+  uid: 'seller-A', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').valid, false,
+  'existing member cannot accept another invitation as a new member');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, status: 'revoked' }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').valid, false,
+  'revoked invitation cannot be accepted');
+assert.equal(modelRevoke(bundle, 'owner-1', validInvite).valid, true,
+  'owner can revoke pending invitation');
+assert.equal(modelRevoke(bundle, 'seller-A', validInvite).valid, false,
+  'seller cannot revoke invitation');
+assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, status: 'accepted' }).valid, false,
+  'accepted invitation cannot be revoked as pending');
+\nconsole.log('PASS: 69 multi-store model, permission, provenance, invitation lifecycle and seller-data projection assertions');
