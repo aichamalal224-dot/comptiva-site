@@ -780,6 +780,11 @@ async function krediInitFirebase(){try{
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
+      const restoreReplaceKey='comptiva_restore_replace_'+activeUid;
+      let restoreReplacePending=false;
+      try{restoreReplacePending=localStorage.getItem(restoreReplaceKey)==='1'}
+      catch(markerReadError){krediCloudReady=false;krediStatus('Remplacement distant suspendu : impossible de lire le marqueur de restauration. Les données locales sont conservées.');console.error('[COMPTIVA] Lecture du marqueur de restauration impossible.',markerReadError);return}
+      if(restoreReplacePending){await krediTryRestoreReplacement(activeUid,ref);return}
       const remoteDataRaw=snap.exists&&snap.data()?snap.data().db:krediEmptyDB();
       let remoteStructureValid=true;try{krediValidateDBRows(remoteDataRaw)}catch(validationError){remoteStructureValid=false;console.error('[COMPTIVA] Enregistrements distants invalides.',validationError)}if(!remoteStructureValid){
         krediRemoteWriteBlockedUid=activeUid;krediCloudReady=false;
@@ -792,9 +797,6 @@ async function krediInitFirebase(){try{
       const remoteData=remoteDataRaw;
       const localData=loadDB();
       if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : la lecture locale a détecté des données illisibles. Aucune fusion ni écriture distante ne sera effectuée.');return}
-      const restoreReplaceKey='comptiva_restore_replace_'+activeUid;
-      let restoreReplacePending=false;try{restoreReplacePending=localStorage.getItem(restoreReplaceKey)==='1'}catch(markerReadError){krediCloudReady=false;krediStatus('Remplacement distant suspendu : impossible de lire le marqueur de restauration. Les données locales sont conservées.');console.error('[COMPTIVA] Lecture du marqueur de restauration impossible.',markerReadError);return}
-      if(restoreReplacePending){krediLocalDirty=true;krediMarkPendingSync(activeUid);krediStatus('Restauration détectée · remplacement de la base Firebase en attente…');krediQueueCloudSave();return}
       const hasPending=!!(krediLocalDirty||krediHasPendingSync(activeUid));
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
@@ -825,7 +827,7 @@ async function krediInitFirebase(){try{
     clearTimeout(krediAuthWaitTimer);
     krediShowDiagnostic(err,'ERREUR AUTHENTICATION');
   });
-  window.addEventListener('online',()=>{if(krediUser){krediStatus('Internet revenu. Reprise de la synchronisation…');clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),1200)}});
+  window.addEventListener('online',()=>{if(krediUser){krediStatus('Internet revenu. Reprise de la synchronisation…');clearTimeout(krediSaveTimer);const uid=krediUser.uid,markerKey='comptiva_restore_replace_'+uid;let restoring=false;try{restoring=localStorage.getItem(markerKey)==='1'}catch(markerError){console.warn('[COMPTIVA] Lecture du marqueur de restauration impossible après reconnexion.',markerError)}if(restoring&&krediStore){const restoreRef=krediStore.collection('users').doc(uid).collection('comptivaData').doc('main');krediSaveTimer=setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediTryRestoreReplacement(uid,restoreRef)},1200)}else{krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),1200)}}});
   window.addEventListener('offline',()=>{if(krediUser)krediStatus('Hors connexion · les changements restent sur cet appareil.')});
 }catch(e){
   const detail=(e&&e.code?e.code+' · ':'')+(e&&e.message?e.message:'erreur JavaScript');
@@ -843,6 +845,51 @@ function krediMarkPendingSync(uid){
 function krediClearPendingSync(uid){
   try{const key='comptiva_pending_'+uid;localStorage.removeItem(key);return localStorage.getItem(key)===null}
   catch(storageError){console.warn('[COMPTIVA] Suppression ou vérification du marqueur de synchronisation impossible pour '+uid,storageError);return false}
+}
+async function krediTryRestoreReplacement(uid,ref){
+  if(!krediUser||krediUser.uid!==uid||!ref)return true;
+  const markerKey='comptiva_restore_replace_'+uid;
+  let marker='';
+  try{marker=localStorage.getItem(markerKey)||''}
+  catch(markerError){krediCloudReady=false;krediRemoteWriteBlockedUid=uid;krediStatus('Remplacement suspendu : le marqueur local de restauration est illisible.');console.error('[COMPTIVA] Marqueur de restauration illisible.',markerError);return true}
+  if(marker!=='1')return false;
+  krediRemoteWriteBlockedUid=uid;
+  krediLocalDirty=true;
+  krediMarkPendingSync(uid);
+  if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Remplacement suspendu : les données restaurées sur cet appareil sont illisibles.');return true}
+  if(!navigator.onLine||!krediServerReady){krediCloudReady=false;krediStatus('Restauration conservée sur cet appareil · remplacement Firebase en attente de connexion au serveur.');return true}
+  if(krediSaveInFlight){setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediTryRestoreReplacement(uid,ref)},1200);krediStatus('Restauration en attente : une écriture Firebase déjà engagée doit se terminer.');return true}
+  let localData,payload;
+  try{localData=loadDB();krediValidateDBRows(localData);if(krediHasMissingRowIds(localData))throw new Error('La sauvegarde locale contient des enregistrements sans identifiant stable.');payload=JSON.stringify(localData);if(!krediCloudPayloadWithinLimit(payload))throw new Error('La sauvegarde dépasse la limite de sécurité de 900 Kio pour un document Firebase.')}
+  catch(validationError){krediCloudReady=false;krediStatus('Remplacement Firebase refusé : la sauvegarde locale restaurée doit être vérifiée. Aucune écriture distante n’a été effectuée.');console.error('[COMPTIVA] Validation du remplacement restauré impossible.',validationError);return true}
+  krediSaveInFlight=true;
+  try{
+    await ref.set({db:localData,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    if(!krediUser||krediUser.uid!==uid)return true;
+    const currentData=loadDB();
+    if(JSON.stringify(currentData)!==payload||localStorage.getItem(markerKey)!=='1'){
+      krediLocalDirty=true;krediMarkPendingSync(uid);krediCloudReady=false;
+      krediStatus('Firebase a reçu la sauvegarde, mais des changements locaux sont intervenus. Le marqueur est conservé et une nouvelle vérification est nécessaire.');
+      setTimeout(()=>{if(krediUser&&krediUser.uid===uid)krediTryRestoreReplacement(uid,ref)},1200);
+      return true;
+    }
+    localStorage.removeItem(markerKey);
+    if(localStorage.getItem(markerKey)!==null)throw new Error('Le marqueur de restauration n’a pas pu être effacé après confirmation Firebase.');
+    krediRemoteWriteBlockedUid='';
+    krediLastWrite=payload;
+    const pendingCleared=krediClearPendingSync(uid);
+    krediLocalDirty=!pendingCleared;
+    krediCloudReady=pendingCleared;
+    krediStatus(pendingCleared?'Restauration synchronisée · sauvegarde confirmée sur Firebase':'Sauvegarde confirmée sur Firebase · vérification du marqueur local de synchronisation nécessaire.');
+    renderAll();
+  }catch(writeError){
+    krediRemoteWriteBlockedUid=uid;krediLocalDirty=true;krediMarkPendingSync(uid);krediCloudReady=false;
+    if(krediUser&&krediUser.uid===uid)krediShowDiagnostic(writeError,'REMPLACEMENT APRÈS RESTAURATION users/'+uid+'/comptivaData/main');
+    else console.warn('[COMPTIVA] Échec tardif du remplacement restauré pour un compte inactif.',writeError);
+  }finally{
+    krediSaveInFlight=false;
+  }
+  return true;
 }
 function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE))return;
@@ -877,7 +924,7 @@ function krediQueueCloudSave(){
       if(!krediUser||krediUser.uid!==uid)return;
       krediLastWrite=payload;
       if(JSON.stringify(db)===payload){
-        const pendingCleared=clearPending();krediLocalDirty=false;krediCloudReady=true;try{localStorage.removeItem('comptiva_restore_replace_'+uid)}catch(restoreMarkerError){console.warn('[COMPTIVA] Marqueur de remplacement distant conservé pour '+uid,restoreMarkerError)}
+        const pendingCleared=clearPending();krediLocalDirty=false;krediCloudReady=true
         krediStatus(pendingCleared?'Synchronisation réussie · données sauvegardées sur Firebase':'Données sauvegardées sur Firebase · marqueur local non effacé, vérifiez le stockage de cet appareil');
       }else{
         krediLocalDirty=true;markPending();
