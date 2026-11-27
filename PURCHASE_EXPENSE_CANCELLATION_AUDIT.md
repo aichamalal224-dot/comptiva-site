@@ -53,3 +53,10 @@ Ajout de `validatePurchaseStockReceipt` au prototype isolé. Le contrôle lie ch
 Limite : les achats historiques sans `productId` stable ne peuvent pas utiliser ce parcours de réception de stock. En production, la lecture de l'achat, de l'historique des réceptions et du stock, l'ajout de la réception, l'incrément de stock et la mise à jour du cumul devront être atomiques dans une transaction serveur. Aucune intégration ni écriture réelle n'a été effectuée.
 
 Le contrôle des réceptions vérifie aussi la cohérence minimale des dates et auteurs des réceptions antérieures et bloque un dépassement de la plage entière sûre lors de l'incrément du stock. Deux tests supplémentaires couvrent ces cas.
+
+
+## Complément — retours clients et remise en stock (28 novembre 2026)
+
+Ajout de `validateSaleReturn` et de l'action patron `sales:return`. Le helper vérifie le rattachement à la vente, au produit, au magasin et à l'organisation ; cumule les quantités et valeurs déjà retournées ; borne le remboursement au montant effectivement payé et la réduction de crédit au montant dû ; distingue les unités revendables des unités endommagées ; refuse les doublons, les ventes annulées, les remboursements hors allocation et les retours sur ventes ayant déjà des remboursements de dette. Les ventes à crédit sans remboursement antérieur réduisent le crédit dû au lieu de créer un paiement en espèces. Les vendeurs sont refusés par défaut. Les assertions couvrent retours partiels/finals, article endommagé, crédit client, rejets et overflow. Harnais isolé : **237 assertions**.
+
+Limite : les ventes à crédit avec remboursements antérieurs exigent un flux de remboursement/réduction de dette dédié et restent bloquées. Le montant de retour est fourni par l'opération autorisée ; aucune politique de prorata/remise n'est inventée ici. Le helper ne modifie ni stock ni caisse : le serveur doit exécuter atomiquement retour, remboursement/réduction de dette, stock et journal d'audit.
