@@ -52,3 +52,8 @@ Scénarios couverts : modèle valide, accès patron aux deux magasins, vendeur d
 ## Complément — réception partielle des achats
 
 Le prototype expose désormais `validatePurchaseStockReceipt` pour prévalider les réceptions successives d'un achat lié à un `productId` stable. Le cumul reçu ne peut pas dépasser la quantité commandée ; les IDs et clés d'idempotence sont contrôlés, et le helper calcule le reliquat et le stock théorique après réception. Ce contrôle reste une prévalidation pure : une transaction serveur doit relire les documents, ajouter le mouvement et incrémenter le stock atomiquement. Les achats non liés à un identifiant produit stable ne peuvent pas recevoir du stock par ce chemin.
+
+
+## Retours clients
+
+Le prototype expose `validateSaleReturn` et réserve `sales:return` au patron. Les retours cumulés sont bornés par les quantités et montants de la vente d'origine. Le remboursement d'une vente payée est limité au montant encaissé ; un retour sur vente à crédit sans remboursement antérieur réduit le crédit dû. Les quantités revendables et endommagées sont distinguées afin de ne remettre en stock que les unités revendables. Les ventes déjà remboursées via des règlements de dette sont bloquées jusqu'à un workflow spécifique. Toute écriture réelle doit être atomique côté serveur.
