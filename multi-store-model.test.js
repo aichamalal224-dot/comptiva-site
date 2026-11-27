@@ -10,6 +10,8 @@ const {
   validateStockTransferCreation,
   validateStockTransferReceipt,
   validateSaleStockDecrement,
+  validateSaleSettlement,
+  validateDebtPayment,
   projectSellerProduct
 } = require('./multi-store-model');
 
@@ -341,4 +343,83 @@ assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
   stockSnapshot, null, '2026-11-27T14:20:00.000Z').reason,
   'invalid_sale_timestamp', 'stale sale proposal is rejected');
 
-console.log('PASS: 90 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+
+// Financial ledger integrity: sale settlement and partial debt repayments.
+assert.equal(validateSaleSettlement({
+  saleType: 'paid', total: 12000, paidAmount: 12000, creditAmount: 0,
+  method: 'Espèces'
+}).valid, true, 'fully paid sale settlement is coherent');
+assert.equal(validateSaleSettlement({
+  saleType: 'credit', total: 12000, paidAmount: 0, creditAmount: 12000,
+  clientId: 'client-1', method: 'Crédit client'
+}).valid, true, 'credit sale settlement requires a customer and full debt amount');
+assert.equal(validateSaleSettlement({
+  saleType: 'paid', total: 12000, paidAmount: 7000, creditAmount: 5000,
+  method: 'Paiement mixte', cashPart: 4000, mobilePart: 3000
+}).valid, true, 'mixed sale split reconciles to amount received');
+assert.equal(validateSaleSettlement({
+  saleType: 'paid', total: 12000, paidAmount: 7000, creditAmount: 4000,
+  method: 'Paiement mixte', cashPart: 4000, mobilePart: 3000
+}).valid, false, 'sale paid plus credit must equal total');
+assert.equal(validateSaleSettlement({
+  saleType: 'paid', total: 12000, paidAmount: 7000, creditAmount: 5000,
+  method: 'Paiement mixte', cashPart: 5000, mobilePart: 3000
+}).valid, false, 'mixed tender components must equal amount received');
+assert.equal(validateSaleSettlement({
+  saleType: 'credit', total: 12000, paidAmount: 1000, creditAmount: 11000,
+  clientId: 'client-1'
+}).valid, false, 'credit-only sale cannot silently include a payment');
+assert.equal(validateSaleSettlement({
+  saleType: 'paid', total: 12000.5, paidAmount: 12000.5, creditAmount: 0
+}).valid, false, 'GNF ledger amounts must be safe integer values');
+
+const debtForPayment = {
+  id: 'debt-pay-1', clientId: 'client-1', organizationId: 'org-1',
+  storeId: 'store-A', amount: 10000
+};
+const priorPayments = [
+  { id: 'payment-old-1', debtId: 'debt-pay-1', amount: 3000 }
+];
+const newPayment = {
+  id: 'payment-new-1', idempotencyKey: 'payment-key-1',
+  debtId: 'debt-pay-1', clientId: 'client-1',
+  organizationId: 'org-1', storeId: 'store-A', amount: 4000,
+  createdBy: 'seller-A', createdAt: '2026-11-27T14:20:00.000Z'
+};
+const repaymentCheck = validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, priorPayments, null, '2026-11-27T14:21:00.000Z');
+assert.equal(repaymentCheck.valid, true, 'assigned seller can record valid partial repayment');
+assert.equal(repaymentCheck.paidAfter, 7000, 'partial repayment updates paid total accurately');
+assert.equal(repaymentCheck.remainingAfter, 3000, 'partial repayment calculates remaining debt');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment, newPayment,
+  priorPayments, { id: 'payment-key-1' }, '2026-11-27T14:21:00.000Z').reason,
+  'payment_already_applied', 'payment replay is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  { ...newPayment, amount: 8000 }, priorPayments, null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'payment_exceeds_remaining_balance', 'repayment cannot exceed current debt balance');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  { ...newPayment, clientId: 'client-other' }, priorPayments, null,
+  '2026-11-27T14:21:00.000Z').valid, false, 'payment must reference same debt customer');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  { ...newPayment, storeId: 'store-B' }, priorPayments, null,
+  '2026-11-27T14:21:00.000Z').valid, false, 'payment cannot cross store boundary');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  { ...newPayment, createdBy: 'seller-B' }, priorPayments, null,
+  '2026-11-27T14:21:00.000Z').valid, false, 'payment actor cannot be forged');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  { ...newPayment, idempotencyKey: '' }, priorPayments, null,
+  '2026-11-27T14:21:00.000Z').valid, false, 'repayment requires idempotency key');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], amount: 11000 }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'existing_payments_exceed_debt', 'corrupt historical payments block new repayment');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], id: 'duplicate' }, { ...priorPayments[0], id: 'duplicate' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'duplicate payment IDs in history are rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, priorPayments, null, '2026-11-27T14:30:00.000Z').reason,
+  'invalid_payment_timestamp', 'stale repayment proposal is rejected');
+
+console.log('PASS: 110 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
