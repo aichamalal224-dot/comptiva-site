@@ -357,7 +357,7 @@ function validateSellerInvitationAcceptance(bundle, invitation, identity, suppli
     return { valid: false, reason: 'identity_already_member_or_invalid' };
   }
   if (!email || email !== invitation.email ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { valid: false, reason: 'authenticated_email_mismatch' };
   }
   if (!nonEmptyString(invitation.tokenHash) ||
