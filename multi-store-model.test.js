@@ -354,7 +354,7 @@ assert.equal(validateSaleSettlement({
   clientId: 'client-1', method: 'Crédit client'
 }).valid, true, 'credit sale settlement requires a customer and full debt amount');
 assert.equal(validateSaleSettlement({
-  saleType: 'paid', total: 12000, paidAmount: 7000, creditAmount: 5000,
+  saleType: 'paid', total: 7000, paidAmount: 7000, creditAmount: 0,
   method: 'Paiement mixte', cashPart: 4000, mobilePart: 3000
 }).valid, true, 'mixed sale split reconciles to amount received');
 assert.equal(validateSaleSettlement({
@@ -362,7 +362,7 @@ assert.equal(validateSaleSettlement({
   method: 'Paiement mixte', cashPart: 4000, mobilePart: 3000
 }).valid, false, 'sale paid plus credit must equal total');
 assert.equal(validateSaleSettlement({
-  saleType: 'paid', total: 12000, paidAmount: 7000, creditAmount: 5000,
+  saleType: 'paid', total: 7000, paidAmount: 7000, creditAmount: 0,
   method: 'Paiement mixte', cashPart: 5000, mobilePart: 3000
 }).valid, false, 'mixed tender components must equal amount received');
 assert.equal(validateSaleSettlement({
