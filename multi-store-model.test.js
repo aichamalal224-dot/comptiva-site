@@ -241,4 +241,5 @@ assert.equal(modelRevoke(bundle, 'seller-A', validInvite).valid, false,
   'seller cannot revoke invitation');
 assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, status: 'accepted' }).valid, false,
   'accepted invitation cannot be revoked as pending');
-\nconsole.log('PASS: 69 multi-store model, permission, provenance, invitation lifecycle and seller-data projection assertions');
+
+console.log('PASS: 69 multi-store model, permission, provenance, invitation lifecycle and seller-data projection assertions');
