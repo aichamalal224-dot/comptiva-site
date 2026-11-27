@@ -761,6 +761,16 @@ assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
   '2026-11-28T10:06:00.000Z').reason,
   'purchase_receipt_stock_mismatch', 'receipt refuses an invalid stock snapshot');
 
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  secondPurchaseReceipt, [{ ...firstPurchaseReceipt, receivedAt: 'invalid-date' }],
+  { ...purchaseStockSnapshot, quantity: 19 }, '2026-11-28T10:08:00.000Z').reason,
+  'invalid_or_duplicate_prior_purchase_receipt', 'receipt history rejects invalid prior timestamps');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  { ...firstPurchaseReceipt, id: 'receipt-overflow', idempotencyKey: 'key-overflow' },
+  [], { ...purchaseStockSnapshot, quantity: Number.MAX_SAFE_INTEGER },
+  '2026-11-28T10:06:00.000Z').reason,
+  'purchase_receipt_quantity_overflow', 'stock increment cannot exceed safe integer range');
+
 // Append-only audit evidence and owner-controlled stock corrections.
 const stockSnapshotForAdjustment = {
   organizationId: 'org-1', storeId: 'store-A',
@@ -870,4 +880,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 216 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data, purchase-receipt and stock-transfer assertions');
+console.log('PASS: 218 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data, purchase-receipt and stock-transfer assertions');
