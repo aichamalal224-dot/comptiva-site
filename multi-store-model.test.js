@@ -251,6 +251,13 @@ assert.equal(validateSellerOperationalProduct({
 }).valid, false, 'seller-readable product rejects bundled financial objects');
 assert.equal(validateSellerOperationalProduct(null).valid, false,
   'invalid seller operational product rejected');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-margin-alias', name: 'Riz', metrics: { profit_margin: 18 }
+}).valid, false, 'seller-readable product rejects profit margin aliases');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-cost-alias', name: 'Riz', details: { purchase_cost: 42000 }
+}).valid, false, 'seller-readable product rejects purchase cost aliases');
+
 
 
 
