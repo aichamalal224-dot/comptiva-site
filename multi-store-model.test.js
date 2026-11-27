@@ -805,4 +805,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 196 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
+console.log('PASS: 201 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
