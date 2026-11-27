@@ -508,4 +508,4 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, { ...cancellationRecord, storeId: 'store-B' }, null, []).valid,
   false, 'cancellation cannot move across stores');
 
-console.log('PASS: 134 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+console.log('PASS: 130 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
