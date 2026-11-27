@@ -450,6 +450,48 @@ function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receip
   return { valid: true, reason: 'stock_transfer_receipt_valid' };
 }
 
+
+/**
+ * Validate a proposed sale stock decrement against a trusted stock snapshot.
+ * This is only pre-validation: production MUST repeat the read, idempotency
+ * check, decrement and movement creation atomically in a Firestore transaction.
+ */
+function validateSaleStockDecrement(bundle, actorUid, sale, stock, existingMovement, now = new Date().toISOString()) {
+  if (!isRecord(sale) || !isRecord(stock)) {
+    return { valid: false, reason: 'invalid_sale_stock_context' };
+  }
+  if (!nonEmptyString(sale.id) || !nonEmptyString(sale.productId) ||
+      !Number.isFinite(sale.quantity) || sale.quantity <= 0 ||
+      sale.organizationId !== bundle?.organization?.id ||
+      stock.organizationId !== sale.organizationId ||
+      stock.storeId !== sale.storeId || stock.productId !== sale.productId ||
+      !Number.isFinite(stock.quantity) || stock.quantity < 0) {
+    return { valid: false, reason: 'invalid_sale_or_stock_fields' };
+  }
+  if (!nonEmptyString(sale.idempotencyKey)) {
+    return { valid: false, reason: 'missing_idempotency_key' };
+  }
+  if (existingMovement !== null && existingMovement !== undefined) {
+    return { valid: false, reason: 'stock_operation_already_applied' };
+  }
+  if (stock.quantity < sale.quantity) {
+    return { valid: false, reason: 'insufficient_stock' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'sales:create', sale);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const nowMs = Date.parse(now);
+  const createdMs = Date.parse(sale.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_sale_timestamp' };
+  }
+  return {
+    valid: true,
+    reason: 'sale_stock_decrement_prevalidated',
+    remainingQuantity: stock.quantity - sale.quantity
+  };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -462,6 +504,7 @@ const api = {
   validateSellerInvitationRevocation,
   validateStockTransferCreation,
   validateStockTransferReceipt,
+  validateSaleStockDecrement,
   projectSellerProduct
 };
 
