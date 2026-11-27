@@ -5,7 +5,8 @@ const {
   validateOrganizationBundle,
   authorizeStoreAction,
   validateOperationRecord,
-  validateOperationUpdate
+  validateOperationUpdate,
+  validateSellerInvitation
 } = require('./multi-store-model');
 
 const bundle = {
@@ -155,4 +156,45 @@ assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 's
 assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 'members:manage').allowed, false,
   'seller cannot manage members through custom permissions');
 
-console.log('PASS: 43 multi-store model, permission and provenance assertions');
+
+const validInvite = {
+  id: 'invite-1',
+  organizationId: 'org-1',
+  email: 'seller.new@example.com',
+  role: 'seller',
+  status: 'pending',
+  storeIds: ['store-A'],
+  permissions: ['sales:read', 'sales:create'],
+  createdBy: 'owner-1',
+  createdAt: '2026-11-27T12:00:00.000Z',
+  expiresAt: '2026-12-04T12:00:00.000Z'
+};
+assert.equal(validateSellerInvitation(bundle, 'owner-1', validInvite,
+  '2026-11-27T13:00:00.000Z').valid, true, 'owner can prepare a valid seller invitation');
+assert.equal(validateSellerInvitation(bundle, 'seller-A', validInvite,
+  '2026-11-27T13:00:00.000Z').valid, false, 'seller cannot invite another seller');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, email: 'Seller.New@example.com'
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation email must be normalized');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, organizationId: 'org-other'
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation cannot cross organizations');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, storeIds: ['store-A', 'store-A']
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation cannot duplicate store assignments');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, storeIds: ['store-B', 'store-X']
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation cannot assign unknown stores');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, permissions: ['members:manage']
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation cannot grant owner permissions');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, expiresAt: '2026-12-10T12:00:00.000Z'
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation lifetime cannot exceed seven days');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', validInvite,
+  '2026-12-05T12:00:00.000Z').valid, false, 'expired invitation is rejected');
+assert.equal(validateSellerInvitation(bundle, 'owner-1', {
+  ...validInvite, createdBy: 'seller-A'
+}, '2026-11-27T13:00:00.000Z').valid, false, 'invitation creator cannot be forged');
+
+console.log('PASS: 53 multi-store model, permission, provenance and invitation assertions');
