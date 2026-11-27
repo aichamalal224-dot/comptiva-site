@@ -182,11 +182,51 @@ function authorizeStoreAction(bundle, actorUid, storeId, action) {
   return { allowed, reason: allowed ? 'seller_allowed' : 'seller_permission_denied' };
 }
 
+
+/**
+ * Validate mandatory provenance before a business operation is accepted.
+ * This is a client-independent contract only; the trusted server must stamp
+ * createdBy/createdAt and prevent clients from rewriting original provenance.
+ */
+function validateOperationRecord(bundle, actorUid, action, record) {
+  if (!isRecord(record)) return { valid: false, reason: 'operation_not_object' };
+  const required = ['id', 'organizationId', 'storeId', 'createdBy', 'createdAt'];
+  if (required.some(key => !nonEmptyString(record[key]))) {
+    return { valid: false, reason: 'missing_provenance' };
+  }
+  if (record.organizationId !== bundle?.organization?.id) {
+    return { valid: false, reason: 'organization_mismatch' };
+  }
+  if (!bundle.stores.some(store => store.id === record.storeId)) {
+    return { valid: false, reason: 'store_mismatch' };
+  }
+  if (record.createdBy !== actorUid) {
+    return { valid: false, reason: 'creator_mismatch' };
+  }
+  if (typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) {
+    return { valid: false, reason: 'invalid_creation_timestamp' };
+  }
+  const hasUpdatedBy = record.updatedBy !== undefined;
+  const hasUpdatedAt = record.updatedAt !== undefined;
+  if (hasUpdatedBy !== hasUpdatedAt) {
+    return { valid: false, reason: 'incomplete_update_provenance' };
+  }
+  if (hasUpdatedBy &&
+      (!nonEmptyString(record.updatedBy) || typeof record.updatedAt !== 'string' ||
+       !Number.isFinite(Date.parse(record.updatedAt)))) {
+    return { valid: false, reason: 'invalid_update_provenance' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, record.storeId, action);
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  return { valid: true, reason: 'operation_provenance_valid' };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
   validateOrganizationBundle,
-  authorizeStoreAction
+  authorizeStoreAction,
+  validateOperationRecord
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
