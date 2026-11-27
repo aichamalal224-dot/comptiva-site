@@ -801,6 +801,81 @@ function validatePurchaseRecord(bundle, actorUid, purchase) {
   return { valid: true, reason: 'purchase_record_valid' };
 }
 
+/**
+ * Prevalidate a partial or final receipt of a stock-linked purchase.
+ * The purchase and receipt history must be loaded from trusted storage.
+ * A server transaction must re-read both, append the receipt, increment stock
+ * and update received totals atomically; this helper does not write anything.
+ */
+function validatePurchaseStockReceipt(bundle, actorUid, purchase, receipt, priorReceipts = [], stock, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(purchase) || !isRecord(receipt) || !Array.isArray(priorReceipts) || !isRecord(stock)) {
+    return { valid: false, reason: 'invalid_purchase_receipt_context' };
+  }
+  const purchaseCheck = validatePurchaseRecord(bundle, actorUid, purchase);
+  if (!purchaseCheck.valid) return { valid: false, reason: purchaseCheck.reason };
+  if (!nonEmptyString(purchase.productId)) {
+    return { valid: false, reason: 'stock_linked_purchase_requires_product' };
+  }
+  if (!nonEmptyString(receipt.id) || !nonEmptyString(receipt.idempotencyKey) ||
+      receipt.purchaseId !== purchase.id ||
+      receipt.organizationId !== purchase.organizationId ||
+      receipt.storeId !== purchase.storeId ||
+      receipt.productId !== purchase.productId ||
+      receipt.receivedBy !== actorUid ||
+      !Number.isSafeInteger(receipt.quantity) || receipt.quantity <= 0) {
+    return { valid: false, reason: 'invalid_purchase_receipt_fields' };
+  }
+  if (stock.organizationId !== purchase.organizationId ||
+      stock.storeId !== purchase.storeId || stock.productId !== purchase.productId ||
+      !Number.isSafeInteger(stock.quantity) || stock.quantity < 0) {
+    return { valid: false, reason: 'purchase_receipt_stock_mismatch' };
+  }
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  let alreadyReceived = 0;
+  for (const prior of priorReceipts) {
+    if (!isRecord(prior) || prior.purchaseId !== purchase.id ||
+        prior.organizationId !== purchase.organizationId ||
+        prior.storeId !== purchase.storeId || prior.productId !== purchase.productId ||
+        !nonEmptyString(prior.id) || !nonEmptyString(prior.idempotencyKey) ||
+        !Number.isSafeInteger(prior.quantity) || prior.quantity <= 0 ||
+        seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
+      return { valid: false, reason: 'invalid_or_duplicate_prior_purchase_receipt' };
+    }
+    seenIds.add(prior.id);
+    seenKeys.add(prior.idempotencyKey);
+    alreadyReceived += prior.quantity;
+    if (!Number.isSafeInteger(alreadyReceived) || alreadyReceived > purchase.quantity) {
+      return { valid: false, reason: 'prior_receipts_exceed_purchase_quantity' };
+    }
+  }
+  if (seenIds.has(receipt.id) || seenKeys.has(receipt.idempotencyKey)) {
+    return { valid: false, reason: 'purchase_receipt_already_applied' };
+  }
+  if (alreadyReceived + receipt.quantity > purchase.quantity) {
+    return { valid: false, reason: 'receipt_exceeds_ordered_quantity' };
+  }
+  const receivedMs = Date.parse(receipt.receivedAt);
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(receivedMs) || !Number.isFinite(nowMs) ||
+      receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_purchase_receipt_timestamp' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, purchase.storeId, 'purchases:create');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  const totalReceived = alreadyReceived + receipt.quantity;
+  return {
+    valid: true,
+    reason: 'purchase_stock_receipt_prevalidated',
+    totalReceived,
+    remainingToReceive: purchase.quantity - totalReceived,
+    resultingStockQuantity: stock.quantity + receipt.quantity,
+    fullyReceived: totalReceived === purchase.quantity
+  };
+}
+
 /** Validate an owner-only expense before a trusted write. */
 function validateExpenseRecord(bundle, actorUid, expense) {
   if (!isRecord(expense)) return { valid: false, reason: 'expense_not_object' };
@@ -1040,6 +1115,7 @@ const api = {
   validateSaleSettlement,
   validateDebtPayment,
   validatePurchaseRecord,
+  validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
   validateAuditEvent,
