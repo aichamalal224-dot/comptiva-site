@@ -666,6 +666,96 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
   };
 }
 
+
+/**
+ * Audit events are append-only evidence. The trusted backend must stamp
+ * actorUid/server timestamp, derive action from the authorized operation,
+ * and deny client update/delete. This helper validates the event envelope.
+ */
+function validateAuditEvent(bundle, actorUid, event, now = new Date().toISOString()) {
+  if (!isRecord(event)) return { valid: false, reason: 'audit_event_not_object' };
+  const allowedActions = new Set([
+    'sale.created', 'sale.updated', 'sale.cancelled',
+    'purchase.created', 'expense.created',
+    'stock.adjusted', 'stock.transfer.created', 'stock.transfer.received',
+    'debt.created', 'payment.created', 'payment.reversed',
+    'product.created', 'product.updated',
+    'member.invited', 'member.suspended', 'member.reactivated'
+  ]);
+  if (!allowedActions.has(event.action) ||
+      !nonEmptyString(event.id) ||
+      event.organizationId !== bundle?.organization?.id ||
+      !nonEmptyString(event.storeId) ||
+      !nonEmptyString(event.targetId) ||
+      !nonEmptyString(event.targetType) ||
+      event.actorUid !== actorUid ||
+      !nonEmptyString(event.operationId)) {
+    return { valid: false, reason: 'invalid_audit_event_fields' };
+  }
+  const createdMs = Date.parse(event.createdAt);
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(createdMs) || !Number.isFinite(nowMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_audit_event_timestamp' };
+  }
+  const permissionAction = event.action.startsWith('purchase.')
+    ? 'purchases:read'
+    : event.action.startsWith('expense.')
+      ? 'expenses:read'
+      : event.action.startsWith('stock.adjusted')
+        ? 'stock:adjust'
+        : event.action.startsWith('sale.cancelled')
+          ? 'sales:cancel'
+          : event.action.startsWith('sale.updated')
+            ? 'sales:update'
+            : event.action.startsWith('product.')
+              ? 'products:manage'
+              : event.action.startsWith('member.')
+                ? 'members:manage'
+                : event.action.startsWith('stock.transfer')
+                  ? (event.action.endsWith('received') ? 'transfers:receive' : 'transfers:create')
+                  : event.action.startsWith('payment.reversed')
+                    ? 'payments:reverse'
+                    : event.action.startsWith('payment.')
+                      ? 'payments:create'
+                      : event.action.startsWith('debt.')
+                        ? 'debts:create'
+                        : 'sales:create';
+  const permission = authorizeStoreAction(bundle, actorUid, event.storeId, permissionAction);
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  return { valid: true, reason: 'audit_event_valid' };
+}
+
+/** Stock corrections require an owner, a reason and a replay-safe movement ID. */
+function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMovement = null) {
+  if (!isRecord(adjustment) || !isRecord(stock)) {
+    return { valid: false, reason: 'invalid_stock_adjustment_context' };
+  }
+  if (existingMovement !== null && existingMovement !== undefined) {
+    return { valid: false, reason: 'stock_adjustment_already_applied' };
+  }
+  if (!nonEmptyString(adjustment.id) ||
+      !nonEmptyString(adjustment.idempotencyKey) ||
+      adjustment.organizationId !== bundle?.organization?.id ||
+      adjustment.storeId !== stock.storeId ||
+      adjustment.productId !== stock.productId ||
+      stock.organizationId !== adjustment.organizationId ||
+      !Number.isSafeInteger(adjustment.delta) || adjustment.delta === 0 ||
+      !Number.isSafeInteger(stock.quantity) || stock.quantity < 0 ||
+      stock.quantity + adjustment.delta < 0 ||
+      !nonEmptyString(adjustment.reason) ||
+      adjustment.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_stock_adjustment_fields' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, adjustment.storeId, 'stock:adjust');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  return {
+    valid: true,
+    reason: 'stock_adjustment_valid',
+    resultingQuantity: stock.quantity + adjustment.delta
+  };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -684,6 +774,8 @@ const api = {
   validatePurchaseRecord,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateAuditEvent,
+  validateStockAdjustment,
   projectSellerProduct
 };
 
