@@ -813,9 +813,9 @@ assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
   [firstReturn], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
   'return_exceeds_sold_quantity', 'cumulative return quantity cannot exceed sold quantity');
 assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
-  { ...firstReturn, amount: 25000, cashRefundAmount: 25000 },
-  [], [], returnStock, '2026-11-28T10:06:00.000Z').valid,
-  false, 'return refund allocation must reconcile with the return amount?');
+  { ...firstReturn, amount: 35000, cashRefundAmount: 35000 },
+  [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'return_exceeds_unreturned_sale_value', 'return refund cannot exceed the original sale value');
 assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
   { ...firstReturn, id: 'return-dup', idempotencyKey: 'return-key-1' },
   [firstReturn], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
