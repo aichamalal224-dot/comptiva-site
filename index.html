@@ -552,7 +552,7 @@ if(!Array.isArray(db.sales))db.sales=[];if(!Array.isArray(db.clients))db.clients
 function saveDB(){try{localStorage.setItem(STORE,JSON.stringify(db))}catch(storageError){console.error('[COMPTIVA] Enregistrement local impossible :',storageError);krediStatus('ATTENTION : le navigateur refuse l’enregistrement local. Ne fermez pas cette page et vérifiez l’espace de stockage du navigateur.');flash('Enregistrement local impossible : données non confirmées.');return false}try{renderAll()}catch(renderError){console.error('[COMPTIVA] Données enregistrées, mais erreur de rafraîchissement de l’interface :',renderError);krediStatus('Données enregistrées localement. Un rafraîchissement de l’interface est nécessaire.');flash('Données enregistrées ; affichage à actualiser.')}krediQueueCloudSave();return true}
 function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,6)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
+function money(n){let value=Number(n);return Number.isFinite(value)?Math.round(value).toLocaleString('fr-FR')+' GNF':'—'}
 function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('fr-FR')}
 function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client supprimé/inconnu'}
 function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId).reduce((a,p)=>a+Number(p.amount||0),0)}
