@@ -256,13 +256,74 @@ function validateOperationUpdate(bundle, actorUid, action, previousRecord, nextR
   return validateOperationRecord(bundle, actorUid, action, nextRecord);
 }
 
+
+/**
+ * Validate a pending seller invitation before a trusted backend persists it.
+ * The backend must generate/store a one-time token hash, send the invitation,
+ * and independently enforce all checks. This helper is not an invitation sender
+ * or a security boundary.
+ */
+function validateSellerInvitation(bundle, actorUid, invitation, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(invitation)) return { valid: false, reason: 'invitation_not_object' };
+
+  const owner = bundle.members.find(member =>
+    member.uid === actorUid && member.role === 'owner' && member.status === 'active'
+  );
+  if (!owner || actorUid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_only' };
+  }
+
+  const email = invitation.email;
+  if (typeof email !== 'string' ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim()) ||
+      email !== email.trim().toLowerCase()) {
+    return { valid: false, reason: 'invalid_normalized_email' };
+  }
+  if (invitation.organizationId !== bundle.organization.id ||
+      invitation.role !== 'seller' ||
+      invitation.status !== 'pending' ||
+      invitation.createdBy !== actorUid ||
+      !nonEmptyString(invitation.id)) {
+    return { valid: false, reason: 'invalid_invitation_identity_or_state' };
+  }
+  if (!Array.isArray(invitation.storeIds) || invitation.storeIds.length === 0 ||
+      new Set(invitation.storeIds).size !== invitation.storeIds.length ||
+      invitation.storeIds.some(id => !bundle.stores.some(store =>
+        store.id === id && store.status === 'active'
+      ))) {
+    return { valid: false, reason: 'invalid_invitation_store_assignment' };
+  }
+  if (invitation.permissions !== undefined &&
+      (!Array.isArray(invitation.permissions) ||
+       invitation.permissions.some(permission =>
+         !SELLER_DEFAULT_ACTIONS.includes(permission)
+       ) ||
+       new Set(invitation.permissions).size !== invitation.permissions.length)) {
+    return { valid: false, reason: 'invalid_or_elevated_seller_permissions' };
+  }
+
+  const nowMs = Date.parse(now);
+  const createdMs = Date.parse(invitation.createdAt);
+  const expiresMs = Date.parse(invitation.expiresAt);
+  const maxLifetimeMs = 7 * 24 * 60 * 60 * 1000;
+  if (![nowMs, createdMs, expiresMs].every(Number.isFinite) ||
+      createdMs > nowMs || expiresMs <= nowMs ||
+      expiresMs <= createdMs || expiresMs - createdMs > maxLifetimeMs) {
+    return { valid: false, reason: 'invalid_or_expired_invitation_window' };
+  }
+  return { valid: true, reason: 'seller_invitation_valid' };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
   validateOrganizationBundle,
   authorizeStoreAction,
   validateOperationRecord,
-  validateOperationUpdate
+  validateOperationUpdate,
+  validateSellerInvitation
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
