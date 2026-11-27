@@ -155,4 +155,4 @@ assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 's
 assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 'members:manage').allowed, false,
   'seller cannot manage members through custom permissions');
 
-console.log('PASS: 34 multi-store model, permission and provenance assertions');
+console.log('PASS: 43 multi-store model, permission and provenance assertions');
