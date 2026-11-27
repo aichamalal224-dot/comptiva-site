@@ -333,6 +333,58 @@ function projectSellerProduct(product) {
   return safe;
 }
 
+
+/**
+ * Validate acceptance using the authenticated identity and a backend-verified
+ * one-time token hash. The caller must atomically consume the invitation and
+ * create membership; this pure helper cannot prevent replay by itself.
+ */
+function validateSellerInvitationAcceptance(bundle, invitation, identity, suppliedTokenHash, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(invitation) || !isRecord(identity)) {
+    return { valid: false, reason: 'invalid_acceptance_context' };
+  }
+  const nowMs = Date.parse(now);
+  const expiresMs = Date.parse(invitation.expiresAt);
+  const email = typeof identity.email === 'string' ? identity.email.trim().toLowerCase() : '';
+  if (invitation.status !== 'pending' || !Number.isFinite(nowMs) ||
+      !Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+    return { valid: false, reason: 'invitation_not_pending_or_expired' };
+  }
+  if (!nonEmptyString(identity.uid) || identity.uid === bundle.organization.ownerUid ||
+      bundle.members.some(member => member.uid === identity.uid)) {
+    return { valid: false, reason: 'identity_already_member_or_invalid' };
+  }
+  if (!email || email !== invitation.email ||
+      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    return { valid: false, reason: 'authenticated_email_mismatch' };
+  }
+  if (!nonEmptyString(invitation.tokenHash) ||
+      !nonEmptyString(suppliedTokenHash) ||
+      invitation.tokenHash !== suppliedTokenHash) {
+    return { valid: false, reason: 'invalid_invitation_token' };
+  }
+  return { valid: true, reason: 'seller_invitation_acceptance_valid' };
+}
+
+/** Only the active owner may revoke a still-pending invitation. */
+function validateSellerInvitationRevocation(bundle, actorUid, invitation) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const owner = bundle.members.find(member =>
+    member.uid === actorUid && member.role === 'owner' && member.status === 'active'
+  );
+  if (!owner || actorUid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_only' };
+  }
+  if (!isRecord(invitation) || invitation.organizationId !== bundle.organization.id ||
+      invitation.status !== 'pending') {
+    return { valid: false, reason: 'invitation_not_revocable' };
+  }
+  return { valid: true, reason: 'seller_invitation_revocation_valid' };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
