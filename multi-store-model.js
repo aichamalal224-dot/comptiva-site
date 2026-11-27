@@ -387,6 +387,116 @@ function validateSellerInvitationRevocation(bundle, actorUid, invitation) {
 
 
 /**
+ * Validate owner-initiated suspension of an active seller. The backend must
+ * persist status and audit event atomically; all requests must re-read current
+ * membership so suspension takes effect immediately on subsequent requests.
+ */
+function validateSellerSuspension(bundle, actorUid, targetUid, reason, now = new Date().toISOString()) {
+  const check = validateOrganizationBundle(bundle);
+  if (!check.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const owner = bundle.members.find(member =>
+    member.uid === actorUid && member.role === 'owner' && member.status === 'active'
+  );
+  if (!owner || actorUid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_only' };
+  }
+  const target = bundle.members.find(member => member.uid === targetUid);
+  if (!target || target.organizationId !== bundle.organization.id || target.role !== 'seller') {
+    return { valid: false, reason: 'seller_member_not_found' };
+  }
+  if (target.status !== 'active') return { valid: false, reason: 'seller_not_active' };
+  if (!nonEmptyString(reason) || reason.trim().length > 500) {
+    return { valid: false, reason: 'suspension_reason_required_or_too_long' };
+  }
+  if (!Number.isFinite(Date.parse(now))) return { valid: false, reason: 'invalid_membership_change_timestamp' };
+  return {
+    valid: true, reason: 'seller_suspension_valid',
+    nextStatus: 'suspended', memberUid: target.uid,
+    changedBy: actorUid, changedAt: now, changeReason: reason.trim()
+  };
+}
+
+/** Only the active owner may reactivate a suspended seller. */
+function validateSellerReactivation(bundle, actorUid, targetUid, now = new Date().toISOString()) {
+  const check = validateOrganizationBundle(bundle);
+  if (!check.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const owner = bundle.members.find(member =>
+    member.uid === actorUid && member.role === 'owner' && member.status === 'active'
+  );
+  if (!owner || actorUid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_only' };
+  }
+  const target = bundle.members.find(member => member.uid === targetUid);
+  if (!target || target.organizationId !== bundle.organization.id || target.role !== 'seller') {
+    return { valid: false, reason: 'seller_member_not_found' };
+  }
+  if (target.status !== 'suspended') return { valid: false, reason: 'seller_not_suspended' };
+  if (!Array.isArray(target.storeIds) || target.storeIds.length === 0 ||
+      target.storeIds.some(id => !bundle.stores.some(store => store.id === id && store.status === 'active'))) {
+    return { valid: false, reason: 'seller_store_assignment_invalid' };
+  }
+  if (!Number.isFinite(Date.parse(now))) return { valid: false, reason: 'invalid_membership_change_timestamp' };
+  return {
+    valid: true, reason: 'seller_reactivation_valid',
+    nextStatus: 'active', memberUid: target.uid,
+    changedBy: actorUid, changedAt: now
+  };
+}
+
+/**
+ * Change the stores assigned to an existing seller. The owner must use a
+ * trusted transaction and increment a membership version so cached clients
+ * cannot keep using stale assignments.
+ */
+function validateSellerStoreAssignment(bundle, actorUid, targetUid, nextStoreIds, now = new Date().toISOString()) {
+  const check = validateOrganizationBundle(bundle);
+  if (!check.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const owner = bundle.members.find(member =>
+    member.uid === actorUid && member.role === 'owner' && member.status === 'active'
+  );
+  if (!owner || actorUid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_only' };
+  }
+  const target = bundle.members.find(member => member.uid === targetUid);
+  if (!target || target.organizationId !== bundle.organization.id || target.role !== 'seller') {
+    return { valid: false, reason: 'seller_member_not_found' };
+  }
+  if (!Array.isArray(nextStoreIds) || nextStoreIds.length === 0 ||
+      nextStoreIds.some(id => !nonEmptyString(id)) ||
+      new Set(nextStoreIds).size !== nextStoreIds.length ||
+      nextStoreIds.some(id => !bundle.stores.some(store => store.id === id && store.status === 'active'))) {
+    return { valid: false, reason: 'invalid_seller_store_assignment' };
+  }
+  if (!Number.isFinite(Date.parse(now))) return { valid: false, reason: 'invalid_membership_change_timestamp' };
+  return {
+    valid: true, reason: 'seller_store_assignment_valid',
+    memberUid: target.uid, previousStoreIds: [...target.storeIds],
+    nextStoreIds: [...nextStoreIds], changedBy: actorUid, changedAt: now
+  };
+}
+
+/**
+ * This decision is only as fresh as the membership bundle supplied to it.
+ * Production must fetch the current membership from trusted storage on every
+ * protected server operation (or use an equally strong revocation mechanism).
+ */
+function authorizeWithCurrentMembership(bundle, actorUid, storeId, action, currentMember) {
+  if (!isRecord(currentMember) || currentMember.uid !== actorUid) {
+    return { allowed: false, reason: 'current_membership_not_verified' };
+  }
+  const embedded = bundle?.members?.find(member => member.uid === actorUid);
+  if (!embedded || embedded.status !== currentMember.status ||
+      embedded.role !== currentMember.role ||
+      embedded.organizationId !== currentMember.organizationId ||
+      JSON.stringify(embedded.storeIds) !== JSON.stringify(currentMember.storeIds) ||
+      JSON.stringify(embedded.permissions || []) !== JSON.stringify(currentMember.permissions || [])) {
+    return { allowed: false, reason: 'stale_membership_snapshot' };
+  }
+  return authorizeStoreAction(bundle, actorUid, storeId, action);
+}
+
+
+/**
  * Validate a stock transfer creation. Production must execute the stock
  * decrement and transfer creation in one trusted database transaction.
  */
@@ -766,6 +876,10 @@ const api = {
   validateSellerInvitation,
   validateSellerInvitationAcceptance,
   validateSellerInvitationRevocation,
+  validateSellerSuspension,
+  validateSellerReactivation,
+  validateSellerStoreAssignment,
+  authorizeWithCurrentMembership,
   validateStockTransferCreation,
   validateStockTransferReceipt,
   validateSaleStockDecrement,
