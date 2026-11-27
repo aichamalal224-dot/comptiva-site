@@ -316,6 +316,23 @@ function validateSellerInvitation(bundle, actorUid, invitation, now = new Date()
   return { valid: true, reason: 'seller_invitation_valid' };
 }
 
+
+/**
+ * Return only fields a seller may need for routine product/stock operations.
+ * Firestore rules cannot hide selected fields inside a readable document:
+ * production must store sensitive cost/profit fields separately or expose a
+ * server-maintained safe projection. This helper is not a data-access boundary.
+ */
+function projectSellerProduct(product) {
+  if (!isRecord(product)) return null;
+  const allowedFields = ['id', 'name', 'category', 'sku', 'quantity', 'salePrice', 'alertAt'];
+  const safe = {};
+  for (const field of allowedFields) {
+    if (Object.prototype.hasOwnProperty.call(product, field)) safe[field] = product[field];
+  }
+  return safe;
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -323,7 +340,8 @@ const api = {
   authorizeStoreAction,
   validateOperationRecord,
   validateOperationUpdate,
-  validateSellerInvitation
+  validateSellerInvitation,
+  projectSellerProduct
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
