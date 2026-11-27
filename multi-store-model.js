@@ -460,6 +460,8 @@ const api = {
   validateSellerInvitation,
   validateSellerInvitationAcceptance,
   validateSellerInvitationRevocation,
+  validateStockTransferCreation,
+  validateStockTransferReceipt,
   projectSellerProduct
 };
 
