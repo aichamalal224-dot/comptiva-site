@@ -751,6 +751,9 @@ function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, 
       return { valid: false, reason: 'existing_payments_exceed_debt' };
     }
   }
+  if (seenIdempotencyKeys.has(payment.idempotencyKey)) {
+    return { valid: false, reason: 'payment_already_applied' };
+  }
   if (paid + payment.amount > debt.amount) {
     return { valid: false, reason: 'payment_exceeds_remaining_balance' };
   }
