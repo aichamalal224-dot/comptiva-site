@@ -29,7 +29,7 @@ Les droits métier exacts restent à valider avant intégration. En particulier,
 
 Commande prévue : `node multi-store-model.test.js`
 
-Résultat du prototype exécuté dans un environnement JavaScript isolé avec assertions simulées compatibles Node.js : **32 assertions réussies**, plus vérification syntaxique des deux fichiers. Douze contrôles supplémentaires vérifient qu'une mise à jour ne peut pas réécrire l'ID, l'organisation, le magasin, l'auteur ou la date de création, et qu'un vendeur ne peut pas modifier une vente validée.
+Résultat du prototype exécuté dans un environnement JavaScript isolé avec assertions simulées compatibles Node.js : **34 assertions réussies**, plus vérification syntaxique des deux fichiers. Douze contrôles supplémentaires vérifient qu'une mise à jour ne peut pas réécrire l'ID, l'organisation, le magasin, l'auteur ou la date de création, qu'un vendeur ne peut pas modifier une vente validée, qu'une création ne peut pas prétendre avoir déjà été modifiée et que le validateur de mise à jour refuse une action de création.
 
 Scénarios couverts : modèle valide, accès patron aux deux magasins, vendeur dans son magasin, stock partagé dans son magasin, refus d'un autre magasin, refus d'annulation vendeur, utilisateur inconnu, membre suspendu, magasin d'une autre organisation, ID magasin dupliqué, propriétaire absent et permissions vendeur restreintes, auteur falsifié, organisation incorrecte, horodatage invalide, métadonnées de modification incomplètes, opération hors magasin affecté, organisation suspendue, action inconnue, élévation de rôle par permissions vendeur et gestion de membres interdite au vendeur.
 
