@@ -639,8 +639,9 @@ function toggleMobileMore(force){const menu=document.getElementById('mobileMoreM
 // Firebase Auth + Firestore — nouvelle copie de travail COMPTIVA
 // COMPTIVA V15 : écouteur Auth enregistré sans attendre setPersistence ; préparation SESSION en arrière-plan. V12/V13/V14 restent inchangées.
 const krediFirebaseConfig={apiKey:"AIzaSyCaSdPxt35_zhkBbMOlY4s0-2kPtsvGMHw",authDomain:"comptiva-6c3cb.firebaseapp.com",projectId:"comptiva-6c3cb",storageBucket:"comptiva-6c3cb.firebasestorage.app",messagingSenderId:"273024333402",appId:"1:273024333402:web:b106b4a4630773006f4a63"};
-let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false;
+let krediAuth=null,krediStore=null,krediUser=null,krediUnsubscribe=null,krediCloudReady=false,krediApplyingCloud=false,krediSaveTimer=null,krediServerReady=false,krediLocalDirty=false,krediLastWrite='',krediSaveInFlight=false,krediRemoteLegacyBlockedUid='';
 const krediEmptyDB=()=>({clients:[],debts:[],payments:[],credits:[],sales:[],purchases:[],expenses:[],products:[]});
+function krediHasMissingRowIds(data){if(!data||typeof data!=='object'||Array.isArray(data))return true;for(const key of Object.keys(krediEmptyDB())){const rows=Array.isArray(data[key])?data[key]:[];for(const row of rows){if(!row||typeof row!=='object'||Array.isArray(row)||String(row.id??'').trim()==='')return true}}return false}
 function krediStatus(t){['cloudSyncStatus','authCloudStatus'].forEach(id=>{const el=document.getElementById(id);if(el)el.textContent=t})}
 function krediAuthMessage(t,ok=false){const el=document.getElementById('authMessage');if(el){el.textContent=t||'';el.classList.toggle('ok',!!ok)}}
 function krediFriendlyError(e){const c=e&&e.code||'';const map={'auth/invalid-email':'Adresse e-mail invalide.','auth/user-not-found':'Aucun compte ne correspond à cet e-mail.','auth/wrong-password':'Mot de passe incorrect.','auth/invalid-credential':'E-mail ou mot de passe incorrect.','auth/email-already-in-use':'Cette adresse e-mail possède déjà un compte.','auth/weak-password':'Choisissez un mot de passe d’au moins 6 caractères.','auth/too-many-requests':'Trop de tentatives. Réessayez plus tard.','auth/network-request-failed':'Connexion Internet indisponible. Vérifiez votre réseau.','auth/unauthorized-domain':'Cette adresse du site doit être autorisée dans Firebase Authentication.','auth/operation-not-allowed':'La connexion par e-mail/mot de passe n’est pas activée dans Firebase.','client-timeout':'La connexion prend plus de temps que prévu. Vérifiez votre connexion Internet puis réessayez. Vos données locales sont conservées.','permission-denied':'Accès Firestore refusé. Vérifiez les règles et le compte connecté.','unavailable':'Firestore indique que le service est indisponible.'};return (map[c]||((e&&e.message)||'Une erreur inconnue est survenue.'))+(c?' [code: '+c+']':'')}
@@ -784,6 +785,8 @@ async function krediInitFirebase(){try{
         console.error('[COMPTIVA] Structure distante invalide : synchronisation bloquée pour éviter un écrasement.',remoteDataRaw);
         return;
       }
+      if(krediHasMissingRowIds(remoteDataRaw)){krediRemoteLegacyBlockedUid=activeUid;krediCloudReady=false;krediLocalDirty=true;krediMarkPendingSync(activeUid);krediStatus('Synchronisation distante suspendue : des enregistrements Firebase n’ont pas d’identifiant stable. Les données locales sont conservées ; aucune écriture automatique ne remplacera la base distante. Une migration contrôlée est nécessaire.');console.warn('[COMPTIVA] Écriture distante bloquée : identifiants absents dans la base Firebase.',remoteDataRaw);return}
+      if(krediRemoteLegacyBlockedUid===activeUid)krediRemoteLegacyBlockedUid='';
       const remoteData=remoteDataRaw;
       const localData=loadDB();
       if(krediStorageBlocked(STORE)){krediCloudReady=false;krediStatus('Synchronisation suspendue : la lecture locale a détecté des données illisibles. Aucune fusion ni écriture distante ne sera effectuée.');return}
@@ -841,6 +844,7 @@ function krediClearPendingSync(uid){
 function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE))return;
   const uid=krediUser.uid;
+  if(krediRemoteLegacyBlockedUid===uid){krediLocalDirty=true;krediMarkPendingSync(uid);krediStatus('Envoi Firebase suspendu : la base distante contient des enregistrements sans identifiant stable. Vos modifications restent locales jusqu’à une migration contrôlée.');return}
   const pendingKey='comptiva_pending_'+uid;
   const markPending=()=>{
     try{localStorage.setItem(pendingKey,'1');return true}
