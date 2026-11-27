@@ -19,15 +19,21 @@ const SELLER_DEFAULT_ACTIONS = Object.freeze([
   'debts:create',
   'payments:read',
   'payments:create',
-  'purchases:read',
-  'purchases:create',
-  'expenses:read',
-  'expenses:create',
-  'reports:read'
+  // Seller defaults are deliberately limited to daily store operations.
+  // Financial reporting, purchases, expenses and profit remain owner-only.
 ]);
 
 const OWNER_ACTIONS = Object.freeze([
   ...SELLER_DEFAULT_ACTIONS,
+  'dashboard:read',
+  'reports:read',
+  'purchases:read',
+  'purchases:create',
+  'purchases:update',
+  'expenses:read',
+  'expenses:create',
+  'expenses:update',
+  'expenses:delete',
   'stores:manage',
   'members:manage',
   'products:manage',
@@ -38,7 +44,6 @@ const OWNER_ACTIONS = Object.freeze([
   'payments:reverse',
   'purchases:update',
   'expenses:update',
-  'expenses:delete',
   'audit:read',
   'transfers:create',
   'transfers:receive'
