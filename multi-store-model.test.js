@@ -12,6 +12,9 @@ const {
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
+  validatePurchaseRecord,
+  validateExpenseRecord,
+  validateSaleCancellation,
   projectSellerProduct
 } = require('./multi-store-model');
 
@@ -422,4 +425,87 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
   newPayment, priorPayments, null, '2026-11-27T14:30:00.000Z').reason,
   'invalid_payment_timestamp', 'stale repayment proposal is rejected');
 
-console.log('PASS: 109 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+
+// Purchases, expenses and sale cancellation audit controls.
+const purchaseRecord = {
+  id: 'purchase-1', organizationId: 'org-1', storeId: 'store-A',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:00:00.000Z',
+  item: 'Rice', productId: 'product-rice', quantity: 20,
+  amount: 500000, method: 'Espèces'
+};
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', purchaseRecord).valid, true,
+  'owner purchase with product reference and provenance is accepted');
+assert.equal(validatePurchaseRecord(bundle, 'seller-A', purchaseRecord).valid, false,
+  'seller cannot create purchases');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, amount: 0
+}).valid, false, 'zero-value purchase rejected');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, quantity: -2
+}).valid, false, 'negative purchase quantity rejected');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, productId: ''
+}).valid, false, 'empty linked product ID rejected');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, storeId: 'store-unknown'
+}).valid, false, 'purchase outside organization stores rejected');
+
+const expenseRecord = {
+  id: 'expense-1', organizationId: 'org-1', storeId: 'store-A',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:05:00.000Z',
+  category: 'Transport', description: 'Livraison',
+  amount: 25000, method: 'Espèces'
+};
+assert.equal(validateExpenseRecord(bundle, 'owner-1', expenseRecord).valid, true,
+  'owner expense with complete provenance is accepted');
+assert.equal(validateExpenseRecord(bundle, 'seller-A', expenseRecord).valid, false,
+  'seller cannot create expenses');
+assert.equal(validateExpenseRecord(bundle, 'owner-1', {
+  ...expenseRecord, amount: -100
+}).valid, false, 'negative expense amount rejected');
+assert.equal(validateExpenseRecord(bundle, 'owner-1', {
+  ...expenseRecord, description: ''
+}).valid, false, 'expense description is mandatory');
+assert.equal(validateExpenseRecord(bundle, 'owner-1', {
+  ...expenseRecord, createdBy: 'seller-A'
+}).valid, false, 'expense creator cannot be forged');
+
+const persistedSaleForCancel = {
+  id: 'sale-cancel-1', organizationId: 'org-1', storeId: 'store-A',
+  quantity: 2, total: 40000, paidAmount: 40000, creditAmount: 0,
+  saleType: 'paid', stockProductId: 'product-rice', status: 'validated'
+};
+const cancellationRecord = {
+  id: 'cancel-1', idempotencyKey: 'cancel-key-1',
+  saleId: 'sale-cancel-1', organizationId: 'org-1', storeId: 'store-A',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:10:00.000Z',
+  reason: 'Erreur de saisie'
+};
+const cancellationCheck = validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, cancellationRecord, null, []);
+assert.equal(cancellationCheck.valid, true, 'owner can prevalidate a valid sale cancellation');
+assert.equal(cancellationCheck.stockToRestore, 2, 'cancellation signals stock quantity to restore');
+assert.equal(cancellationCheck.cashToReverse, 40000, 'cancellation reports cash ledger amount to reverse');
+assert.equal(validateSaleCancellation(bundle, 'seller-A',
+  persistedSaleForCancel, cancellationRecord, null, []).valid, false,
+  'seller cannot cancel a validated sale');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, cancellationRecord, { id: 'cancel-previous' }, []).reason,
+  'sale_already_cancelled', 'duplicate cancellation is rejected');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  { ...persistedSaleForCancel, status: 'cancelled' }, cancellationRecord, null, []).reason,
+  'sale_already_cancelled', 'cancelled sale cannot be cancelled again');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, { ...cancellationRecord, reason: '' }, null, []).valid,
+  false, 'cancellation requires a reason');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, { ...cancellationRecord, idempotencyKey: '' }, null, []).valid,
+  false, 'cancellation requires idempotency key');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, cancellationRecord, null, [{ id: 'repayment-1', amount: 10000 }]).reason,
+  'sale_has_repayments_requires_refund_workflow', 'sale with repayments requires explicit refund workflow');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, { ...cancellationRecord, storeId: 'store-B' }, null, []).valid,
+  false, 'cancellation cannot move across stores');
+
+console.log('PASS: 134 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
