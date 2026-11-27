@@ -422,4 +422,4 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
   newPayment, priorPayments, null, '2026-11-27T14:30:00.000Z').reason,
   'invalid_payment_timestamp', 'stale repayment proposal is rejected');
 
-console.log('PASS: 110 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+console.log('PASS: 109 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
