@@ -15,6 +15,8 @@ const {
   validatePurchaseRecord,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateAuditEvent,
+  validateStockAdjustment,
   projectSellerProduct
 } = require('./multi-store-model');
 
@@ -508,4 +510,64 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, { ...cancellationRecord, storeId: 'store-B' }, null, []).valid,
   false, 'cancellation cannot move across stores');
 
-console.log('PASS: 130 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+
+// Append-only audit evidence and owner-controlled stock corrections.
+const stockSnapshotForAdjustment = {
+  organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-rice', quantity: 12
+};
+const adjustment = {
+  id: 'adjust-1', idempotencyKey: 'adjust-key-1',
+  organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-rice', delta: -2,
+  reason: 'Inventaire physique', createdBy: 'owner-1'
+};
+const adjustmentCheck = validateStockAdjustment(bundle, 'owner-1',
+  adjustment, stockSnapshotForAdjustment, null);
+assert.equal(adjustmentCheck.valid, true, 'owner can validate a reasoned stock adjustment');
+assert.equal(adjustmentCheck.resultingQuantity, 10, 'stock adjustment computes resulting quantity');
+assert.equal(validateStockAdjustment(bundle, 'seller-A', adjustment,
+  stockSnapshotForAdjustment, null).valid, false, 'seller cannot adjust stock');
+assert.equal(validateStockAdjustment(bundle, 'owner-1',
+  { ...adjustment, delta: -20 }, stockSnapshotForAdjustment, null).valid, false,
+  'stock adjustment cannot make quantity negative');
+assert.equal(validateStockAdjustment(bundle, 'owner-1',
+  { ...adjustment, reason: '' }, stockSnapshotForAdjustment, null).valid, false,
+  'stock adjustment requires a reason');
+assert.equal(validateStockAdjustment(bundle, 'owner-1', adjustment,
+  stockSnapshotForAdjustment, { id: 'movement-existing' }).reason,
+  'stock_adjustment_already_applied', 'stock adjustment replay is rejected');
+
+const auditEvent = {
+  id: 'audit-1', organizationId: 'org-1', storeId: 'store-A',
+  actorUid: 'seller-A', action: 'sale.created',
+  targetType: 'sale', targetId: 'sale-1', operationId: 'sale-op-1',
+  createdAt: '2026-11-28T11:00:00.000Z'
+};
+assert.equal(validateAuditEvent(bundle, 'seller-A', auditEvent,
+  '2026-11-28T11:00:30.000Z').valid, true,
+  'assigned seller event for an allowed sale operation is accepted');
+assert.equal(validateAuditEvent(bundle, 'seller-B', auditEvent,
+  '2026-11-28T11:00:30.000Z').valid, false,
+  'audit actor cannot be forged across seller identities');
+assert.equal(validateAuditEvent(bundle, 'seller-A',
+  { ...auditEvent, storeId: 'store-B' }, '2026-11-28T11:00:30.000Z').valid,
+  false, 'seller cannot write audit events into another store');
+assert.equal(validateAuditEvent(bundle, 'seller-A',
+  { ...auditEvent, action: 'expense.created' }, '2026-11-28T11:00:30.000Z').valid,
+  false, 'seller cannot create expense audit evidence');
+assert.equal(validateAuditEvent(bundle, 'seller-A',
+  { ...auditEvent, createdAt: 'not-a-date' }, '2026-11-28T11:00:30.000Z').valid,
+  false, 'audit event timestamp must be valid');
+assert.equal(validateAuditEvent(bundle, 'seller-A',
+  { ...auditEvent, operationId: '' }, '2026-11-28T11:00:30.000Z').valid,
+  false, 'audit event must reference its originating operation');
+assert.equal(validateAuditEvent(bundle, 'seller-A',
+  { ...auditEvent, action: 'untrusted.admin' }, '2026-11-28T11:00:30.000Z').valid,
+  false, 'unknown audit action is rejected');
+assert.equal(validateAuditEvent(bundle, 'owner-1',
+  { ...auditEvent, actorUid: 'owner-1', action: 'expense.created' },
+  '2026-11-28T11:00:30.000Z').valid, true,
+  'owner expense event is accepted');
+
+console.log('PASS: 145 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
