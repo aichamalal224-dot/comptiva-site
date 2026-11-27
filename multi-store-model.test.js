@@ -245,4 +245,53 @@ assert.equal(modelRevoke(bundle, 'seller-A', validInvite).valid, false,
 assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, status: 'accepted' }).valid, false,
   'accepted invitation cannot be revoked as pending');
 
-console.log('PASS: 69 multi-store model, permission, provenance, invitation lifecycle and seller-data projection assertions');
+
+const transfer = {
+  id: 'transfer-1', organizationId: 'org-1', productId: 'product-1',
+  fromStoreId: 'store-A', toStoreId: 'store-B', quantity: 5,
+  status: 'in_transit', createdBy: 'owner-1',
+  createdAt: '2026-11-27T14:00:00.000Z'
+};
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', transfer,
+  '2026-11-27T14:01:00.000Z').valid, true,
+  'owner can create a valid inter-store stock transfer');
+assert.equal(validateStockTransferCreation(bundle, 'seller-A', transfer,
+  '2026-11-27T14:01:00.000Z').valid, false,
+  'seller cannot initiate stock transfers');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, toStoreId: 'store-A'
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'transfer cannot target its source store');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, quantity: -2
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'negative transfer quantity is rejected');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, toStoreId: 'store-X'
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'transfer cannot target unknown store');
+const receipt = {
+  transferId: 'transfer-1', organizationId: 'org-1',
+  storeId: 'store-B', productId: 'product-1', quantity: 5,
+  receivedBy: 'owner-1', receivedAt: '2026-11-27T14:02:00.000Z'
+};
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
+  '2026-11-27T14:03:00.000Z').valid, true,
+  'owner can validate receipt at destination store');
+assert.equal(validateStockTransferReceipt(bundle, 'seller-B', transfer, receipt,
+  '2026-11-27T14:03:00.000Z').valid, false,
+  'seller cannot validate transfer receipt');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', {
+  ...transfer, status: 'received'
+}, receipt, '2026-11-27T14:03:00.000Z').valid, false,
+  'already received transfer cannot be received twice');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+  ...receipt, quantity: 4
+}, '2026-11-27T14:03:00.000Z').valid, false,
+  'partial or altered quantity cannot silently complete transfer');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+  ...receipt, storeId: 'store-A'
+}, '2026-11-27T14:03:00.000Z').valid, false,
+  'receipt must credit the designated destination store');
+
+console.log('PASS: 79 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
