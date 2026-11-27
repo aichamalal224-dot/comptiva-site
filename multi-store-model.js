@@ -731,14 +731,21 @@ function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, 
     return { valid: false, reason: 'payment_already_applied' };
   }
   const seen = new Set();
+  const seenIdempotencyKeys = new Set();
   let paid = 0;
   for (const prior of existingPayments) {
     if (!isRecord(prior) || prior.debtId !== debt.id ||
+        prior.clientId !== debt.clientId ||
+        prior.organizationId !== debt.organizationId ||
+        prior.storeId !== debt.storeId ||
         !nonEmptyString(prior.id) || seen.has(prior.id) ||
+        !nonEmptyString(prior.idempotencyKey) ||
+        seenIdempotencyKeys.has(prior.idempotencyKey) ||
         !Number.isSafeInteger(prior.amount) || prior.amount <= 0) {
       return { valid: false, reason: 'invalid_existing_payment_history' };
     }
     seen.add(prior.id);
+    seenIdempotencyKeys.add(prior.idempotencyKey);
     paid += prior.amount;
     if (!Number.isSafeInteger(paid) || paid > debt.amount) {
       return { valid: false, reason: 'existing_payments_exceed_debt' };
