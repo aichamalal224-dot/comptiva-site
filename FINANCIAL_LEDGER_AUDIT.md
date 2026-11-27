@@ -26,7 +26,7 @@ Les contrôles s'ajoutent aux validations de rôles, invitations, transferts et 
 
 ## Tests
 
-Le harnais JavaScript isolé exécute **109 assertions** avec succès. Les nouveaux cas couvrent ventes réglées, ventes à crédit, paiement mixte, incohérence de totaux, dépassement de solde, rejeu de paiement, mauvais client/magasin, auteur falsifié, historique de paiement corrompu et horodatage trop ancien.
+Le décompte de 109 assertions correspond à l'étape initiale de cet audit. Le harnais consolidé du prototype multi-magasins exécute maintenant **178 assertions** avec succès, dont les contrôles financiers et d'accès vendeur. Les nouveaux cas couvrent ventes réglées, ventes à crédit, paiement mixte, incohérence de totaux, dépassement de solde, rejeu de paiement, mauvais client/magasin, auteur falsifié, historique de paiement corrompu et horodatage trop ancien.
 
 Il s'agit de tests de fonctions pures. Ce ne sont ni des tests Firebase Emulator, ni des tests de transaction concurrente, ni des tests navigateur.
 
