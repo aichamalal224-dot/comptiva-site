@@ -23,7 +23,7 @@ Pour une annulation, le résultat indique les montants/quantités à contre-pass
 
 ## Tests
 
-Le harnais JavaScript isolé a exécuté **130 assertions** avec succès. Les tests ajoutés couvrent notamment les permissions patron/vendeur, les montants invalides, les références produit, les dépenses, les motifs d'annulation, les rejouements et les ventes avec remboursements préexistants.
+Le harnais JavaScript isolé a exécuté **240 assertions** avec succès. Les tests ajoutés couvrent notamment les permissions patron/vendeur, les montants invalides, les références produit, les dépenses, les motifs d'annulation, les rejouements et les ventes avec remboursements préexistants.
 
 Ce sont des tests de fonctions pures. Aucun test Firebase Emulator, navigateur, transaction concurrente ou multi-appareils n'a été exécuté.
 
@@ -43,12 +43,12 @@ Ce sont des tests de fonctions pures. Aucun test Firebase Emulator, navigateur, 
 
 Le validateur d'achat refuse désormais les quantités nulles, négatives ou fractionnaires : une réception d'articles doit porter une quantité entière strictement positive. Le validateur d'annulation exige aussi une quantité entière sur la vente d'origine et vérifie la cohérence du règlement avant d'autoriser une contre-écriture. Une vente payée dont les montants encaissés/crédités ne correspondent plus au total est bloquée plutôt que de produire une annulation financière erronée.
 
-Cinq scénarios supplémentaires vérifient les quantités d'achat nulles/fractionnaires, les quantités de vente fractionnaires et deux incohérences de règlement. Le harnais isolé passe avec **201 assertions**. Il ne réalise toujours aucune écriture de stock ou de caisse : ces contre-écritures doivent être atomiques côté serveur.
+Cinq scénarios supplémentaires vérifient les quantités d'achat nulles/fractionnaires, les quantités de vente fractionnaires et deux incohérences de règlement. Le harnais isolé passe avec **240 assertions**. Il ne réalise toujours aucune écriture de stock ou de caisse : ces contre-écritures doivent être atomiques côté serveur.
 
 
 ## Complément — réception partielle des achats (28 novembre 2026)
 
-Ajout de `validatePurchaseStockReceipt` au prototype isolé. Le contrôle lie chaque réception à un achat stocké, à un produit par identifiant stable, à une organisation et à un magasin. Il cumule les réceptions antérieures, refuse les quantités fractionnaires, les doublons (ID/clé d'idempotence), les dépassements de la quantité commandée, les stocks incohérents et les réceptions par un vendeur. Il calcule la quantité reçue, le reliquat et le stock résultant sans effectuer lui-même d'écriture. Dix assertions couvrent une livraison en deux fois (12 puis 8 unités sur 20) et les refus associés. Le harnais isolé passe avec **218 assertions**.
+Ajout de `validatePurchaseStockReceipt` au prototype isolé. Le contrôle lie chaque réception à un achat stocké, à un produit par identifiant stable, à une organisation et à un magasin. Il cumule les réceptions antérieures, refuse les quantités fractionnaires, les doublons (ID/clé d'idempotence), les dépassements de la quantité commandée, les stocks incohérents et les réceptions par un vendeur. Il calcule la quantité reçue, le reliquat et le stock résultant sans effectuer lui-même d'écriture. Dix assertions couvrent une livraison en deux fois (12 puis 8 unités sur 20) et les refus associés. Le harnais isolé passe avec **240 assertions**.
 
 Limite : les achats historiques sans `productId` stable ne peuvent pas utiliser ce parcours de réception de stock. En production, la lecture de l'achat, de l'historique des réceptions et du stock, l'ajout de la réception, l'incrément de stock et la mise à jour du cumul devront être atomiques dans une transaction serveur. Aucune intégration ni écriture réelle n'a été effectuée.
 
@@ -57,6 +57,8 @@ Le contrôle des réceptions vérifie aussi la cohérence minimale des dates et 
 
 ## Complément — retours clients et remise en stock (28 novembre 2026)
 
-Ajout de `validateSaleReturn` et de l'action patron `sales:return`. Le helper vérifie le rattachement à la vente, au produit, au magasin et à l'organisation ; cumule les quantités et valeurs déjà retournées ; borne le remboursement au montant effectivement payé et la réduction de crédit au montant dû ; distingue les unités revendables des unités endommagées ; refuse les doublons, les ventes annulées, les remboursements hors allocation et les retours sur ventes ayant déjà des remboursements de dette. Les ventes à crédit sans remboursement antérieur réduisent le crédit dû au lieu de créer un paiement en espèces. Les vendeurs sont refusés par défaut. Les assertions couvrent retours partiels/finals, article endommagé, crédit client, rejets et overflow. Harnais isolé : **237 assertions**.
+Ajout de `validateSaleReturn` et de l'action patron `sales:return`. Le helper vérifie le rattachement à la vente, au produit, au magasin et à l'organisation ; cumule les quantités et valeurs déjà retournées ; borne le remboursement au montant effectivement payé et la réduction de crédit au montant dû ; distingue les unités revendables des unités endommagées ; refuse les doublons, les ventes annulées, les remboursements hors allocation et les retours sur ventes ayant déjà des remboursements de dette. Les ventes à crédit sans remboursement antérieur réduisent le crédit dû au lieu de créer un paiement en espèces. Les vendeurs sont refusés par défaut. Les assertions couvrent retours partiels/finals, article endommagé, crédit client, rejets et overflow. Harnais isolé : **240 assertions**.
 
 Limite : les ventes à crédit avec remboursements antérieurs exigent un flux de remboursement/réduction de dette dédié et restent bloquées. Le montant de retour est fourni par l'opération autorisée ; aucune politique de prorata/remise n'est inventée ici. Le helper ne modifie ni stock ni caisse : le serveur doit exécuter atomiquement retour, remboursement/réduction de dette, stock et journal d'audit.
+
+Le dernier durcissement contrôle aussi les allocations, l'identité de l'auteur, la date et les cumuls de l'historique des retours déjà enregistrés. Trois tests couvrent un historique antérieur incohérent.
