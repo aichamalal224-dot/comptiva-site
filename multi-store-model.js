@@ -492,6 +492,102 @@ function validateSaleStockDecrement(bundle, actorUid, sale, stock, existingMovem
   };
 }
 
+
+/**
+ * Validate the financial split of a sale before persistence.
+ * Amounts are GNF integers; this does not replace server-side validation.
+ */
+function validateSaleSettlement(sale) {
+  if (!isRecord(sale)) return { valid: false, reason: 'sale_not_object' };
+  const total = sale.total, paid = sale.paidAmount, credit = sale.creditAmount;
+  if (![total, paid, credit].every(Number.isSafeInteger) ||
+      total <= 0 || paid < 0 || credit < 0 || paid + credit !== total) {
+    return { valid: false, reason: 'invalid_sale_settlement_totals' };
+  }
+  if (sale.saleType === 'credit') {
+    if (paid !== 0 || credit !== total || !nonEmptyString(sale.clientId)) {
+      return { valid: false, reason: 'invalid_credit_sale_settlement' };
+    }
+  } else if (sale.saleType === 'paid') {
+    if (credit !== 0 || paid !== total) {
+      return { valid: false, reason: 'invalid_paid_sale_settlement' };
+    }
+  } else {
+    return { valid: false, reason: 'unknown_sale_type' };
+  }
+  if (sale.method === 'Paiement mixte') {
+    if (![sale.cashPart, sale.mobilePart].every(Number.isSafeInteger) ||
+        sale.cashPart < 0 || sale.mobilePart < 0 ||
+        sale.cashPart + sale.mobilePart !== paid || paid <= 0) {
+      return { valid: false, reason: 'invalid_mixed_payment_split' };
+    }
+  } else if (sale.cashPart !== undefined || sale.mobilePart !== undefined) {
+    if (![sale.cashPart, sale.mobilePart].every(Number.isSafeInteger) ||
+        sale.cashPart < 0 || sale.mobilePart < 0 ||
+        sale.cashPart + sale.mobilePart !== paid) {
+      return { valid: false, reason: 'invalid_payment_components' };
+    }
+  }
+  return { valid: true, reason: 'sale_settlement_valid' };
+}
+
+/**
+ * Pre-validate a partial debt repayment against trusted persisted debt and
+ * payment history. Production must repeat this inside a transaction, reading
+ * the debt and idempotency record before writing payment + updated balance.
+ */
+function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, existingIdempotencyRecord, now = new Date().toISOString()) {
+  if (!isRecord(debt) || !isRecord(payment) || !Array.isArray(existingPayments)) {
+    return { valid: false, reason: 'invalid_debt_payment_context' };
+  }
+  if (!nonEmptyString(debt.id) || !nonEmptyString(debt.clientId) ||
+      debt.organizationId !== bundle?.organization?.id ||
+      !nonEmptyString(debt.storeId) || !Number.isSafeInteger(debt.amount) ||
+      debt.amount <= 0) {
+    return { valid: false, reason: 'invalid_debt_record' };
+  }
+  if (payment.debtId !== debt.id || payment.clientId !== debt.clientId ||
+      payment.organizationId !== debt.organizationId ||
+      payment.storeId !== debt.storeId ||
+      !Number.isSafeInteger(payment.amount) || payment.amount <= 0 ||
+      !nonEmptyString(payment.idempotencyKey)) {
+    return { valid: false, reason: 'invalid_payment_fields_or_reference' };
+  }
+  if (existingIdempotencyRecord !== null && existingIdempotencyRecord !== undefined) {
+    return { valid: false, reason: 'payment_already_applied' };
+  }
+  const seen = new Set();
+  let paid = 0;
+  for (const prior of existingPayments) {
+    if (!isRecord(prior) || prior.debtId !== debt.id ||
+        !nonEmptyString(prior.id) || seen.has(prior.id) ||
+        !Number.isSafeInteger(prior.amount) || prior.amount <= 0) {
+      return { valid: false, reason: 'invalid_existing_payment_history' };
+    }
+    seen.add(prior.id);
+    paid += prior.amount;
+    if (!Number.isSafeInteger(paid) || paid > debt.amount) {
+      return { valid: false, reason: 'existing_payments_exceed_debt' };
+    }
+  }
+  if (paid + payment.amount > debt.amount) {
+    return { valid: false, reason: 'payment_exceeds_remaining_balance' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'payments:create', payment);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const nowMs = Date.parse(now), createdMs = Date.parse(payment.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_payment_timestamp' };
+  }
+  return {
+    valid: true,
+    reason: 'debt_payment_prevalidated',
+    paidAfter: paid + payment.amount,
+    remainingAfter: debt.amount - paid - payment.amount
+  };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -505,6 +601,8 @@ const api = {
   validateStockTransferCreation,
   validateStockTransferReceipt,
   validateSaleStockDecrement,
+  validateSaleSettlement,
+  validateDebtPayment,
   projectSellerProduct
 };
 
