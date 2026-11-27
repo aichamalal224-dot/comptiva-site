@@ -1247,7 +1247,8 @@ async function krediInitFirebase(){try{
       if(snap.metadata&&snap.metadata.fromCache){if(!krediServerReady&&!serverProbeFinished){krediCloudReady=false;krediStatus('Connexion au serveur en cours… Les données locales sont conservées.')}return}
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
-      const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
+      const snapshotData=snap.exists?snap.data():null;
+      const remoteData=snap.exists?(snapshotData&&snapshotData.db):krediEmptyDB();
       if(!krediRemoteDBIsStructurallyValid(remoteData)){
         krediCloudReady=false;
         krediStatus('Données reçues de Firebase dans un format incohérent. Aucune fusion automatique effectuée ; les données locales restent intactes. Une vérification est nécessaire.');
