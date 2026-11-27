@@ -20,6 +20,7 @@ const {
   validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
   projectSellerProduct,
@@ -771,6 +772,94 @@ assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
   '2026-11-28T10:06:00.000Z').reason,
   'purchase_receipt_quantity_overflow', 'stock increment cannot exceed safe integer range');
 
+// Customer returns: quantity, refund/credit reduction and restock are bounded.
+const saleForReturn = {
+  id: 'sale-return-1', organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-1', quantity: 3, total: 30000, unitPrice: 10000,
+  saleType: 'paid', paidAmount: 30000, creditAmount: 0, method: 'Espèces',
+  createdBy: 'seller-A', createdAt: '2026-11-28T10:00:00.000Z'
+};
+const returnStock = {
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-1', quantity: 5
+};
+const firstReturn = {
+  id: 'return-1', idempotencyKey: 'return-key-1', saleId: 'sale-return-1',
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-1',
+  quantity: 1, amount: 10000, cashRefundAmount: 10000, creditReductionAmount: 0,
+  restockQuantity: 1, damagedQuantity: 0, reason: 'Produit retourné intact',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:05:00.000Z'
+};
+const returnCheck = validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [], [], returnStock, '2026-11-28T10:06:00.000Z');
+assert.equal(returnCheck.valid, true, 'owner can prevalidate a valid paid-sale return');
+assert.equal(returnCheck.remainingReturnableQuantity, 2, 'return tracks remaining returnable quantity');
+assert.equal(returnCheck.refundedAfter, 10000, 'return tracks cumulative cash refund');
+assert.equal(returnCheck.resultingStockQuantity, 6, 'only resellable returned units re-enter stock');
+assert.equal(returnCheck.fullyReturned, false, 'partial return leaves sale returnable balance');
+const secondReturn = {
+  ...firstReturn, id: 'return-2', idempotencyKey: 'return-key-2',
+  quantity: 2, amount: 20000, cashRefundAmount: 20000,
+  restockQuantity: 1, damagedQuantity: 1, createdAt: '2026-11-28T10:07:00.000Z'
+};
+const finalReturnCheck = validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  secondReturn, [firstReturn], [], { ...returnStock, quantity: 6 },
+  '2026-11-28T10:08:00.000Z');
+assert.equal(finalReturnCheck.valid, true, 'remaining items can be returned with one damaged unit');
+assert.equal(finalReturnCheck.fullyReturned, true, 'all sold quantity can be returned once');
+assert.equal(finalReturnCheck.resultingStockQuantity, 7, 'damaged returned unit is not restored to stock');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, id: 'return-over', idempotencyKey: 'return-key-over', quantity: 3, amount: 30000,
+    cashRefundAmount: 30000, restockQuantity: 3 },
+  [firstReturn], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'return_exceeds_sold_quantity', 'cumulative return quantity cannot exceed sold quantity');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, amount: 25000, cashRefundAmount: 25000 },
+  [], [], returnStock, '2026-11-28T10:06:00.000Z').valid,
+  false, 'return refund allocation must reconcile with the return amount?');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, id: 'return-dup', idempotencyKey: 'return-key-1' },
+  [firstReturn], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'sale_return_already_applied', 'return replay by idempotency key is rejected');
+assert.equal(validateSaleReturn(bundle, 'seller-A', saleForReturn,
+  { ...firstReturn, createdBy: 'seller-A' }, [], [], returnStock,
+  '2026-11-28T10:06:00.000Z').valid, false, 'seller cannot perform owner-only sale returns');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [], [{ id: 'repayment-1' }], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'sale_has_repayments_requires_debt_refund_workflow', 'returns with prior repayments require dedicated debt workflow');
+assert.equal(validateSaleReturn(bundle, 'owner-1',
+  { ...saleForReturn, status: 'cancelled' }, firstReturn, [], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'cancelled_sale_cannot_be_returned', 'cancelled sale cannot be returned again');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, restockQuantity: 2, damagedQuantity: 0 },
+  [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_sale_return_fields', 'restocked and damaged quantities must equal returned quantity');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, quantity: 1.5 }, [], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_sale_return_fields', 'fractional return quantities are rejected');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [], [], { ...returnStock, quantity: Number.MAX_SAFE_INTEGER },
+  '2026-11-28T10:06:00.000Z').reason,
+  'sale_return_stock_overflow', 'return stock increment cannot overflow safe integer range');
+const creditSaleForReturn = {
+  ...saleForReturn, id: 'sale-credit-return', saleType: 'credit',
+  paidAmount: 0, creditAmount: 30000, method: 'Crédit client', clientId: 'client-1'
+};
+const creditReturn = {
+  ...firstReturn, id: 'return-credit', idempotencyKey: 'return-credit-key',
+  saleId: 'sale-credit-return', amount: 10000, cashRefundAmount: 0,
+  creditReductionAmount: 10000, restockQuantity: 1
+};
+assert.equal(validateSaleReturn(bundle, 'owner-1', creditSaleForReturn,
+  creditReturn, [], [], returnStock, '2026-11-28T10:06:00.000Z').valid,
+  true, 'unpaid credit sale return reduces outstanding credit rather than paying cash');
+assert.equal(validateSaleReturn(bundle, 'owner-1', creditSaleForReturn,
+  { ...creditReturn, cashRefundAmount: 10000, creditReductionAmount: 0 },
+  [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_credit_sale_return_allocation', 'credit return cannot create an unsupported cash refund');
+
 // Append-only audit evidence and owner-controlled stock corrections.
 const stockSnapshotForAdjustment = {
   organizationId: 'org-1', storeId: 'store-A',
@@ -880,4 +969,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 218 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data, purchase-receipt and stock-transfer assertions');
+console.log('PASS: 237 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, sale-return and stock-transfer assertions');
