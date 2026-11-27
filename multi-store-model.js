@@ -223,12 +223,37 @@ function validateOperationRecord(bundle, actorUid, action, record) {
   return { valid: true, reason: 'operation_provenance_valid' };
 }
 
+
+/**
+ * Validate an update against the persisted version. Original identity and
+ * provenance fields are immutable; the caller must load previousRecord from
+ * trusted storage and must not accept it from the request body.
+ */
+function validateOperationUpdate(bundle, actorUid, action, previousRecord, nextRecord) {
+  if (!isRecord(previousRecord) || !isRecord(nextRecord)) {
+    return { valid: false, reason: 'missing_persisted_or_next_record' };
+  }
+  const immutableFields = ['id', 'organizationId', 'storeId', 'createdBy', 'createdAt'];
+  for (const field of immutableFields) {
+    if (previousRecord[field] !== nextRecord[field]) {
+      return { valid: false, reason: 'immutable_provenance_changed' };
+    }
+  }
+  if (nextRecord.updatedBy !== actorUid ||
+      typeof nextRecord.updatedAt !== 'string' ||
+      !Number.isFinite(Date.parse(nextRecord.updatedAt))) {
+    return { valid: false, reason: 'invalid_update_actor_or_timestamp' };
+  }
+  return validateOperationRecord(bundle, actorUid, action, nextRecord);
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
   validateOrganizationBundle,
   authorizeStoreAction,
-  validateOperationRecord
+  validateOperationRecord,
+  validateOperationUpdate
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
