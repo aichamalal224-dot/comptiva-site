@@ -466,7 +466,7 @@ function id(prefix){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function inlineArg(value){return esc(JSON.stringify(String(value??'')))}
 function money(n){return Math.round(Number(n)||0).toLocaleString('fr-FR')+' GNF'}
-function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('fr-FR')}
+function dateFmt(s){if(!s)return '—';let d=new Date(s+'T00:00:00');return isNaN(d)?'—':d.toLocaleDateString('fr-FR')}
 function clientName(cid){return db.clients.find(c=>c.id===cid)?.name||'Client supprimé/inconnu'}
 function paidFor(debtId){return db.payments.filter(p=>p.debtId===debtId).reduce((a,p)=>a+Number(p.appliedAmount!==undefined?p.appliedAmount:p.amount||0),0)}
 function clientCreditBalance(clientId){return db.credits.filter(c=>c.clientId===clientId).reduce((sum,c)=>sum+(c.type==='redeemed'?-1:1)*Number(c.amount||0),0)}
