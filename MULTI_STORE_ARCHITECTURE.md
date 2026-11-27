@@ -48,6 +48,10 @@ Les contrôles doivent être appliqués côté serveur / règles Firestore, pas 
 
 Le modèle final des règles doit être testé avec des comptes de test patron, vendeur autorisé, vendeur non autorisé et utilisateur d'une autre organisation. Les règles actuellement publiées dans Firebase ne sont pas visibles dans ce dépôt ; leur état réel ne peut donc pas être certifié depuis cet audit.
 
+## 4 bis. Séparation des données confidentielles du patron
+
+Les fiches produits actuelles contiennent `purchasePrice` dans le même objet que le nom, la quantité et le prix de vente. Les règles Firestore ne savent pas masquer ce champ à un vendeur qui peut lire le document. La cible doit donc séparer le document opérationnel du produit et son document financier réservé au patron. Les achats, dépenses, coûts d'achat, marges, bénéfices et valorisations restent dans des documents accessibles uniquement au patron. Les projections vendeur doivent être construites par liste blanche, et les écritures vers les documents opérationnels doivent refuser tout champ financier, y compris dans les objets imbriqués. Voir `STORE_DATA_ACCESS_AUDIT.md`.
+
 ## 5. Migration sans perte
 
 1. Sauvegarder et vérifier les données existantes de chaque compte.
