@@ -1091,6 +1091,22 @@ async function updateCreatorAdRequest(button){
 }
 function krediTrackMerchant(user){if(!user||!user.uid||user.uid===KREDI_CREATOR_UID||!krediStore)return;const name=user.displayName||(user.email?user.email.split('@')[0]:'Commerçant');krediStore.collection('merchantDirectory').doc(user.uid).set({uid:user.uid,email:user.email||'',displayName:name,updatedAt:firebase.firestore.FieldValue.serverTimestamp()},{merge:true}).catch(e=>console.warn('[COMPTIVA] Inscription au répertoire commerçant non confirmée :',e));}
 function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comptiva_subscription_v1_'+uid;db=loadDB();if(!db||typeof db!=='object'||Array.isArray(db))db={};['sales','clients','debts','payments','purchases','expenses','products'].forEach(key=>{if(!Array.isArray(db[key]))db[key]=[];else db[key]=db[key].filter(row=>row&&typeof row==='object'&&!Array.isArray(row))});subscription=loadSubscription();if(!subscription||typeof subscription!=='object'||Array.isArray(subscription))subscription={};if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings||typeof subscription.paymentSettings!=='object')subscription.paymentSettings={number:'',name:''};}
+function krediRemoteDBIsStructurallyValid(data){
+  if(!data||typeof data!=='object'||Array.isArray(data))return false;
+  const base=krediEmptyDB();
+  for(const key of Object.keys(base)){
+    if(data[key]!==undefined&&!Array.isArray(data[key]))return false;
+    const seen=new Set();
+    for(const row of data[key]||[]){
+      if(!row||typeof row!=='object'||Array.isArray(row))return false;
+      if(row.id!==undefined){
+        if(typeof row.id!=='string'||!row.id.trim()||seen.has(row.id))return false;
+        seen.add(row.id);
+      }
+    }
+  }
+  return true;
+}
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
@@ -1099,8 +1115,8 @@ function krediMergeDatabases(localData,remoteData,preferLocal){
     const first=preferLocal?remoteRows:localRows;
     const second=preferLocal?localRows:remoteRows;
     const map=new Map();
-    for(const item of first){if(!item||typeof item!=='object')continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
-    for(const item of second){if(!item||typeof item!=='object')continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
+    for(const item of first){if(!item||typeof item!=='object'||Array.isArray(item))continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
+    for(const item of second){if(!item||typeof item!=='object'||Array.isArray(item))continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
     out[key]=Array.from(map.values());
   }
   return out;
@@ -1232,6 +1248,12 @@ async function krediInitFirebase(){try{
       clearTimeout(serverProbeTimer);
       krediServerReady=true;
       const remoteData=snap.exists&&snap.data()&&snap.data().db&&typeof snap.data().db==='object'?snap.data().db:krediEmptyDB();
+      if(!krediRemoteDBIsStructurallyValid(remoteData)){
+        krediCloudReady=false;
+        krediStatus('Données reçues de Firebase dans un format incohérent. Aucune fusion automatique effectuée ; les données locales restent intactes. Une vérification est nécessaire.');
+        console.error('[COMPTIVA] Snapshot Firestore refusé : structure de données invalide.');
+        return;
+      }
       const localData=loadDB();
       const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
