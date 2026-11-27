@@ -7,6 +7,10 @@ const {
   validateOperationRecord,
   validateOperationUpdate,
   validateSellerInvitation,
+  validateSellerSuspension,
+  validateSellerReactivation,
+  validateSellerStoreAssignment,
+  authorizeWithCurrentMembership,
   validateStockTransferCreation,
   validateStockTransferReceipt,
   validateSaleStockDecrement,
@@ -255,6 +259,64 @@ assert.equal(modelRevoke(bundle, 'seller-A', validInvite).valid, false,
 assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, status: 'accepted' }).valid, false,
   'accepted invitation cannot be revoked as pending');
 
+
+
+const activeSellerForLifecycle = bundle.members[1];
+assert.equal(validateSellerSuspension(bundle, 'owner-1', 'seller-A',
+  'Fin de contrat', '2026-11-27T15:00:00.000Z').valid, true,
+  'owner can suspend an active seller with a reason');
+assert.equal(validateSellerSuspension(bundle, 'seller-A', 'seller-B',
+  'Motif', '2026-11-27T15:00:00.000Z').reason, 'owner_only',
+  'seller cannot suspend another member');
+assert.equal(validateSellerSuspension(bundle, 'owner-1', 'owner-1',
+  'Motif', '2026-11-27T15:00:00.000Z').reason, 'seller_member_not_found',
+  'owner account cannot be suspended as a seller');
+assert.equal(validateSellerSuspension(bundle, 'owner-1', 'seller-A',
+  '', '2026-11-27T15:00:00.000Z').reason, 'suspension_reason_required_or_too_long',
+  'suspension requires an audit reason');
+assert.equal(validateSellerSuspension(bundle, 'owner-1', 'seller-A',
+  'Motif', 'invalid-date').valid, false, 'suspension requires a valid timestamp');
+const suspendedSellerBundle = structuredClone(bundle);
+suspendedSellerBundle.members[1].status = 'suspended';
+assert.equal(validateSellerReactivation(suspendedSellerBundle, 'owner-1', 'seller-A',
+  '2026-11-27T15:05:00.000Z').valid, true,
+  'owner can reactivate a suspended seller with valid store assignments');
+assert.equal(validateSellerReactivation(bundle, 'owner-1', 'seller-A',
+  '2026-11-27T15:05:00.000Z').reason, 'seller_not_suspended',
+  'active seller cannot be reactivated twice');
+assert.equal(validateSellerReactivation(suspendedSellerBundle, 'seller-B', 'seller-A',
+  '2026-11-27T15:05:00.000Z').reason, 'owner_only',
+  'seller cannot reactivate another seller');
+const suspendedWithoutStore = structuredClone(suspendedSellerBundle);
+suspendedWithoutStore.members[1].storeIds = [];
+assert.equal(validateSellerReactivation(suspendedWithoutStore, 'owner-1', 'seller-A',
+  '2026-11-27T15:05:00.000Z').reason, 'invalid_organization_model',
+  'organization model rejects a seller without an assigned store');
+assert.equal(validateSellerStoreAssignment(bundle, 'owner-1', 'seller-A', ['store-A', 'store-B'],
+  '2026-11-27T15:10:00.000Z').valid, true,
+  'owner can assign seller to multiple active stores');
+assert.equal(validateSellerStoreAssignment(bundle, 'seller-A', 'seller-B', ['store-A'],
+  '2026-11-27T15:10:00.000Z').reason, 'owner_only',
+  'seller cannot change store assignments');
+assert.equal(validateSellerStoreAssignment(bundle, 'owner-1', 'seller-A', ['store-X'],
+  '2026-11-27T15:10:00.000Z').reason, 'invalid_seller_store_assignment',
+  'assignment rejects unknown stores');
+assert.equal(validateSellerStoreAssignment(bundle, 'owner-1', 'seller-A', ['store-A', 'store-A'],
+  '2026-11-27T15:10:00.000Z').reason, 'invalid_seller_store_assignment',
+  'assignment rejects duplicate stores');
+assert.equal(validateSellerStoreAssignment(bundle, 'owner-1', 'seller-A', [],
+  '2026-11-27T15:10:00.000Z').reason, 'invalid_seller_store_assignment',
+  'seller must retain at least one assigned store');
+assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-A', 'sales:read',
+  bundle.members[1]).allowed, true, 'authorization accepts the matching current membership snapshot');
+assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-A', 'sales:read',
+  { ...bundle.members[1], status: 'suspended' }).reason, 'stale_membership_snapshot',
+  'stale active client snapshot is denied after suspension');
+assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-B', 'sales:read',
+  bundle.members[1]).allowed, false, 'current membership still enforces store assignment');
+assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-A', 'sales:read',
+  { ...bundle.members[1], uid: 'seller-B' }).reason, 'current_membership_not_verified',
+  'membership snapshot for a different UID is rejected');
 
 const transfer = {
   id: 'transfer-1', organizationId: 'org-1', productId: 'product-1',
@@ -570,4 +632,4 @@ assert.equal(validateAuditEvent(bundle, 'owner-1',
   '2026-11-28T11:00:30.000Z').valid, true,
   'owner expense event is accepted');
 
-console.log('PASS: 144 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+console.log('PASS: 157 multi-store model, permission, provenance, invitation, seller lifecycle, seller-data and stock-transfer assertions');
