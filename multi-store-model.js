@@ -277,7 +277,7 @@ function validateSellerInvitation(bundle, actorUid, invitation, now = new Date()
 
   const email = invitation.email;
   if (typeof email !== 'string' ||
-      !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email.trim()) ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ||
       email !== email.trim().toLowerCase()) {
     return { valid: false, reason: 'invalid_normalized_email' };
   }
