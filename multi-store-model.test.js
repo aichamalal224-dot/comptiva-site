@@ -7,6 +7,8 @@ const {
   validateOperationRecord,
   validateOperationUpdate,
   validateSellerInvitation,
+  validateStockTransferCreation,
+  validateStockTransferReceipt,
   projectSellerProduct
 } = require('./multi-store-model');
 
