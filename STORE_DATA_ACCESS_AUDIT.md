@@ -64,3 +64,12 @@ Les permissions vendeurs personnalisées peuvent réduire les actions quotidienn
 - [ ] Tests Firebase Emulator et tests de lecture réelle avec comptes patron/vendeur.
 
 **Conclusion :** le prototype de validation est renforcé, mais le risque réel ne sera éliminé qu'après séparation des documents et application de règles Firestore testées. Ne pas activer les vendeurs sur les fiches produits actuelles contenant `purchasePrice` tant que cette séparation n'est pas faite.
+
+
+## 7. Extension des projections vendeur — 28 novembre 2026
+
+Le prototype fournit désormais des projections positives par liste blanche pour les ventes (projectSellerSale), les dettes (projectSellerDebt) et les remboursements (projectSellerPayment). Elles conservent les montants opérationnels nécessaires à l'encaissement et au suivi des crédits, mais omettent les champs de coûts, marges, bénéfices et notes internes non explicitement autorisés.
+
+validateSellerOperationalRecord inspecte récursivement les objets et tableaux et refuse les champs financiers sensibles, y compris lorsqu'ils sont imbriqués. Cette validation ne doit jamais être considérée comme un filtre Firestore : les requêtes vendeurs doivent lire des documents opérationnels distincts, qui ne contiennent déjà aucun champ confidentiel.
+
+Tests ajoutés : projection positive de vente, dette et remboursement ; exclusion de coûts, marges et bénéfices ; refus de champs sensibles imbriqués ; acceptation des champs de règlement opérationnels. Le harnais consolidé compte **185 assertions réussies** (173 appels d'assertion antérieurs + 12 nouveaux). Exécution isolée JavaScript, sans Firebase Emulator ni comptes réels.
