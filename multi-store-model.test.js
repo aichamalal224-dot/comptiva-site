@@ -63,6 +63,19 @@ restrictedSeller.members[1].permissions = ['sales:read'];
 assert.equal(authorizeStoreAction(restrictedSeller, 'seller-A', 'store-A', 'sales:create').allowed, false,
   'explicit seller permission list restricts defaults');
 
+// Seller role must not expose owner financial controls or sensitive reports.
+for (const action of ['dashboard:read', 'reports:read', 'purchases:read',
+  'purchases:create', 'expenses:read', 'expenses:create']) {
+  assert.equal(authorizeStoreAction(bundle, 'seller-A', 'store-A', action).allowed, false,
+    'seller is denied owner-only action: ' + action);
+}
+assert.equal(authorizeStoreAction(bundle, 'owner-1', 'store-A', 'reports:read').allowed, true,
+  'owner retains financial reporting access');
+assert.equal(authorizeStoreAction(bundle, 'owner-1', 'store-A', 'expenses:read').allowed, true,
+  'owner retains expense access');
+assert.equal(authorizeStoreAction(bundle, 'owner-1', 'store-A', 'purchases:create').allowed, true,
+  'owner retains purchase management');
+
 
 const saleRecord = {
   id: 'sale-1',
