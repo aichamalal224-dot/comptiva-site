@@ -1236,7 +1236,24 @@ async function krediInitFirebase(){try{
       const hasPending=!!(krediLocalDirty||localStorage.getItem('comptiva_pending_'+activeUid)==='1');
       const merged=krediMergeDatabases(localData,remoteData,hasPending);
       const mergedText=JSON.stringify(merged),remoteText=JSON.stringify({...krediEmptyDB(),...remoteData});
-      krediApplyingCloud=true;db=merged;localStorage.setItem(STORE,JSON.stringify(db));renderAll();krediApplyingCloud=false;
+      // Toujours libérer le verrou, même si le stockage local ou le rendu échoue.
+      krediApplyingCloud=true;
+      try{
+        localStorage.setItem(STORE,JSON.stringify(merged));
+        db=merged;
+        try{renderAll()}catch(renderError){
+          console.error('[COMPTIVA] Données synchronisées localement, mais affichage non actualisé :',renderError);
+          krediStatus('Données reçues de Firebase et enregistrées localement. Un rafraîchissement de l’interface est nécessaire.');
+        }
+      }catch(storageError){
+        db=localData;
+        krediCloudReady=false;
+        console.error('[COMPTIVA] Réception Firestore non enregistrée localement :',storageError);
+        krediStatus('Données reçues de Firebase, mais stockage local impossible. Les données locales précédentes sont conservées sur cet appareil.');
+        return;
+      }finally{
+        krediApplyingCloud=false;
+      }
       if(!snap.exists||mergedText!==remoteText){
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
