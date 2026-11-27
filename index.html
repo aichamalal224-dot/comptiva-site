@@ -883,6 +883,7 @@ async function krediTryRestoreReplacement(uid,ref){
     krediStatus(pendingCleared?'Restauration synchronisée · sauvegarde confirmée sur Firebase':'Sauvegarde confirmée sur Firebase · vérification du marqueur local de synchronisation nécessaire.');
     renderAll();
   }catch(writeError){
+    try{localStorage.setItem(markerKey,'1')}catch(markerRestoreError){console.error('[COMPTIVA] Impossible de rétablir le marqueur de restauration après un échec.',markerRestoreError)}
     krediRemoteWriteBlockedUid=uid;krediLocalDirty=true;krediMarkPendingSync(uid);krediCloudReady=false;
     if(krediUser&&krediUser.uid===uid)krediShowDiagnostic(writeError,'REMPLACEMENT APRÈS RESTAURATION users/'+uid+'/comptivaData/main');
     else console.warn('[COMPTIVA] Échec tardif du remplacement restauré pour un compte inactif.',writeError);
