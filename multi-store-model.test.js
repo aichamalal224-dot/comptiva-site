@@ -17,6 +17,7 @@ const {
   validateSaleSettlement,
   validateDebtPayment,
   validatePurchaseRecord,
+  validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
   validateAuditEvent,
@@ -696,6 +697,70 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
   'invalid_persisted_sale_settlement', 'cancellation rejects invalid paid-sale credit balance');
 
 
+// Partial and final receipts for stock-linked purchases.
+const stockPurchase = {
+  id: 'purchase-stock-1', organizationId: 'org-1', storeId: 'store-A',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:00:00.000Z',
+  item: 'Riz', productId: 'product-rice', quantity: 20,
+  amount: 200000, method: 'cash'
+};
+const purchaseStockSnapshot = {
+  organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-rice', quantity: 7
+};
+const firstPurchaseReceipt = {
+  id: 'purchase-receipt-1', idempotencyKey: 'purchase-receipt-key-1',
+  purchaseId: 'purchase-stock-1', organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-rice', quantity: 12, receivedBy: 'owner-1',
+  receivedAt: '2026-11-28T10:05:00.000Z'
+};
+const firstReceiptCheck = validatePurchaseStockReceipt(bundle, 'owner-1',
+  stockPurchase, firstPurchaseReceipt, [], purchaseStockSnapshot,
+  '2026-11-28T10:06:00.000Z');
+assert.equal(firstReceiptCheck.valid, true, 'owner can receive part of a stock-linked purchase');
+assert.equal(firstReceiptCheck.totalReceived, 12, 'partial receipt accumulates received quantity');
+assert.equal(firstReceiptCheck.remainingToReceive, 8, 'partial receipt preserves outstanding quantity');
+assert.equal(firstReceiptCheck.resultingStockQuantity, 19, 'partial receipt calculates stock increment');
+assert.equal(firstReceiptCheck.fullyReceived, false, 'partial receipt does not mark order fully received');
+const secondPurchaseReceipt = {
+  ...firstPurchaseReceipt, id: 'purchase-receipt-2',
+  idempotencyKey: 'purchase-receipt-key-2', quantity: 8,
+  receivedAt: '2026-11-28T10:07:00.000Z'
+};
+const secondReceiptCheck = validatePurchaseStockReceipt(bundle, 'owner-1',
+  stockPurchase, secondPurchaseReceipt, [firstPurchaseReceipt],
+  { ...purchaseStockSnapshot, quantity: 19 }, '2026-11-28T10:08:00.000Z');
+assert.equal(secondReceiptCheck.valid, true, 'owner can complete a purchase in a second delivery');
+assert.equal(secondReceiptCheck.remainingToReceive, 0, 'final receipt closes outstanding quantity');
+assert.equal(secondReceiptCheck.fullyReceived, true, 'final receipt marks purchase fully received');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  { ...firstPurchaseReceipt, quantity: 9 }, [firstPurchaseReceipt],
+  purchaseStockSnapshot, '2026-11-28T10:06:00.000Z').reason,
+  'purchase_receipt_already_applied', 'receipt replay by ID or idempotency key is rejected');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  { ...firstPurchaseReceipt, id: 'receipt-over', idempotencyKey: 'key-over', quantity: 9 },
+  [firstPurchaseReceipt], purchaseStockSnapshot, '2026-11-28T10:06:00.000Z').reason,
+  'receipt_exceeds_ordered_quantity', 'cumulative receipt cannot exceed ordered quantity');
+assert.equal(validatePurchaseStockReceipt(bundle, 'seller-A', stockPurchase,
+  { ...firstPurchaseReceipt, receivedBy: 'seller-A' }, [], purchaseStockSnapshot,
+  '2026-11-28T10:06:00.000Z').valid, false, 'seller cannot receive owner-only purchases');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  { ...firstPurchaseReceipt, quantity: 1.5 }, [], purchaseStockSnapshot,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_purchase_receipt_fields', 'fractional receipt quantities are rejected');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1',
+  { ...stockPurchase, productId: undefined }, firstPurchaseReceipt, [],
+  purchaseStockSnapshot, '2026-11-28T10:06:00.000Z').reason,
+  'stock_linked_purchase_requires_product', 'stock receipt requires a stable product reference');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  { ...firstPurchaseReceipt, storeId: 'store-B' }, [], purchaseStockSnapshot,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_purchase_receipt_fields', 'receipt cannot be posted to another store');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  firstPurchaseReceipt, [], { ...purchaseStockSnapshot, quantity: -1 },
+  '2026-11-28T10:06:00.000Z').reason,
+  'purchase_receipt_stock_mismatch', 'receipt refuses an invalid stock snapshot');
+
 // Append-only audit evidence and owner-controlled stock corrections.
 const stockSnapshotForAdjustment = {
   organizationId: 'org-1', storeId: 'store-A',
@@ -805,4 +870,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 201 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
+console.log('PASS: 216 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data, purchase-receipt and stock-transfer assertions');
