@@ -1107,6 +1107,41 @@ function krediRemoteDBIsStructurallyValid(data){
   }
   return true;
 }
+function krediRemoteDBIsFinanciallyValid(data){
+  if(!krediRemoteDBIsStructurallyValid(data))return false;
+  const rows=key=>Array.isArray(data[key])?data[key]:[];
+  const finite=(value,min=0)=>typeof value==='number'&&Number.isFinite(value)&&value>=min;
+  const clients=new Set(rows('clients').map(x=>x.id).filter(Boolean));
+  const debts=new Map(rows('debts').filter(x=>x.id).map(x=>[x.id,x]));
+  const sales=new Map(rows('sales').filter(x=>x.id).map(x=>[x.id,x]));
+  const paidByDebt=new Map(),linkedSales=new Set();
+  for(const sale of rows('sales')){
+    if(!finite(sale.quantity,Number.MIN_VALUE)||!finite(sale.unitPrice,Number.MIN_VALUE)||!finite(sale.total,Number.MIN_VALUE))return false;
+    const isCredit=sale.saleType==='credit'||(sale.creditAmount!==undefined&&Number(sale.creditAmount)>0);
+    const paid=sale.paidAmount!==undefined?Number(sale.paidAmount):(isCredit?0:Number(sale.total));
+    const credit=sale.creditAmount!==undefined?Number(sale.creditAmount):(isCredit?Number(sale.total):0);
+    if(!Number.isFinite(paid)||!Number.isFinite(credit)||paid<0||credit<0||Math.abs((paid+credit)-Number(sale.total))>1)return false;
+    if(isCredit&&(!sale.clientId||!clients.has(sale.clientId)))return false;
+    if(sale.stockProductId&&!rows('products').some(p=>p.id===sale.stockProductId))return false;
+  }
+  for(const debt of rows('debts')){
+    if(!finite(debt.amount,Number.MIN_VALUE)||!debt.clientId||!clients.has(debt.clientId))return false;
+    if(debt.saleId){
+      const sale=sales.get(debt.saleId);
+      if(!sale||sale.saleType!=='credit'||sale.clientId!==debt.clientId||Math.abs(Number(debt.amount)-Number(sale.creditAmount!==undefined?sale.creditAmount:sale.total))>1||linkedSales.has(debt.saleId))return false;
+      linkedSales.add(debt.saleId);
+    }
+  }
+  for(const payment of rows('payments')){
+    if(!finite(payment.amount,Number.MIN_VALUE)||!payment.debtId||!debts.has(payment.debtId))return false;
+    paidByDebt.set(payment.debtId,(paidByDebt.get(payment.debtId)||0)+payment.amount);
+  }
+  for(const [debtId,totalPaid] of paidByDebt)if(!Number.isFinite(totalPaid)||totalPaid>Number(debts.get(debtId).amount))return false;
+  for(const purchase of rows('purchases'))if(!finite(purchase.amount,Number.MIN_VALUE))return false;
+  for(const expense of rows('expenses'))if(!finite(expense.amount,Number.MIN_VALUE))return false;
+  for(const product of rows('products'))for(const field of ['quantity','purchasePrice','salePrice','alertAt'])if(product[field]!==undefined&&product[field]!==null&&product[field]!==''&&!finite(product[field]))return false;
+  return true;
+}
 function krediMergeDatabases(localData,remoteData,preferLocal){
   const base=krediEmptyDB(),out={...base};
   for(const key of Object.keys(base)){
@@ -1253,6 +1288,12 @@ async function krediInitFirebase(){try{
         krediCloudReady=false;
         krediStatus('Données reçues de Firebase dans un format incohérent. Aucune fusion automatique effectuée ; les données locales restent intactes. Une vérification est nécessaire.');
         console.error('[COMPTIVA] Snapshot Firestore refusé : structure de données invalide.');
+        return;
+      }
+      if(!krediRemoteDBIsFinanciallyValid(remoteData)){
+        krediCloudReady=false;
+        krediStatus('Données financières reçues de Firebase incohérentes (ventes, dettes, remboursements ou stock). Aucune fusion effectuée ; les données locales restent intactes. Vérification nécessaire.');
+        console.error('[COMPTIVA] Snapshot Firestore refusé : incohérence financière détectée.');
         return;
       }
       const localData=loadDB();
