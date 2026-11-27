@@ -10,7 +10,10 @@ const {
   projectSellerProduct
 } = require('./multi-store-model');
 
-const modelAcceptance = require('./multi-store-model').validateSellerInvitationAcceptance;\nconst modelRevoke = require('./multi-store-model').validateSellerInvitationRevocation;\n\nconst bundle = {
+const modelAcceptance = require('./multi-store-model').validateSellerInvitationAcceptance;
+const modelRevoke = require('./multi-store-model').validateSellerInvitationRevocation;
+
+const bundle = {
   organization: { id: 'org-1', ownerUid: 'owner-1', status: 'active' },
   stores: [
     { id: 'store-A', organizationId: 'org-1', status: 'active' },
