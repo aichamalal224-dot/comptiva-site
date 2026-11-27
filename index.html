@@ -726,11 +726,19 @@ function krediApplyCloudTrial(data){
 }
 async function krediLoadMerchantSubscription(){
  if(!krediUser||krediIsCreator()||!krediStore)return;
+ const requestedUid=krediUser.uid;
+ const requestedStore=krediStore;
  try{
-  const snap=await krediStore.collection('merchantSubscriptions').doc(krediUser.uid).get({source:'server'});
-  if(!krediUser||!snap)return;
+  const snap=await requestedStore.collection('merchantSubscriptions').doc(requestedUid).get({source:'server'});
+  // Une réponse tardive ne doit jamais modifier l'abonnement du compte suivant.
+  if(!krediUser||krediUser.uid!==requestedUid||krediStore!==requestedStore||krediIsCreator()||!snap)return;
   krediApplyCloudTrial(snap.exists?snap.data():null);
- }catch(error){console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);krediStatus('Compte connecté. Lecture de l’abonnement impossible pour le moment : '+(error.code||'erreur Firebase'))}
+ }catch(error){
+  // Ne pas afficher l'erreur d'une ancienne session dans la session courante.
+  if(!krediUser||krediUser.uid!==requestedUid||krediStore!==requestedStore)return;
+  console.warn('[COMPTIVA] Lecture de l’abonnement Firebase non confirmée :',error);
+  krediStatus('Compte connecté. Lecture de l’abonnement impossible pour le moment : '+(error.code||'erreur Firebase'));
+ }
 }
 function showTrialSuccess(message){
  const box=document.getElementById('trialSuccessMessage');
