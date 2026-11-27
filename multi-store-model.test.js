@@ -860,6 +860,21 @@ assert.equal(validateSaleReturn(bundle, 'owner-1', creditSaleForReturn,
   [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
   'invalid_credit_sale_return_allocation', 'credit return cannot create an unsupported cash refund');
 
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-bad', idempotencyKey: 'prior-bad-key',
+    cashRefundAmount: 5000 }], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'prior return allocations must match original sale type');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-over', idempotencyKey: 'prior-over-key',
+    quantity: 4, amount: 30000, cashRefundAmount: 30000, restockQuantity: 4 }],
+  [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_totals', 'inconsistent prior return totals are rejected');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-date', idempotencyKey: 'prior-date-key',
+    createdAt: 'not-a-date' }], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'prior return history requires a valid timestamp');
 // Append-only audit evidence and owner-controlled stock corrections.
 const stockSnapshotForAdjustment = {
   organizationId: 'org-1', storeId: 'store-A',
@@ -969,4 +984,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 237 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, sale-return and stock-transfer assertions');
+console.log('PASS: 240 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, sale-return and stock-transfer assertions');
