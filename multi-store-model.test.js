@@ -382,7 +382,7 @@ assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-A', 'sale
   'membership snapshot for a different UID is rejected');
 
 const transfer = {
-  id: 'transfer-1', organizationId: 'org-1', productId: 'product-1',
+  id: 'transfer-1', idempotencyKey: 'transfer-key-1', organizationId: 'org-1', productId: 'product-1',
   fromStoreId: 'store-A', toStoreId: 'store-B', quantity: 5,
   status: 'in_transit', createdBy: 'owner-1',
   createdAt: '2026-11-27T14:00:00.000Z'
@@ -405,9 +405,21 @@ assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
   ...transfer, toStoreId: 'store-X'
 }, '2026-11-27T14:01:00.000Z').valid, false,
   'transfer cannot target unknown store');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, idempotencyKey: ''
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'transfer requires a stable idempotency key');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', transfer,
+  '2026-11-27T14:01:00.000Z', { id: 'movement-existing' }).reason,
+  'invalid_transfer_fields', 'duplicate transfer creation is rejected');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, quantity: 1.5
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'fractional transfer quantity is rejected');
 const receipt = {
   transferId: 'transfer-1', organizationId: 'org-1',
-  storeId: 'store-B', productId: 'product-1', quantity: 5,
+  storeId: 'store-B', fromStoreId: 'store-A', toStoreId: 'store-B',
+  id: 'receipt-1', idempotencyKey: 'receipt-key-1', productId: 'product-1', quantity: 5,
   receivedBy: 'owner-1', receivedAt: '2026-11-27T14:02:00.000Z'
 };
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
@@ -428,6 +440,17 @@ assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
   ...receipt, storeId: 'store-A'
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'receipt must credit the designated destination store');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+  ...receipt, fromStoreId: 'store-B'
+}, '2026-11-27T14:03:00.000Z').valid, false,
+  'receipt source store must match persisted transfer');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+  ...receipt, idempotencyKey: ''
+}, '2026-11-27T14:03:00.000Z').valid, false,
+  'receipt requires an idempotency key');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
+  '2026-11-27T14:03:00.000Z', { id: 'receipt-existing' }).reason,
+  'transfer_receipt_already_applied', 'duplicate receipt is rejected even if transfer snapshot is stale');
 
 
 // Sale stock decrement: pre-validation, replay protection and stock bounds.
