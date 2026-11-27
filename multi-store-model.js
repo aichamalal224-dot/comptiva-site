@@ -1016,6 +1016,12 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
         !Number.isSafeInteger(prior.restockQuantity) || prior.restockQuantity < 0 ||
         !Number.isSafeInteger(prior.damagedQuantity) || prior.damagedQuantity < 0 ||
         prior.restockQuantity + prior.damagedQuantity !== prior.quantity ||
+        !nonEmptyString(prior.reason) || !nonEmptyString(prior.createdBy) ||
+        !Number.isFinite(Date.parse(prior.createdAt)) ||
+        (persistedSale.saleType === 'paid' &&
+          (prior.cashRefundAmount !== prior.amount || prior.creditReductionAmount !== 0)) ||
+        (persistedSale.saleType === 'credit' &&
+          (prior.cashRefundAmount !== 0 || prior.creditReductionAmount !== prior.amount)) ||
         seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
       return { valid: false, reason: 'invalid_existing_sale_return_history' };
     }
@@ -1031,6 +1037,10 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
   }
   if (seenIds.has(returnRecord.id) || seenKeys.has(returnRecord.idempotencyKey)) {
     return { valid: false, reason: 'sale_return_already_applied' };
+  }
+  if (returnedQuantity > persistedSale.quantity || returnedAmount > persistedSale.total ||
+      cashRefunded > persistedSale.paidAmount || creditReduced > persistedSale.creditAmount) {
+    return { valid: false, reason: 'invalid_existing_sale_return_totals' };
   }
   if (returnedQuantity + returnRecord.quantity > persistedSale.quantity) {
     return { valid: false, reason: 'return_exceeds_sold_quantity' };
