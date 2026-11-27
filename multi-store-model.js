@@ -789,7 +789,7 @@ function validatePurchaseRecord(bundle, actorUid, purchase) {
   if (!isRecord(purchase)) return { valid: false, reason: 'purchase_not_object' };
   if (!nonEmptyString(purchase.item) ||
       !Number.isSafeInteger(purchase.amount) || purchase.amount <= 0 ||
-      !Number.isFinite(purchase.quantity) || purchase.quantity < 0 ||
+      !Number.isSafeInteger(purchase.quantity) || purchase.quantity <= 0 ||
       !nonEmptyString(purchase.method)) {
     return { valid: false, reason: 'invalid_purchase_fields' };
   }
@@ -837,10 +837,12 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
   if (!nonEmptyString(persistedSale.id) ||
       persistedSale.organizationId !== bundle?.organization?.id ||
       !nonEmptyString(persistedSale.storeId) ||
-      !Number.isFinite(persistedSale.quantity) || persistedSale.quantity <= 0 ||
+      !Number.isSafeInteger(persistedSale.quantity) || persistedSale.quantity <= 0 ||
       !Number.isSafeInteger(persistedSale.total) || persistedSale.total <= 0) {
     return { valid: false, reason: 'invalid_persisted_sale' };
   }
+  const settlement = validateSaleSettlement(persistedSale);
+  if (!settlement.valid) return { valid: false, reason: 'invalid_persisted_sale_settlement' };
   if (cancellation.saleId !== persistedSale.id ||
       cancellation.organizationId !== persistedSale.organizationId ||
       cancellation.storeId !== persistedSale.storeId ||
