@@ -894,6 +894,10 @@ async function krediTryRestoreReplacement(uid,ref){
 function krediQueueCloudSave(){
   if(!krediUser||krediApplyingCloud||!krediStore||krediStorageBlocked(STORE))return;
   const uid=krediUser.uid;
+  let restorePending=false;
+  try{restorePending=localStorage.getItem('comptiva_restore_replace_'+uid)==='1'}
+  catch(markerError){krediLocalDirty=true;krediCloudReady=false;krediRemoteWriteBlockedUid=uid;krediStatus('Synchronisation suspendue : impossible de vérifier le marqueur de restauration.');console.error('[COMPTIVA] Vérification du marqueur avant sauvegarde impossible.',markerError);return}
+  if(restorePending){const restoreRef=krediStore.collection('users').doc(uid).collection('comptivaData').doc('main');krediTryRestoreReplacement(uid,restoreRef);return}
   if(krediRemoteWriteBlockedUid===uid){krediLocalDirty=true;krediMarkPendingSync(uid);krediStatus('Envoi Firebase suspendu : les données distantes sont invalides ou contiennent des enregistrements sans identifiant stable. Vos modifications restent locales jusqu’à une vérification et une migration contrôlées.');return}
   const pendingKey='comptiva_pending_'+uid;
   const markPending=()=>{
