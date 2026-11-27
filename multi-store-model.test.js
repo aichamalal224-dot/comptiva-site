@@ -616,6 +616,12 @@ assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
   ...purchaseRecord, quantity: -2
 }).valid, false, 'negative purchase quantity rejected');
 assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, quantity: 0
+}).valid, false, 'zero-quantity purchase rejected');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
+  ...purchaseRecord, quantity: 1.5
+}).valid, false, 'fractional purchase quantity rejected');
+assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
   ...purchaseRecord, productId: ''
 }).valid, false, 'empty linked product ID rejected');
 assert.equal(validatePurchaseRecord(bundle, 'owner-1', {
@@ -679,6 +685,15 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
 assert.equal(validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, { ...cancellationRecord, storeId: 'store-B' }, null, []).valid,
   false, 'cancellation cannot move across stores');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  { ...persistedSaleForCancel, quantity: 1.5 }, cancellationRecord, null, []).reason,
+  'invalid_persisted_sale', 'fractional sale quantity cannot be restored to stock');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  { ...persistedSaleForCancel, paidAmount: 30000 }, cancellationRecord, null, []).reason,
+  'invalid_persisted_sale_settlement', 'cancellation rejects inconsistent paid and credit totals');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  { ...persistedSaleForCancel, creditAmount: 5000 }, cancellationRecord, null, []).reason,
+  'invalid_persisted_sale_settlement', 'cancellation rejects invalid paid-sale credit balance');
 
 
 // Append-only audit evidence and owner-controlled stock corrections.
