@@ -3,7 +3,8 @@
 const assert = require('node:assert/strict');
 const {
   validateOrganizationBundle,
-  authorizeStoreAction
+  authorizeStoreAction,
+  validateOperationRecord
 } = require('./multi-store-model');
 
 const bundle = {
@@ -61,4 +62,33 @@ restrictedSeller.members[1].permissions = ['sales:read'];
 assert.equal(authorizeStoreAction(restrictedSeller, 'seller-A', 'store-A', 'sales:create').allowed, false,
   'explicit seller permission list restricts defaults');
 
-console.log('PASS: 13 multi-store model and authorization assertions');
+
+const saleRecord = {
+  id: 'sale-1',
+  organizationId: 'org-1',
+  storeId: 'store-A',
+  createdBy: 'seller-A',
+  createdAt: '2026-11-27T12:00:00.000Z'
+};
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create', saleRecord).valid, true,
+  'seller operation has valid provenance');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, createdBy: 'seller-B' }).valid, false,
+  'forged creator is rejected');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, organizationId: 'org-other' }).valid, false,
+  'cross-organization operation is rejected');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, createdAt: 'not-a-date' }).valid, false,
+  'invalid creation timestamp is rejected');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, updatedBy: 'seller-A' }).valid, false,
+  'incomplete update provenance is rejected');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, updatedBy: 'seller-A', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, true,
+  'complete update provenance is accepted');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, storeId: 'store-B' }).valid, false,
+  'seller operation in an unassigned store is rejected');
+
+console.log('PASS: 20 multi-store model, permission and provenance assertions');
