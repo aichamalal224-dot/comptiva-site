@@ -210,6 +210,9 @@ function validateOperationRecord(bundle, actorUid, action, record) {
   if (hasUpdatedBy !== hasUpdatedAt) {
     return { valid: false, reason: 'incomplete_update_provenance' };
   }
+  if (typeof action === 'string' && action.endsWith(':create') && hasUpdatedBy) {
+    return { valid: false, reason: 'creation_cannot_claim_update_provenance' };
+  }
   if (hasUpdatedBy &&
       (!nonEmptyString(record.updatedBy) || typeof record.updatedAt !== 'string' ||
        !Number.isFinite(Date.parse(record.updatedAt)))) {
@@ -230,6 +233,9 @@ function validateOperationRecord(bundle, actorUid, action, record) {
  * trusted storage and must not accept it from the request body.
  */
 function validateOperationUpdate(bundle, actorUid, action, previousRecord, nextRecord) {
+  if (typeof action !== 'string' || !action.endsWith(':update')) {
+    return { valid: false, reason: 'update_action_required' };
+  }
   if (!isRecord(previousRecord) || !isRecord(nextRecord)) {
     return { valid: false, reason: 'missing_persisted_or_next_record' };
   }
