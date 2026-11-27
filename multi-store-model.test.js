@@ -61,4 +61,4 @@ restrictedSeller.members[1].permissions = ['sales:read'];
 assert.equal(authorizeStoreAction(restrictedSeller, 'seller-A', 'store-A', 'sales:create').allowed, false,
   'explicit seller permission list restricts defaults');
 
-console.log('PASS: 12 multi-store model and authorization assertions');
+console.log('PASS: 13 multi-store model and authorization assertions');
