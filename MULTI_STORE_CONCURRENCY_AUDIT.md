@@ -56,3 +56,10 @@ Le fichier de test affiche **90 assertions** réussies dans le harnais JavaScrip
 - Le modèle actuel de synchronisation par instantané global ne doit pas être réutilisé tel quel pour des vendeurs simultanés.
 
 **Décision de sécurité :** ne pas activer les comptes vendeurs multi-magasins en production avant l'implémentation des transactions, les règles serveur et les tests de concurrence. Aucune donnée, règle Firebase, branche principale ou publication n'a été modifiée par cette étape.
+
+
+## Complément — intégrité de l'historique des remboursements (28 novembre 2026)
+
+Le validateur des remboursements vérifie maintenant que chaque paiement historique appartient à la même dette, au même client, à la même organisation et au même magasin. Chaque paiement historique doit également posséder un identifiant et une clé d'idempotence uniques ; la clé du nouveau remboursement ne peut pas réutiliser une clé déjà consommée. Un historique croisé entre organisations/magasins, incomplet ou rejoué bloque le nouveau remboursement. Cinq tests négatifs couvrent ces cas.
+
+Résultat rejoué après correction : **190 assertions réussies** dans le harnais JavaScript isolé. Ce contrôle reste une prévalidation : le backend devra relire dette, paiements et clé d'idempotence dans une transaction Firestore avant toute écriture.
