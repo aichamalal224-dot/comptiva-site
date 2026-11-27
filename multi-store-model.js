@@ -8,7 +8,6 @@
 
 const SELLER_DEFAULT_ACTIONS = Object.freeze([
   'store:read',
-  'dashboard:read',
   'clients:read',
   'clients:create',
   'products:read',
@@ -29,7 +28,6 @@ const OWNER_ACTIONS = Object.freeze([
   'reports:read',
   'purchases:read',
   'purchases:create',
-  'purchases:update',
   'expenses:read',
   'expenses:create',
   'expenses:update',
