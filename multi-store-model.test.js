@@ -21,7 +21,8 @@ const {
   validateSaleCancellation,
   validateAuditEvent,
   validateStockAdjustment,
-  projectSellerProduct
+  projectSellerProduct,
+  validateSellerOperationalProduct
 } = require('./multi-store-model');
 
 const modelAcceptance = require('./multi-store-model').validateSellerInvitationAcceptance;
@@ -229,6 +230,28 @@ assert.equal(sellerProductView.internalNotes, undefined, 'seller product view hi
 assert.equal(sellerProductView.salePrice, 50000, 'seller retains customer-facing sale price');
 assert.equal(sellerProductView.quantity, 12, 'seller retains assigned-store stock quantity');
 assert.equal(projectSellerProduct(null), null, 'invalid product projection rejected');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-safe', name: 'Riz', quantity: 5, salePrice: 50000, alertAt: 2
+}).valid, true, 'seller operational product accepts only routine fields');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-leak', name: 'Riz', quantity: 5, salePrice: 50000,
+  purchasePrice: 42000
+}).valid, false, 'seller-readable product rejects purchase price at write boundary');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-nested-leak', name: 'Riz',
+  metadata: { supplier: { unit_cost: 41000 } }
+}).valid, false, 'seller-readable product rejects nested cost fields');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-profit-leak', name: 'Riz',
+  analytics: [{ grossProfit: 9000 }]
+}).valid, false, 'seller-readable product rejects nested profit fields');
+assert.equal(validateSellerOperationalProduct({
+  id: 'product-financials-leak', name: 'Riz',
+  financials: { inventoryValue: 100000 }
+}).valid, false, 'seller-readable product rejects bundled financial objects');
+assert.equal(validateSellerOperationalProduct(null).valid, false,
+  'invalid seller operational product rejected');
+
 
 
 const acceptanceInvite = { ...validInvite, tokenHash: 'sha256:example-hash' };
