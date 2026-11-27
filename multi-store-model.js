@@ -588,6 +588,84 @@ function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, 
   };
 }
 
+
+/** Validate an owner-only purchase before a trusted write. */
+function validatePurchaseRecord(bundle, actorUid, purchase) {
+  if (!isRecord(purchase)) return { valid: false, reason: 'purchase_not_object' };
+  if (!nonEmptyString(purchase.item) ||
+      !Number.isSafeInteger(purchase.amount) || purchase.amount <= 0 ||
+      !Number.isFinite(purchase.quantity) || purchase.quantity < 0 ||
+      !nonEmptyString(purchase.method)) {
+    return { valid: false, reason: 'invalid_purchase_fields' };
+  }
+  if (purchase.productId !== undefined && !nonEmptyString(purchase.productId)) {
+    return { valid: false, reason: 'invalid_purchase_product_reference' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'purchases:create', purchase);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  return { valid: true, reason: 'purchase_record_valid' };
+}
+
+/** Validate an owner-only expense before a trusted write. */
+function validateExpenseRecord(bundle, actorUid, expense) {
+  if (!isRecord(expense)) return { valid: false, reason: 'expense_not_object' };
+  if (!nonEmptyString(expense.description) ||
+      !nonEmptyString(expense.category) ||
+      !Number.isSafeInteger(expense.amount) || expense.amount <= 0 ||
+      !nonEmptyString(expense.method)) {
+    return { valid: false, reason: 'invalid_expense_fields' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'expenses:create', expense);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  return { valid: true, reason: 'expense_record_valid' };
+}
+
+/**
+ * Validate a sale cancellation request against a persisted sale. A trusted
+ * transaction must atomically mark the sale cancelled and reverse stock,
+ * debt and ledger entries. If repayments exist, a separate refund workflow
+ * is mandatory; this validator rejects rather than silently erase them.
+ */
+function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation, existingCancellation, linkedPayments = []) {
+  if (!isRecord(persistedSale) || !isRecord(cancellation) || !Array.isArray(linkedPayments)) {
+    return { valid: false, reason: 'invalid_cancellation_context' };
+  }
+  if (existingCancellation !== null && existingCancellation !== undefined) {
+    return { valid: false, reason: 'sale_already_cancelled' };
+  }
+  if (persistedSale.cancelledAt || persistedSale.status === 'cancelled') {
+    return { valid: false, reason: 'sale_already_cancelled' };
+  }
+  if (linkedPayments.length > 0) {
+    return { valid: false, reason: 'sale_has_repayments_requires_refund_workflow' };
+  }
+  if (!nonEmptyString(persistedSale.id) ||
+      persistedSale.organizationId !== bundle?.organization?.id ||
+      !nonEmptyString(persistedSale.storeId) ||
+      !Number.isFinite(persistedSale.quantity) || persistedSale.quantity <= 0 ||
+      !Number.isSafeInteger(persistedSale.total) || persistedSale.total <= 0) {
+    return { valid: false, reason: 'invalid_persisted_sale' };
+  }
+  if (cancellation.saleId !== persistedSale.id ||
+      cancellation.organizationId !== persistedSale.organizationId ||
+      cancellation.storeId !== persistedSale.storeId ||
+      !nonEmptyString(cancellation.id) ||
+      !nonEmptyString(cancellation.idempotencyKey) ||
+      !nonEmptyString(cancellation.reason) ||
+      cancellation.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_cancellation_fields' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'sales:cancel', cancellation);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  return {
+    valid: true,
+    reason: 'sale_cancellation_prevalidated',
+    stockToRestore: persistedSale.stockProductId ? persistedSale.quantity : 0,
+    debtToReverse: persistedSale.saleType === 'credit' ? persistedSale.creditAmount || persistedSale.total : 0,
+    cashToReverse: persistedSale.paidAmount || 0
+  };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -603,6 +681,9 @@ const api = {
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
+  validatePurchaseRecord,
+  validateExpenseRecord,
+  validateSaleCancellation,
   projectSellerProduct
 };
 
