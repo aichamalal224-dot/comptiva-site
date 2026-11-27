@@ -7,7 +7,7 @@ Branche : `comptiva/monthly-stability-audit`
 
 Lecture de `index.html` sur la branche :
 
-- **Achats :** le formulaire valide un montant positif et une quantité non négative. Le produit est rapproché par nom normalisé, et non par identifiant stable. Si plusieurs produits ont le même nom, l'achat est annulé ; si aucun produit n'est trouvé, l'achat est enregistré sans mouvement de stock. La provenance organisation/magasin/auteur n'est pas ajoutée.
+- **Achats :** le formulaire valide un montant positif et une quantité entière strictement positive. Le produit est rapproché par nom normalisé, et non par identifiant stable. Si plusieurs produits ont le même nom, l'achat est annulé ; si aucun produit n'est trouvé, l'achat est enregistré sans mouvement de stock. La provenance organisation/magasin/auteur n'est pas ajoutée.
 - **Dépenses :** le formulaire valide la description et un montant positif, puis enregistre la dépense localement. Il ne lui ajoute pas de provenance normalisée ni d'écriture immuable de caisse.
 - **Annulation de vente :** aucune fonction `cancelSale` ou `deleteSale` n'a été trouvée dans la zone de code inspectée ; la table des ventes affiche l'impression du reçu, sans action d'annulation. Il n'y a donc pas encore de flux complet d'annulation et de contre-écriture.
 
@@ -17,7 +17,7 @@ Ces constats ne prouvent pas l'absence absolue de tout autre mécanisme dans cha
 
 - `validatePurchaseRecord` : achats réservés au patron, montant entier GNF positif, quantité non négative, référence produit stable facultative et provenance obligatoire.
 - `validateExpenseRecord` : dépenses réservées au patron, description/catégorie/moyen de paiement, montant entier GNF positif et provenance obligatoire.
-- `validateSaleCancellation` : annulation patron uniquement, vente persistée cohérente, motif et clé d'idempotence obligatoires, refus des annulations répétées. Si des remboursements sont déjà associés à la vente, le helper bloque l'annulation simple et exige un parcours explicite de remboursement.
+- `validateSaleCancellation` : annulation patron uniquement, vente persistée avec quantité entière et règlement financier cohérent, motif et clé d'idempotence obligatoires, refus des annulations répétées. Si des remboursements sont déjà associés à la vente, le helper bloque l'annulation simple et exige un parcours explicite de remboursement.
 
 Pour une annulation, le résultat indique les montants/quantités à contre-passer. Il ne réalise pas ces écritures. Le backend devra effectuer en une transaction la modification du statut, la restauration éventuelle du stock, l'annulation de dette et les écritures de caisse. Les mouvements d'origine ne doivent jamais être supprimés ou réécrits.
 
@@ -37,3 +37,10 @@ Ce sont des tests de fonctions pures. Aucun test Firebase Emulator, navigateur, 
 6. Écrire et exécuter les règles Firestore et les tests Emulator qui interdisent les accès vendeur aux achats, dépenses, coûts d'achat et marges.
 
 **État :** améliorations du contrat de validation uniquement. Le modèle reste non intégré à `index.html`, les règles Firestore réelles n'ont pas été modifiées et rien n'a été publié ou fusionné dans `main`.
+
+
+## Complément — intégrité des quantités d'achat et annulations (28 novembre 2026)
+
+Le validateur d'achat refuse désormais les quantités nulles, négatives ou fractionnaires : une réception d'articles doit porter une quantité entière strictement positive. Le validateur d'annulation exige aussi une quantité entière sur la vente d'origine et vérifie la cohérence du règlement avant d'autoriser une contre-écriture. Une vente payée dont les montants encaissés/crédités ne correspondent plus au total est bloquée plutôt que de produire une annulation financière erronée.
+
+Cinq scénarios supplémentaires vérifient les quantités d'achat nulles/fractionnaires, les quantités de vente fractionnaires et deux incohérences de règlement. Le harnais isolé passe avec **201 assertions**. Il ne réalise toujours aucune écriture de stock ou de caisse : ces contre-écritures doivent être atomiques côté serveur.
