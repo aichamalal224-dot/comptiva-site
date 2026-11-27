@@ -123,4 +123,18 @@ assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleReco
   ...updatedSale, updatedAt: 'invalid-date'
 }).valid, false, 'update timestamp must be valid');
 
-console.log('PASS: 28 multi-store model, permission and provenance assertions');
+
+const suspendedOrg = structuredClone(bundle);
+suspendedOrg.organization.status = 'suspended';
+assert.equal(authorizeStoreAction(suspendedOrg, 'owner-1', 'store-A', 'sales:read').allowed, false,
+  'suspended organization blocks even owner access');
+assert.equal(authorizeStoreAction(bundle, 'owner-1', 'store-A', 'unknown:admin').allowed, false,
+  'unknown owner action is denied');
+const privilegeEscalation = structuredClone(bundle);
+privilegeEscalation.members[1].permissions = ['sales:update', 'members:manage', 'sales:create'];
+assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 'sales:update').allowed, false,
+  'seller permissions cannot elevate role capabilities');
+assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 'members:manage').allowed, false,
+  'seller cannot manage members through custom permissions');
+
+console.log('PASS: 32 multi-store model, permission and provenance assertions');
