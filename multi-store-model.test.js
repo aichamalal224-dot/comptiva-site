@@ -572,7 +572,7 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
 assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
   newPayment, [{ ...priorPayments[0], idempotencyKey: 'payment-key-1' }], null,
   '2026-11-27T14:21:00.000Z').reason,
-  'invalid_existing_payment_history', 'duplicate historical idempotency keys are rejected');
+  'payment_already_applied', 'duplicate historical idempotency keys are rejected');
 
 
 // Purchases, expenses and sale cancellation audit controls.
