@@ -346,11 +346,36 @@ function validateSellerInvitationAcceptance(bundle, invitation, identity, suppli
     return { valid: false, reason: 'invalid_acceptance_context' };
   }
   const nowMs = Date.parse(now);
+  const createdMs = Date.parse(invitation.createdAt);
   const expiresMs = Date.parse(invitation.expiresAt);
   const email = typeof identity.email === 'string' ? identity.email.trim().toLowerCase() : '';
   if (invitation.status !== 'pending' || !Number.isFinite(nowMs) ||
-      !Number.isFinite(expiresMs) || expiresMs <= nowMs) {
+      !Number.isFinite(createdMs) || !Number.isFinite(expiresMs) ||
+      createdMs > nowMs || expiresMs <= nowMs || expiresMs <= createdMs ||
+      expiresMs - createdMs > 7 * 24 * 60 * 60 * 1000) {
     return { valid: false, reason: 'invitation_not_pending_or_expired' };
+  }
+  if (!nonEmptyString(invitation.id) ||
+      invitation.organizationId !== bundle.organization.id ||
+      invitation.role !== 'seller' ||
+      invitation.createdBy !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'invalid_invitation_identity_or_state' };
+  }
+  if (typeof invitation.email !== 'string' ||
+      invitation.email !== invitation.email.trim().toLowerCase() ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(invitation.email) ||
+      !Array.isArray(invitation.storeIds) || invitation.storeIds.length === 0 ||
+      new Set(invitation.storeIds).size !== invitation.storeIds.length ||
+      invitation.storeIds.some(id => !bundle.stores.some(store =>
+        store.id === id && store.status === 'active'
+      ))) {
+    return { valid: false, reason: 'invalid_invitation_email_or_store_assignment' };
+  }
+  if (invitation.permissions !== undefined &&
+      (!Array.isArray(invitation.permissions) ||
+       new Set(invitation.permissions).size !== invitation.permissions.length ||
+       invitation.permissions.some(permission => !SELLER_DEFAULT_ACTIONS.includes(permission)))) {
+    return { valid: false, reason: 'invalid_or_elevated_seller_permissions' };
   }
   if (!nonEmptyString(identity.uid) || identity.uid === bundle.organization.ownerUid ||
       bundle.members.some(member => member.uid === identity.uid)) {
@@ -378,8 +403,10 @@ function validateSellerInvitationRevocation(bundle, actorUid, invitation) {
   if (!owner || actorUid !== bundle.organization.ownerUid) {
     return { valid: false, reason: 'owner_only' };
   }
-  if (!isRecord(invitation) || invitation.organizationId !== bundle.organization.id ||
-      invitation.status !== 'pending') {
+  if (!isRecord(invitation) || !nonEmptyString(invitation.id) ||
+      invitation.organizationId !== bundle.organization.id ||
+      invitation.createdBy !== bundle.organization.ownerUid ||
+      invitation.role !== 'seller' || invitation.status !== 'pending') {
     return { valid: false, reason: 'invitation_not_revocable' };
   }
   return { valid: true, reason: 'seller_invitation_revocation_valid' };
