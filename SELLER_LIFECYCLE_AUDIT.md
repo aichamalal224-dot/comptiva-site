@@ -27,7 +27,7 @@ Revue du prototype `multi-store-model.js` et de ses tests. Les fonctions suivant
 
 ## Tests exécutés
 
-Le fichier `multi-store-model.test.js` contient maintenant **157 assertions**. L'exécution isolée a retourné :
+Le fichier `multi-store-model.test.js` contient maintenant **165 assertions**. L'exécution isolée a retourné :
 
 `PASS: 157 multi-store model, permission, provenance, invitation, seller lifecycle, seller-data and stock-transfer assertions`
 
@@ -66,3 +66,12 @@ Aucun jeu complet de règles Firestore COMPTIVA ni configuration d'émulateur n'
 ## Conclusion
 
 Le modèle de règles et ses validations progressent, mais le chantier reste substantiel : il faut encore construire le flux serveur et l'interface, intégrer le schéma multi-magasins, écrire les règles Firestore effectives, exécuter les tests émulateur et préparer la migration. Ne pas annoncer la fonctionnalité patron/vendeur/multi-magasins comme terminée avant ces preuves.
+
+
+## Contrôle complémentaire — invitation à l'acceptation et révocation
+
+Une revue complémentaire a identifié qu'un appel direct au validateur d'acceptation ne revalidait pas tous les attributs de l'invitation (organisation, rôle vendeur, auteur patron, magasins, liste de permissions et durée maximale). Les contrôles ont été renforcés pour revalider ces champs au moment de l'acceptation, et la révocation vérifie désormais aussi l'organisation, le rôle et l'auteur d'origine.
+
+Les nouveaux tests négatifs couvrent une invitation d'une autre organisation, une tentative de rôle propriétaire, un créateur falsifié, un magasin inconnu, une permission propriétaire, une durée excessive et une révocation d'une invitation étrangère ou dont l'auteur est falsifié.
+
+Cela reste une prévalidation : le backend doit charger le document d'invitation depuis Firestore, consommer le jeton et créer l'adhésion dans une transaction atomique.
