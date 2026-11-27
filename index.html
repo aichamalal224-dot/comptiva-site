@@ -682,7 +682,6 @@ async function krediInitFirebase(){try{
   if(window.krediSdkLoadError){krediStatus('Chargement Firebase impossible : '+window.krediSdkLoadError+'. Rechargez la page après vérification du réseau.');return}
   // Authentication doit rester indépendante de Firestore : une panne du SDK
   // Firestore ne doit jamais empêcher l'ouverture d'une session commerçant.
-  if(window.krediSdkLoadError){krediStatus(window.krediSdkLoadError);return}
   if(!window.firebase||!firebase.apps||!firebase.initializeApp||!firebase.auth){
     krediStatus('Firebase App ou Authentication indisponible. Vérifiez le chargement du SDK et Internet.');return;
   }
