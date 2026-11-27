@@ -341,4 +341,4 @@ assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
   stockSnapshot, null, '2026-11-27T14:20:00.000Z').reason,
   'invalid_sale_timestamp', 'stale sale proposal is rejected');
 
-console.log('PASS: 89 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+console.log('PASS: 90 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
