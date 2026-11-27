@@ -1134,6 +1134,8 @@ async function krediInitFirebase(){try{
     window.krediAuthPersistence='DEFAULT';
   }
   let krediAuthStateReceived=false;
+  // Invalide les traitements Auth précédents si la session change pendant une attente asynchrone.
+  let krediAuthGeneration=0;
   const krediAuthWaitTimer=setTimeout(()=>{
     if(!krediAuthStateReceived){
       let storageState='inconnu';
@@ -1159,6 +1161,7 @@ async function krediInitFirebase(){try{
       krediStatus('Connexion en cours… vérification de la session Firebase.');
       return;
     }
+    const authGeneration=++krediAuthGeneration;
     krediUser=activeUser;krediCloudReady=false;krediServerReady=false;
     krediLocalDirty=!!(activeUser&&localStorage.getItem('comptiva_pending_'+activeUser.uid)==='1');
     if(krediUnsubscribe){krediUnsubscribe();krediUnsubscribe=null}
@@ -1167,6 +1170,8 @@ async function krediInitFirebase(){try{
     // La session Auth est déjà active. La synchronisation attend Firestore en arrière-plan.
     if(window.__comptivaFirestoreSdkReady){
       const firestoreReady=await window.__comptivaFirestoreSdkReady;
+      // Une autre connexion/déconnexion a pu survenir pendant l'attente du SDK.
+      if(authGeneration!==krediAuthGeneration||!krediUser||krediUser.uid!==(activeUser&&activeUser.uid))return;
       if(!firestoreReady){krediStatus('Compte connecté. Firestore est indisponible : vos données restent sur cet appareil et ne sont pas encore synchronisées.');return}
     }
     if(!krediStore && firebase.firestore){
