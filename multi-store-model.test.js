@@ -22,7 +22,11 @@ const {
   validateAuditEvent,
   validateStockAdjustment,
   projectSellerProduct,
-  validateSellerOperationalProduct
+  validateSellerOperationalProduct,
+  validateSellerOperationalRecord,
+  projectSellerSale,
+  projectSellerDebt,
+  projectSellerPayment
 } = require('./multi-store-model');
 
 const modelAcceptance = require('./multi-store-model').validateSellerInvitationAcceptance;
@@ -691,4 +695,54 @@ assert.equal(validateAuditEvent(bundle, 'owner-1',
   '2026-11-28T11:00:30.000Z').valid, true,
   'owner expense event is accepted');
 
-console.log('PASS: 165 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
+ 
+// Seller views use positive field allowlists for sales, debts and repayments.
+const sellerSale = projectSellerSale({
+  id: 'sale-safe', organizationId: 'org-1', storeId: 'store-A',
+  product: 'Riz', quantity: 2, unitPrice: 5000, total: 10000,
+  date: '2026-11-28', saleType: 'cash', method: 'cash',
+  paidAmount: 10000, creditAmount: 0, createdBy: 'seller-A',
+  purchasePrice: 3000, grossProfit: 4000, internalNotes: 'secret'
+});
+assert.deepEqual(Object.keys(sellerSale).sort(),
+  ['createdBy','creditAmount','date','id','method','organizationId','paidAmount','product','quantity','saleType','storeId','total','unitPrice'].sort(),
+  'seller sale projection contains only operational allowlisted fields');
+assert.equal(Object.hasOwn(sellerSale, 'purchasePrice'), false,
+  'seller sale projection excludes purchase cost');
+assert.equal(Object.hasOwn(sellerSale, 'grossProfit'), false,
+  'seller sale projection excludes gross profit');
+
+const sellerDebt = projectSellerDebt({
+  id: 'debt-safe', organizationId: 'org-1', storeId: 'store-A',
+  clientId: 'client-1', saleId: 'sale-safe', amount: 10000,
+  paidAmount: 2000, remaining: 8000, status: 'partial',
+  supplierCost: 5000, margin: 3000
+});
+assert.equal(sellerDebt.remaining, 8000, 'seller can see debt balance needed for collection');
+assert.equal(Object.hasOwn(sellerDebt, 'supplierCost'), false,
+  'seller debt projection excludes supplier cost');
+assert.equal(Object.hasOwn(sellerDebt, 'margin'), false,
+  'seller debt projection excludes margin');
+
+const sellerPayment = projectSellerPayment({
+  id: 'payment-safe', organizationId: 'org-1', storeId: 'store-A',
+  debtId: 'debt-safe', clientId: 'client-1', amount: 2000,
+  method: 'cash', date: '2026-11-28', createdBy: 'seller-A',
+  costSnapshot: 1500, netProfit: 500
+});
+assert.equal(sellerPayment.amount, 2000, 'seller can see received repayment amount');
+assert.equal(Object.hasOwn(sellerPayment, 'costSnapshot'), false,
+  'seller payment projection excludes cost snapshot');
+assert.equal(Object.hasOwn(sellerPayment, 'netProfit'), false,
+  'seller payment projection excludes net profit');
+
+assert.equal(validateSellerOperationalRecord({
+  id: 'sale-1', details: [{ payment: { profit_margin: 15 } }]
+}).valid, false, 'seller operational records reject nested profit fields');
+assert.equal(validateSellerOperationalRecord({
+  id: 'sale-2', total: 10000, paidAmount: 10000, method: 'cash'
+}).valid, true, 'seller operational records allow ordinary settlement fields');
+assert.equal(validateSellerOperationalRecord(null).valid, false,
+  'seller operational record validator rejects missing objects');
+
+console.log('PASS: 185 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
