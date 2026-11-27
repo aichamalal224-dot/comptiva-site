@@ -564,7 +564,7 @@ function authorizeWithCurrentMembership(bundle, actorUid, storeId, action, curre
  * Validate a stock transfer creation. Production must execute the stock
  * decrement and transfer creation in one trusted database transaction.
  */
-function validateStockTransferCreation(bundle, actorUid, transfer, now = new Date().toISOString()) {
+function validateStockTransferCreation(bundle, actorUid, transfer, now = new Date().toISOString(), existingMovement = null) {
   const modelCheck = validateOrganizationBundle(bundle);
   if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
   if (!isRecord(transfer)) return { valid: false, reason: 'transfer_not_object' };
@@ -576,9 +576,11 @@ function validateStockTransferCreation(bundle, actorUid, transfer, now = new Dat
     return { valid: false, reason: 'invalid_transfer_stores' };
   }
   if (!nonEmptyString(transfer.id) ||
+      !nonEmptyString(transfer.idempotencyKey) ||
+      (existingMovement !== null && existingMovement !== undefined) ||
       transfer.organizationId !== bundle.organization.id ||
       !nonEmptyString(transfer.productId) ||
-      !Number.isFinite(transfer.quantity) || transfer.quantity <= 0 ||
+      !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
       transfer.status !== 'in_transit' || transfer.createdBy !== actorUid) {
     return { valid: false, reason: 'invalid_transfer_fields' };
   }
@@ -597,13 +599,21 @@ function validateStockTransferCreation(bundle, actorUid, transfer, now = new Dat
  * Validate receipt against the persisted in-transit transfer. A trusted
  * transaction must atomically credit destination stock and mark it received.
  */
-function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receipt, now = new Date().toISOString()) {
+function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receipt, now = new Date().toISOString(), existingReceipt = null) {
   const modelCheck = validateOrganizationBundle(bundle);
   if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
   if (!isRecord(previousTransfer) || !isRecord(receipt)) {
     return { valid: false, reason: 'invalid_transfer_receipt_context' };
   }
-  if (previousTransfer.status !== 'in_transit' ||
+  if (existingReceipt !== null && existingReceipt !== undefined) {
+    return { valid: false, reason: 'transfer_receipt_already_applied' };
+  }
+  if (!nonEmptyString(previousTransfer.id) ||
+      !nonEmptyString(previousTransfer.idempotencyKey) ||
+      !nonEmptyString(receipt.id) || !nonEmptyString(receipt.idempotencyKey) ||
+      receipt.fromStoreId !== previousTransfer.fromStoreId ||
+      receipt.toStoreId !== previousTransfer.toStoreId ||
+      previousTransfer.status !== 'in_transit' ||
       previousTransfer.organizationId !== bundle.organization.id ||
       receipt.transferId !== previousTransfer.id ||
       receipt.organizationId !== previousTransfer.organizationId ||
@@ -635,7 +645,8 @@ function validateSaleStockDecrement(bundle, actorUid, sale, stock, existingMovem
     return { valid: false, reason: 'invalid_sale_stock_context' };
   }
   if (!nonEmptyString(sale.id) || !nonEmptyString(sale.productId) ||
-      !Number.isFinite(sale.quantity) || sale.quantity <= 0 ||
+      !Number.isSafeInteger(sale.quantity) || sale.quantity <= 0 ||
+      !Number.isSafeInteger(stock.quantity) ||
       sale.organizationId !== bundle?.organization?.id ||
       stock.organizationId !== sale.organizationId ||
       stock.storeId !== sale.storeId || stock.productId !== sale.productId ||
