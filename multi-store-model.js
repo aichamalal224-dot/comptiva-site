@@ -190,6 +190,8 @@ function authorizeStoreAction(bundle, actorUid, storeId, action) {
  */
 function validateOperationRecord(bundle, actorUid, action, record) {
   if (!isRecord(record)) return { valid: false, reason: 'operation_not_object' };
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
   const required = ['id', 'organizationId', 'storeId', 'createdBy', 'createdAt'];
   if (required.some(key => !nonEmptyString(record[key]))) {
     return { valid: false, reason: 'missing_provenance' };
@@ -200,10 +202,7 @@ function validateOperationRecord(bundle, actorUid, action, record) {
   if (!bundle.stores.some(store => store.id === record.storeId)) {
     return { valid: false, reason: 'store_mismatch' };
   }
-  if (record.createdBy !== actorUid) {
-    return { valid: false, reason: 'creator_mismatch' };
-  }
-  if (typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) {
+    if (typeof record.createdAt !== 'string' || !Number.isFinite(Date.parse(record.createdAt))) {
     return { valid: false, reason: 'invalid_creation_timestamp' };
   }
   const hasUpdatedBy = record.updatedBy !== undefined;
@@ -215,6 +214,9 @@ function validateOperationRecord(bundle, actorUid, action, record) {
       (!nonEmptyString(record.updatedBy) || typeof record.updatedAt !== 'string' ||
        !Number.isFinite(Date.parse(record.updatedAt)))) {
     return { valid: false, reason: 'invalid_update_provenance' };
+  }
+  if ((hasUpdatedBy ? record.updatedBy : record.createdBy) !== actorUid) {
+    return { valid: false, reason: 'actor_provenance_mismatch' };
   }
   const permission = authorizeStoreAction(bundle, actorUid, record.storeId, action);
   if (!permission.allowed) return { valid: false, reason: permission.reason };
