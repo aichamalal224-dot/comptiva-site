@@ -508,7 +508,7 @@ const debtForPayment = {
   storeId: 'store-A', amount: 10000
 };
 const priorPayments = [
-  { id: 'payment-old-1', debtId: 'debt-pay-1', amount: 3000 }
+  { id: 'payment-old-1', idempotencyKey: 'payment-old-key-1', debtId: 'debt-pay-1', clientId: 'client-1', organizationId: 'org-1', storeId: 'store-A', amount: 3000 }
 ];
 const newPayment = {
   id: 'payment-new-1', idempotencyKey: 'payment-key-1',
@@ -551,6 +551,28 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
 assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
   newPayment, priorPayments, null, '2026-11-27T14:30:00.000Z').reason,
   'invalid_payment_timestamp', 'stale repayment proposal is rejected');
+
+
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], organizationId: 'org-other' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment from another organization is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], storeId: 'store-B' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment from another store is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], clientId: 'client-other' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment for another client is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], idempotencyKey: '' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment without idempotency key is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], idempotencyKey: 'payment-key-1' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'duplicate historical idempotency keys are rejected');
 
 
 // Purchases, expenses and sale cancellation audit controls.
@@ -745,4 +767,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 185 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
+console.log('PASS: 190 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
