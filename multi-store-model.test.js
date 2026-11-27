@@ -6,7 +6,8 @@ const {
   authorizeStoreAction,
   validateOperationRecord,
   validateOperationUpdate,
-  validateSellerInvitation
+  validateSellerInvitation,
+  projectSellerProduct
 } = require('./multi-store-model');
 
 const bundle = {
@@ -197,4 +198,19 @@ assert.equal(validateSellerInvitation(bundle, 'owner-1', {
   ...validInvite, createdBy: 'seller-A'
 }, '2026-11-27T13:00:00.000Z').valid, false, 'invitation creator cannot be forged');
 
-console.log('PASS: 53 multi-store model, permission, provenance and invitation assertions');
+
+const sellerProductView = projectSellerProduct({
+  id: 'product-1', name: 'Riz', category: 'Alimentaire', sku: 'RIZ-1',
+  quantity: 12, salePrice: 50000, alertAt: 3, purchasePrice: 42000,
+  margin: 8000, profit: 96000, supplierCost: 41000, internalNotes: 'secret'
+});
+assert.equal(sellerProductView.purchasePrice, undefined, 'seller product view hides purchase price');
+assert.equal(sellerProductView.margin, undefined, 'seller product view hides margin');
+assert.equal(sellerProductView.profit, undefined, 'seller product view hides profit');
+assert.equal(sellerProductView.supplierCost, undefined, 'seller product view hides supplier cost');
+assert.equal(sellerProductView.internalNotes, undefined, 'seller product view hides internal notes');
+assert.equal(sellerProductView.salePrice, 50000, 'seller retains customer-facing sale price');
+assert.equal(sellerProductView.quantity, 12, 'seller retains assigned-store stock quantity');
+assert.equal(projectSellerProduct(null), null, 'invalid product projection rejected');
+
+console.log('PASS: 61 multi-store model, permission, provenance, invitation and seller-data projection assertions');
