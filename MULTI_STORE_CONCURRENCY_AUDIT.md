@@ -63,3 +63,10 @@ Le fichier de test affiche **90 assertions** réussies dans le harnais JavaScrip
 Le validateur des remboursements vérifie maintenant que chaque paiement historique appartient à la même dette, au même client, à la même organisation et au même magasin. Chaque paiement historique doit également posséder un identifiant et une clé d'idempotence uniques ; la clé du nouveau remboursement ne peut pas réutiliser une clé déjà consommée. Un historique croisé entre organisations/magasins, incomplet ou rejoué bloque le nouveau remboursement. Cinq tests négatifs couvrent ces cas.
 
 Résultat rejoué après correction : **190 assertions réussies** dans le harnais JavaScript isolé. Ce contrôle reste une prévalidation : le backend devra relire dette, paiements et clé d'idempotence dans une transaction Firestore avant toute écriture.
+
+
+## Complément — idempotence des transferts et quantités de stock (28 novembre 2026)
+
+Le contrôle des ventes exige maintenant des quantités entières sûres pour la vente et le stock. La création d'un transfert exige une clé d'idempotence stable et refuse une opération déjà présente ; la quantité transférée doit être un entier sûr strictement positif. La réception vérifie aussi l'identité des deux magasins par rapport au transfert persistant, exige son propre identifiant et sa clé d'idempotence, et refuse une réception déjà enregistrée même si le client présente encore un ancien état « en transit ».
+
+Six cas négatifs supplémentaires couvrent l'absence de clé, le rejeu de création, la quantité fractionnaire, la falsification du magasin source, l'absence de clé de réception et le rejeu de réception. Le fichier contient **196 appels d'assertion** et le harnais JavaScript isolé passe. Ces validations restent préliminaires : seule une transaction Firestore serveur peut garantir l'absence de double débit/crédit en concurrence réelle.
