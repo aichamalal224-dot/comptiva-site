@@ -27,9 +27,9 @@ Revue du prototype `multi-store-model.js` et de ses tests. Les fonctions suivant
 
 ## Tests exécutés
 
-Le fichier `multi-store-model.test.js` contient maintenant **165 assertions**. L'exécution isolée a retourné :
+Le fichier `multi-store-model.test.js` contient maintenant **178 assertions**. L'exécution isolée a retourné :
 
-`PASS: 157 multi-store model, permission, provenance, invitation, seller lifecycle, seller-data and stock-transfer assertions`
+`PASS: 178 assertions exécutées dans le harnais JavaScript isolé`
 
 Les nouveaux cas couvrent notamment : suspension autorisée et refusée, motif obligatoire, interdiction de suspendre le patron comme vendeur, réactivation réservée au patron, refus d'une réactivation en double, validation des affectations multi-magasins, rejet des magasins inconnus/dupliqués, interdiction de retirer toutes les affectations, et refus d'un ancien instantané d'adhésion.
 
