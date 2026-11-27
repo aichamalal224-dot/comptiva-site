@@ -38,6 +38,7 @@ const OWNER_ACTIONS = Object.freeze([
   'stock:adjust',
   'sales:update',
   'sales:cancel',
+  'sales:return',
   'debts:update',
   'payments:reverse',
   'purchases:update',
@@ -946,6 +947,123 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
 
 
 /**
+ * Prevalidate a customer return against a persisted sale, prior returns and
+ * stock snapshot. Returns linked to prior repayments are deliberately refused
+ * until a dedicated debt/refund transaction exists. A server transaction must
+ * re-read all inputs and atomically append the return and restore eligible stock.
+ */
+function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, priorReturns = [], linkedPayments = [], stock, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(persistedSale) || !isRecord(returnRecord) ||
+      !Array.isArray(priorReturns) || !Array.isArray(linkedPayments) || !isRecord(stock)) {
+    return { valid: false, reason: 'invalid_sale_return_context' };
+  }
+  if (persistedSale.cancelledAt || persistedSale.status === 'cancelled') {
+    return { valid: false, reason: 'cancelled_sale_cannot_be_returned' };
+  }
+  if (linkedPayments.length > 0) {
+    return { valid: false, reason: 'sale_has_repayments_requires_debt_refund_workflow' };
+  }
+  const settlement = validateSaleSettlement(persistedSale);
+  if (!settlement.valid || !nonEmptyString(persistedSale.id) ||
+      persistedSale.organizationId !== bundle.organization.id ||
+      !nonEmptyString(persistedSale.storeId) || !nonEmptyString(persistedSale.productId) ||
+      !Number.isSafeInteger(persistedSale.quantity) || persistedSale.quantity <= 0) {
+    return { valid: false, reason: 'invalid_persisted_sale_for_return' };
+  }
+  if (returnRecord.saleId !== persistedSale.id ||
+      returnRecord.organizationId !== persistedSale.organizationId ||
+      returnRecord.storeId !== persistedSale.storeId ||
+      returnRecord.productId !== persistedSale.productId ||
+      !nonEmptyString(returnRecord.id) || !nonEmptyString(returnRecord.idempotencyKey) ||
+      !Number.isSafeInteger(returnRecord.quantity) || returnRecord.quantity <= 0 ||
+      !Number.isSafeInteger(returnRecord.amount) || returnRecord.amount <= 0 ||
+      !Number.isSafeInteger(returnRecord.cashRefundAmount) || returnRecord.cashRefundAmount < 0 ||
+      !Number.isSafeInteger(returnRecord.creditReductionAmount) || returnRecord.creditReductionAmount < 0 ||
+      returnRecord.cashRefundAmount + returnRecord.creditReductionAmount !== returnRecord.amount ||
+      !Number.isSafeInteger(returnRecord.restockQuantity) || returnRecord.restockQuantity < 0 ||
+      !Number.isSafeInteger(returnRecord.damagedQuantity) || returnRecord.damagedQuantity < 0 ||
+      returnRecord.restockQuantity + returnRecord.damagedQuantity !== returnRecord.quantity ||
+      !nonEmptyString(returnRecord.reason) || returnRecord.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_sale_return_fields' };
+  }
+  if (persistedSale.saleType === 'paid' &&
+      (returnRecord.cashRefundAmount !== returnRecord.amount || returnRecord.creditReductionAmount !== 0)) {
+    return { valid: false, reason: 'invalid_paid_sale_return_allocation' };
+  }
+  if (persistedSale.saleType === 'credit' &&
+      (returnRecord.cashRefundAmount !== 0 || returnRecord.creditReductionAmount !== returnRecord.amount)) {
+    return { valid: false, reason: 'invalid_credit_sale_return_allocation' };
+  }
+  if (stock.organizationId !== persistedSale.organizationId ||
+      stock.storeId !== persistedSale.storeId || stock.productId !== persistedSale.productId ||
+      !Number.isSafeInteger(stock.quantity) || stock.quantity < 0) {
+    return { valid: false, reason: 'sale_return_stock_mismatch' };
+  }
+  const seenIds = new Set(), seenKeys = new Set();
+  let returnedQuantity = 0, returnedAmount = 0, cashRefunded = 0, creditReduced = 0;
+  for (const prior of priorReturns) {
+    if (!isRecord(prior) || prior.saleId !== persistedSale.id ||
+        prior.organizationId !== persistedSale.organizationId ||
+        prior.storeId !== persistedSale.storeId || prior.productId !== persistedSale.productId ||
+        !nonEmptyString(prior.id) || !nonEmptyString(prior.idempotencyKey) ||
+        !Number.isSafeInteger(prior.quantity) || prior.quantity <= 0 ||
+        !Number.isSafeInteger(prior.amount) || prior.amount <= 0 ||
+        !Number.isSafeInteger(prior.cashRefundAmount) || prior.cashRefundAmount < 0 ||
+        !Number.isSafeInteger(prior.creditReductionAmount) || prior.creditReductionAmount < 0 ||
+        prior.cashRefundAmount + prior.creditReductionAmount !== prior.amount ||
+        !Number.isSafeInteger(prior.restockQuantity) || prior.restockQuantity < 0 ||
+        !Number.isSafeInteger(prior.damagedQuantity) || prior.damagedQuantity < 0 ||
+        prior.restockQuantity + prior.damagedQuantity !== prior.quantity ||
+        seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
+      return { valid: false, reason: 'invalid_existing_sale_return_history' };
+    }
+    seenIds.add(prior.id);
+    seenKeys.add(prior.idempotencyKey);
+    returnedQuantity += prior.quantity;
+    returnedAmount += prior.amount;
+    cashRefunded += prior.cashRefundAmount;
+    creditReduced += prior.creditReductionAmount;
+    if (![returnedQuantity, returnedAmount, cashRefunded, creditReduced].every(Number.isSafeInteger)) {
+      return { valid: false, reason: 'sale_return_history_overflow' };
+    }
+  }
+  if (seenIds.has(returnRecord.id) || seenKeys.has(returnRecord.idempotencyKey)) {
+    return { valid: false, reason: 'sale_return_already_applied' };
+  }
+  if (returnedQuantity + returnRecord.quantity > persistedSale.quantity) {
+    return { valid: false, reason: 'return_exceeds_sold_quantity' };
+  }
+  if (returnedAmount + returnRecord.amount > persistedSale.total ||
+      cashRefunded + returnRecord.cashRefundAmount > persistedSale.paidAmount ||
+      creditReduced + returnRecord.creditReductionAmount > persistedSale.creditAmount) {
+    return { valid: false, reason: 'return_exceeds_unreturned_sale_value' };
+  }
+  const resultingStockQuantity = stock.quantity + returnRecord.restockQuantity;
+  if (!Number.isSafeInteger(resultingStockQuantity)) {
+    return { valid: false, reason: 'sale_return_stock_overflow' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'sales:return', returnRecord);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const nowMs = Date.parse(now), createdMs = Date.parse(returnRecord.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_sale_return_timestamp' };
+  }
+  return {
+    valid: true,
+    reason: 'sale_return_prevalidated',
+    returnedQuantityAfter: returnedQuantity + returnRecord.quantity,
+    remainingReturnableQuantity: persistedSale.quantity - returnedQuantity - returnRecord.quantity,
+    refundedAfter: cashRefunded + returnRecord.cashRefundAmount,
+    creditReducedAfter: creditReduced + returnRecord.creditReductionAmount,
+    resultingStockQuantity,
+    fullyReturned: returnedQuantity + returnRecord.quantity === persistedSale.quantity
+  };
+}
+
+/**
  * Audit events are append-only evidence. The trusted backend must stamp
  * actorUid/server timestamp, derive action from the authorized operation,
  * and deny client update/delete. This helper validates the event envelope.
@@ -953,7 +1071,7 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
 function validateAuditEvent(bundle, actorUid, event, now = new Date().toISOString()) {
   if (!isRecord(event)) return { valid: false, reason: 'audit_event_not_object' };
   const allowedActions = new Set([
-    'sale.created', 'sale.updated', 'sale.cancelled',
+    'sale.created', 'sale.updated', 'sale.cancelled', 'sale.returned',
     'purchase.created', 'expense.created',
     'stock.adjusted', 'stock.transfer.created', 'stock.transfer.received',
     'debt.created', 'payment.created', 'payment.reversed',
@@ -1124,6 +1242,7 @@ const api = {
   validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
   projectSellerProduct,
