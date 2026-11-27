@@ -88,8 +88,8 @@ assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
 assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
   { ...saleRecord, updatedBy: 'seller-A', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, false,
   'creation cannot claim update provenance');
-assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:update',
-  { ...saleRecord, updatedBy: 'seller-A', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, true,
+assert.equal(validateOperationRecord(bundle, 'owner-1', 'sales:update',
+  { ...saleRecord, updatedBy: 'owner-1', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, true,
   'complete update provenance is accepted');
 assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
   { ...saleRecord, storeId: 'store-B' }).valid, false,
