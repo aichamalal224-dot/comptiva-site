@@ -258,6 +258,35 @@ assert.equal(modelRevoke(bundle, 'seller-A', validInvite).valid, false,
   'seller cannot revoke invitation');
 assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, status: 'accepted' }).valid, false,
   'accepted invitation cannot be revoked as pending');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, organizationId: 'org-other' }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invalid_invitation_identity_or_state', 'acceptance rejects invitation from another organization');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, role: 'owner' }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invalid_invitation_identity_or_state', 'acceptance cannot promote invitee to owner');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, createdBy: 'seller-A' }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invalid_invitation_identity_or_state', 'acceptance rejects invitation not created by owner');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, storeIds: ['store-A', 'store-X'] }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invalid_invitation_email_or_store_assignment', 'acceptance revalidates store assignments');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, permissions: ['members:manage'] }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invalid_or_elevated_seller_permissions', 'acceptance revalidates permission allowlist');
+assert.equal(modelAcceptance(bundle, { ...acceptanceInvite, expiresAt: '2026-12-10T12:00:00.000Z' }, {
+  uid: 'seller-new', email: 'seller.new@example.com'
+}, 'sha256:example-hash', '2026-11-27T14:00:00.000Z').reason,
+  'invitation_not_pending_or_expired', 'acceptance rejects invitation lifetime beyond seven days');
+assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, organizationId: 'org-other' }).valid, false,
+  'owner cannot revoke invitation belonging to another organization');
+assert.equal(modelRevoke(bundle, 'owner-1', { ...validInvite, createdBy: 'seller-A' }).valid, false,
+  'owner cannot revoke invitation with forged creator provenance');
+
 
 
 
@@ -632,4 +661,4 @@ assert.equal(validateAuditEvent(bundle, 'owner-1',
   '2026-11-28T11:00:30.000Z').valid, true,
   'owner expense event is accepted');
 
-console.log('PASS: 157 multi-store model, permission, provenance, invitation, seller lifecycle, seller-data and stock-transfer assertions');
+console.log('PASS: 165 multi-store model, permission, provenance, hardened invitation, seller lifecycle, seller-data and stock-transfer assertions');
