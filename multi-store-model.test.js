@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 const {
   validateOrganizationBundle,
   authorizeStoreAction,
-  validateOperationRecord
+  validateOperationRecord,
+  validateOperationUpdate
 } = require('./multi-store-model');
 
 const bundle = {
@@ -91,4 +92,35 @@ assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
   { ...saleRecord, storeId: 'store-B' }).valid, false,
   'seller operation in an unassigned store is rejected');
 
-console.log('PASS: 20 multi-store model, permission and provenance assertions');
+
+const updatedSale = {
+  ...saleRecord,
+  total: 25000,
+  updatedBy: 'owner-1',
+  updatedAt: '2026-11-27T12:10:00.000Z'
+};
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, updatedSale).valid, true,
+  'owner update preserves original provenance');
+assert.equal(validateOperationUpdate(bundle, 'seller-A', 'sales:update', saleRecord, {
+  ...updatedSale, updatedBy: 'seller-A'
+}).valid, false, 'seller cannot update a validated sale');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, createdBy: 'owner-1'
+}).valid, false, 'update cannot rewrite original creator');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, createdAt: '2026-11-27T12:09:00.000Z'
+}).valid, false, 'update cannot rewrite original creation time');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, storeId: 'store-B'
+}).valid, false, 'update cannot move operation to another store');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, organizationId: 'org-other'
+}).valid, false, 'update cannot move operation to another organization');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, updatedBy: 'seller-A'
+}).valid, false, 'update actor must match authenticated owner');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, {
+  ...updatedSale, updatedAt: 'invalid-date'
+}).valid, false, 'update timestamp must be valid');
+
+console.log('PASS: 28 multi-store model, permission and provenance assertions');
