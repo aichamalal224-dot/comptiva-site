@@ -318,6 +318,42 @@ function validateSellerInvitation(bundle, actorUid, invitation, now = new Date()
 
 
 /**
+ * Reject a product document that is about to be made directly readable by a
+ * seller when it contains purchase-cost, margin, profit or valuation fields.
+ * This is a schema guard for trusted write paths, not a Firestore security rule.
+ */
+function validateSellerOperationalProduct(product) {
+  if (!isRecord(product)) return { valid: false, reason: 'product_not_object' };
+  const forbidden = new Set([
+    'purchaseprice', 'buyprice', 'unitcost', 'costprice', 'suppliercost',
+    'cost', 'costtotal', 'costsnapshot', 'averagecost', 'lastpurchaseprice',
+    'margin', 'profit', 'profitamount', 'grossprofit', 'netprofit',
+    'inventoryvalue', 'stockvalue', 'financials'
+  ]);
+  const found = [];
+  const visited = new Set();
+  function inspect(value, path) {
+    if (value === null || typeof value !== 'object') return;
+    if (visited.has(value)) {
+      found.push(path || '<root>');
+      return;
+    }
+    visited.add(value);
+    for (const [key, child] of Object.entries(value)) {
+      const normalized = key.toLowerCase().replace(/[_-]/g, '');
+      const childPath = path ? path + '.' + key : key;
+      if (forbidden.has(normalized)) found.push(childPath);
+      else inspect(child, childPath);
+    }
+    visited.delete(value);
+  }
+  inspect(product, '');
+  return found.length
+    ? { valid: false, reason: 'sensitive_product_fields_present', fields: found }
+    : { valid: true, reason: 'seller_product_schema_safe' };
+}
+
+/**
  * Return only fields a seller may need for routine product/stock operations.
  * Firestore rules cannot hide selected fields inside a readable document:
  * production must store sensitive cost/profit fields separately or expose a
@@ -917,7 +953,8 @@ const api = {
   validateSaleCancellation,
   validateAuditEvent,
   validateStockAdjustment,
-  projectSellerProduct
+  projectSellerProduct,
+  validateSellerOperationalProduct
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
