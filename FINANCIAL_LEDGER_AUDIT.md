@@ -50,3 +50,10 @@ Pour une vente à crédit, la création de la vente, de la dette, du mouvement d
 Ne pas activer les vendeurs multi-appareils tant que le backend transactionnel, les règles Firestore et les tests Emulator/multi-client ne sont pas terminés. Les helpers ne sont pas branchés à `index.html` et ne protègent pas les données réelles.
 
 Aucune donnée utilisateur, règle Firebase, branche `main` ou publication n'a été modifiée pendant cet audit.
+
+
+## Complément — projections vendeur des opérations financières
+
+Le prototype ajoute des projections par liste blanche pour les ventes, dettes et remboursements. Elles exposent uniquement les données nécessaires aux opérations du magasin (montants encaissés, solde de dette, moyen de paiement, rattachements et provenance minimale) et excluent les coûts, marges, bénéfices et notes internes. Un validateur récursif rejette aussi les champs financiers sensibles dans les structures imbriquées.
+
+Cette protection reste une spécification côté modèle. Les documents lus par les vendeurs devront être physiquement dépourvus de ces champs dans Firestore ; aucune règle ne peut masquer quelques champs d'un document déjà lisible. Le harnais consolidé exécuté après ces ajouts rapporte **185 assertions réussies** ; il ne remplace pas les tests de règles, transactions et accès multi-comptes dans Firebase Emulator.
