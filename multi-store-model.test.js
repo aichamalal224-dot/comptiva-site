@@ -9,6 +9,7 @@ const {
   validateSellerInvitation,
   validateStockTransferCreation,
   validateStockTransferReceipt,
+  validateSaleStockDecrement,
   projectSellerProduct
 } = require('./multi-store-model');
 
@@ -296,4 +297,48 @@ assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'receipt must credit the designated destination store');
 
-console.log('PASS: 79 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
+
+// Sale stock decrement: pre-validation, replay protection and stock bounds.
+const saleForStock = {
+  id: 'sale-stock-1', idempotencyKey: 'sale-stock-key-1',
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-1',
+  quantity: 3, createdBy: 'seller-A', createdAt: '2026-11-27T14:10:00.000Z'
+};
+const stockSnapshot = {
+  organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-1', quantity: 8
+};
+const stockCheck = validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  stockSnapshot, null, '2026-11-27T14:11:00.000Z');
+assert.equal(stockCheck.valid, true, 'assigned seller can prevalidate a sale stock decrement');
+assert.equal(stockCheck.remainingQuantity, 5, 'prevalidation calculates expected remaining stock');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  stockSnapshot, { id: 'movement-existing' }, '2026-11-27T14:11:00.000Z').reason,
+  'stock_operation_already_applied', 'duplicate idempotency operation is rejected');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  { ...stockSnapshot, quantity: 2 }, null, '2026-11-27T14:11:00.000Z').reason,
+  'insufficient_stock', 'sale cannot consume more stock than available');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A',
+  { ...saleForStock, storeId: 'store-B' }, stockSnapshot, null,
+  '2026-11-27T14:11:00.000Z').valid, false, 'seller cannot decrement another store stock');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A',
+  { ...saleForStock, createdBy: 'seller-B' }, stockSnapshot, null,
+  '2026-11-27T14:11:00.000Z').valid, false, 'sale creator must match authenticated seller');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A',
+  { ...saleForStock, idempotencyKey: '' }, stockSnapshot, null,
+  '2026-11-27T14:11:00.000Z').reason, 'missing_idempotency_key',
+  'stock-changing sale requires an idempotency key');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A',
+  { ...saleForStock, quantity: 0 }, stockSnapshot, null,
+  '2026-11-27T14:11:00.000Z').valid, false, 'zero-quantity sale cannot change stock');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  { ...stockSnapshot, organizationId: 'org-other' }, null,
+  '2026-11-27T14:11:00.000Z').valid, false, 'stock from another organization is rejected');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  { ...stockSnapshot, quantity: -1 }, null,
+  '2026-11-27T14:11:00.000Z').valid, false, 'negative persisted stock is rejected');
+assert.equal(validateSaleStockDecrement(bundle, 'seller-A', saleForStock,
+  stockSnapshot, null, '2026-11-27T14:20:00.000Z').reason,
+  'invalid_sale_timestamp', 'stale sale proposal is rejected');
+
+console.log('PASS: 89 multi-store model, permission, provenance, invitation, seller-data and stock-transfer assertions');
