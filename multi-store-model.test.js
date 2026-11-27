@@ -86,6 +86,9 @@ assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
   { ...saleRecord, updatedBy: 'seller-A' }).valid, false,
   'incomplete update provenance is rejected');
 assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
+  { ...saleRecord, updatedBy: 'seller-A', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, false,
+  'creation cannot claim update provenance');
+assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
   { ...saleRecord, updatedBy: 'seller-A', updatedAt: '2026-11-27T12:05:00.000Z' }).valid, true,
   'complete update provenance is accepted');
 assert.equal(validateOperationRecord(bundle, 'seller-A', 'sales:create',
@@ -101,6 +104,8 @@ const updatedSale = {
 };
 assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:update', saleRecord, updatedSale).valid, true,
   'owner update preserves original provenance');
+assert.equal(validateOperationUpdate(bundle, 'owner-1', 'sales:create', saleRecord, updatedSale).valid, false,
+  'update validator rejects a creation action');
 assert.equal(validateOperationUpdate(bundle, 'seller-A', 'sales:update', saleRecord, {
   ...updatedSale, updatedBy: 'seller-A'
 }).valid, false, 'seller cannot update a validated sale');
@@ -137,4 +142,4 @@ assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 's
 assert.equal(authorizeStoreAction(privilegeEscalation, 'seller-A', 'store-A', 'members:manage').allowed, false,
   'seller cannot manage members through custom permissions');
 
-console.log('PASS: 32 multi-store model, permission and provenance assertions');
+console.log('PASS: 34 multi-store model, permission and provenance assertions');
