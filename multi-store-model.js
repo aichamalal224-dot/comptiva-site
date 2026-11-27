@@ -325,9 +325,10 @@ function validateSellerInvitation(bundle, actorUid, invitation, now = new Date()
 function validateSellerOperationalProduct(product) {
   if (!isRecord(product)) return { valid: false, reason: 'product_not_object' };
   const forbidden = new Set([
-    'purchaseprice', 'buyprice', 'unitcost', 'costprice', 'suppliercost',
-    'cost', 'costtotal', 'costsnapshot', 'averagecost', 'lastpurchaseprice',
-    'margin', 'profit', 'profitamount', 'grossprofit', 'netprofit',
+    'purchaseprice', 'purchasecost', 'unitpurchaseprice', 'buyprice', 'buyingprice',
+    'unitcost', 'costperunit', 'costprice', 'suppliercost', 'costamount',
+    'cost', 'costtotal', 'totalcost', 'costsnapshot', 'averagecost', 'lastpurchaseprice', 'stockcost',
+    'margin', 'profitmargin', 'grossmargin', 'netmargin', 'profit', 'profitamount', 'grossprofit', 'netprofit',
     'inventoryvalue', 'stockvalue', 'financials'
   ]);
   const found = [];
