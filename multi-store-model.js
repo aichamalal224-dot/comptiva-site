@@ -840,6 +840,8 @@ function validatePurchaseStockReceipt(bundle, actorUid, purchase, receipt, prior
         prior.organizationId !== purchase.organizationId ||
         prior.storeId !== purchase.storeId || prior.productId !== purchase.productId ||
         !nonEmptyString(prior.id) || !nonEmptyString(prior.idempotencyKey) ||
+        !nonEmptyString(prior.receivedBy) ||
+        !Number.isFinite(Date.parse(prior.receivedAt)) ||
         !Number.isSafeInteger(prior.quantity) || prior.quantity <= 0 ||
         seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
       return { valid: false, reason: 'invalid_or_duplicate_prior_purchase_receipt' };
@@ -866,12 +868,16 @@ function validatePurchaseStockReceipt(bundle, actorUid, purchase, receipt, prior
   const permission = authorizeStoreAction(bundle, actorUid, purchase.storeId, 'purchases:create');
   if (!permission.allowed) return { valid: false, reason: permission.reason };
   const totalReceived = alreadyReceived + receipt.quantity;
+  const resultingStockQuantity = stock.quantity + receipt.quantity;
+  if (!Number.isSafeInteger(totalReceived) || !Number.isSafeInteger(resultingStockQuantity)) {
+    return { valid: false, reason: 'purchase_receipt_quantity_overflow' };
+  }
   return {
     valid: true,
     reason: 'purchase_stock_receipt_prevalidated',
     totalReceived,
     remainingToReceive: purchase.quantity - totalReceived,
-    resultingStockQuantity: stock.quantity + receipt.quantity,
+    resultingStockQuantity,
     fullyReceived: totalReceived === purchase.quantity
   };
 }
