@@ -1224,8 +1224,9 @@ async function krediInitFirebase(){try{
       if(!snap.exists||mergedText!==remoteText){
         krediLocalDirty=true;localStorage.setItem('comptiva_pending_'+activeUid,'1');
         krediStatus('Envoi des données locales vers Firebase…');
-        try{await ref.set({db:merged,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});if(!krediUser||krediUser.uid!==activeUid)return;krediLastWrite=mergedText;krediLocalDirty=false;krediCloudReady=true;localStorage.removeItem('comptiva_pending_'+activeUid);krediStatus('Synchronisation réussie · données sauvegardées sur Firebase');renderAll()}
-        catch(e){krediCloudReady=false;krediShowDiagnostic(e,'ECRITURE users/'+activeUid+'/comptivaData/main')}
+        // Une seule file d’écriture doit gérer les sauvegardes. Éviter qu’un
+        // snapshot lance un .set() concurrent avec une sauvegarde déjà en cours.
+        krediQueueCloudSave();
         return;
       }
       krediCloudReady=true;krediLocalDirty=false;localStorage.removeItem('comptiva_pending_'+activeUid);
@@ -1285,7 +1286,9 @@ function krediQueueCloudSave(){
       krediShowDiagnostic(e,'ECRITURE AUTOMATIQUE users/'+uid+'/comptivaData/main');
     }finally{
       krediSaveInFlight=false;
-      if(krediUser&&krediUser.uid===uid&&krediLocalDirty&&navigator.onLine){clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),3000)}
+      // Si la session a changé pendant cette écriture, relancer la file
+      // du compte actuellement actif : son UID sera relu par krediQueueCloudSave().
+      if(krediUser&&krediLocalDirty&&navigator.onLine){clearTimeout(krediSaveTimer);krediSaveTimer=setTimeout(()=>krediQueueCloudSave(),1200)}
     }
   },650);
 }
