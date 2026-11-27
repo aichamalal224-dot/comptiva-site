@@ -385,6 +385,71 @@ function validateSellerInvitationRevocation(bundle, actorUid, invitation) {
   return { valid: true, reason: 'seller_invitation_revocation_valid' };
 }
 
+
+/**
+ * Validate a stock transfer creation. Production must execute the stock
+ * decrement and transfer creation in one trusted database transaction.
+ */
+function validateStockTransferCreation(bundle, actorUid, transfer, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(transfer)) return { valid: false, reason: 'transfer_not_object' };
+  const from = bundle.stores.find(store => store.id === transfer.fromStoreId);
+  const to = bundle.stores.find(store => store.id === transfer.toStoreId);
+  if (!from || !to || from.id === to.id ||
+      from.organizationId !== bundle.organization.id ||
+      to.organizationId !== bundle.organization.id) {
+    return { valid: false, reason: 'invalid_transfer_stores' };
+  }
+  if (!nonEmptyString(transfer.id) ||
+      transfer.organizationId !== bundle.organization.id ||
+      !nonEmptyString(transfer.productId) ||
+      !Number.isFinite(transfer.quantity) || transfer.quantity <= 0 ||
+      transfer.status !== 'in_transit' || transfer.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_transfer_fields' };
+  }
+  const nowMs = Date.parse(now);
+  const createdMs = Date.parse(transfer.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_transfer_timestamp' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, from.id, 'transfers:create');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  return { valid: true, reason: 'stock_transfer_creation_valid' };
+}
+
+/**
+ * Validate receipt against the persisted in-transit transfer. A trusted
+ * transaction must atomically credit destination stock and mark it received.
+ */
+function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receipt, now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(previousTransfer) || !isRecord(receipt)) {
+    return { valid: false, reason: 'invalid_transfer_receipt_context' };
+  }
+  if (previousTransfer.status !== 'in_transit' ||
+      previousTransfer.organizationId !== bundle.organization.id ||
+      receipt.transferId !== previousTransfer.id ||
+      receipt.organizationId !== previousTransfer.organizationId ||
+      receipt.storeId !== previousTransfer.toStoreId ||
+      receipt.productId !== previousTransfer.productId ||
+      receipt.quantity !== previousTransfer.quantity ||
+      receipt.receivedBy !== actorUid) {
+    return { valid: false, reason: 'transfer_receipt_mismatch_or_replay' };
+  }
+  const receivedMs = Date.parse(receipt.receivedAt);
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(receivedMs) || !Number.isFinite(nowMs) ||
+      receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_receipt_timestamp' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, previousTransfer.toStoreId, 'transfers:receive');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  return { valid: true, reason: 'stock_transfer_receipt_valid' };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
