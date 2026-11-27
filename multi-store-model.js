@@ -393,6 +393,8 @@ const api = {
   validateOperationRecord,
   validateOperationUpdate,
   validateSellerInvitation,
+  validateSellerInvitationAcceptance,
+  validateSellerInvitationRevocation,
   projectSellerProduct
 };
 
