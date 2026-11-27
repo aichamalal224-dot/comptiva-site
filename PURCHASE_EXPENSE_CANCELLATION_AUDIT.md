@@ -44,3 +44,10 @@ Ce sont des tests de fonctions pures. Aucun test Firebase Emulator, navigateur, 
 Le validateur d'achat refuse désormais les quantités nulles, négatives ou fractionnaires : une réception d'articles doit porter une quantité entière strictement positive. Le validateur d'annulation exige aussi une quantité entière sur la vente d'origine et vérifie la cohérence du règlement avant d'autoriser une contre-écriture. Une vente payée dont les montants encaissés/crédités ne correspondent plus au total est bloquée plutôt que de produire une annulation financière erronée.
 
 Cinq scénarios supplémentaires vérifient les quantités d'achat nulles/fractionnaires, les quantités de vente fractionnaires et deux incohérences de règlement. Le harnais isolé passe avec **201 assertions**. Il ne réalise toujours aucune écriture de stock ou de caisse : ces contre-écritures doivent être atomiques côté serveur.
+
+
+## Complément — réception partielle des achats (28 novembre 2026)
+
+Ajout de `validatePurchaseStockReceipt` au prototype isolé. Le contrôle lie chaque réception à un achat stocké, à un produit par identifiant stable, à une organisation et à un magasin. Il cumule les réceptions antérieures, refuse les quantités fractionnaires, les doublons (ID/clé d'idempotence), les dépassements de la quantité commandée, les stocks incohérents et les réceptions par un vendeur. Il calcule la quantité reçue, le reliquat et le stock résultant sans effectuer lui-même d'écriture. Dix assertions couvrent une livraison en deux fois (12 puis 8 unités sur 20) et les refus associés. Le harnais isolé passe avec **216 assertions**.
+
+Limite : les achats historiques sans `productId` stable ne peuvent pas utiliser ce parcours de réception de stock. En production, la lecture de l'achat, de l'historique des réceptions et du stock, l'ajout de la réception, l'incrément de stock et la mise à jour du cumul devront être atomiques dans une transaction serveur. Aucune intégration ni écriture réelle n'a été effectuée.
