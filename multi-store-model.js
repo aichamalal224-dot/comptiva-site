@@ -18,6 +18,7 @@ const SELLER_DEFAULT_ACTIONS = Object.freeze([
   'debts:create',
   'payments:read',
   'payments:create',
+  'transfers:receive',
   // Seller defaults are deliberately limited to daily store operations.
   // Financial reporting, purchases, expenses and profit remain owner-only.
 ]);
@@ -633,6 +634,143 @@ function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receip
   const permission = authorizeStoreAction(bundle, actorUid, previousTransfer.toStoreId, 'transfers:receive');
   if (!permission.allowed) return { valid: false, reason: permission.reason };
   return { valid: true, reason: 'stock_transfer_receipt_valid' };
+}
+
+
+/**
+ * Validate one delivery-receipt event, including partial, refused and damaged
+ * quantities. Sellers may confirm only at a store assigned to them. The owner
+ * can confirm at any organization store. A trusted transaction must re-read
+ * transfer, receipt history and destination stock, then atomically append
+ * event, credit only accepted units, update transfer status and append audit.
+ */
+function validateStockTransferReceiptEvent(
+  bundle, actorUid, previousTransfer, receipt, priorReceipts = [],
+  destinationStock = null, now = new Date().toISOString()
+) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(previousTransfer) || !isRecord(receipt) || !Array.isArray(priorReceipts)) {
+    return { valid: false, reason: 'invalid_transfer_receipt_context' };
+  }
+  const transfer = previousTransfer;
+  const destinationStore = bundle.stores.find(store => store.id === transfer.toStoreId);
+  if (!nonEmptyString(transfer.id) || !nonEmptyString(transfer.idempotencyKey) ||
+      transfer.organizationId !== bundle.organization.id ||
+      !destinationStore || destinationStore.organizationId !== bundle.organization.id ||
+      !nonEmptyString(transfer.productId) ||
+      !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
+      !['in_transit', 'partially_received'].includes(transfer.status)) {
+    return { valid: false, reason: 'invalid_transfer_state' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, transfer.toStoreId, 'transfers:receive');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  if (!isRecord(destinationStock) ||
+      destinationStock.organizationId !== transfer.organizationId ||
+      destinationStock.storeId !== transfer.toStoreId ||
+      destinationStock.productId !== transfer.productId ||
+      !Number.isSafeInteger(destinationStock.quantity) || destinationStock.quantity < 0) {
+    return { valid: false, reason: 'invalid_destination_stock_snapshot' };
+  }
+  const seenIds = new Set();
+  const seenKeys = new Set();
+  let priorAccounted = 0, priorAccepted = 0, priorRefused = 0, priorDamaged = 0;
+  for (const event of priorReceipts) {
+    if (!isRecord(event) || event.transferId !== transfer.id ||
+        event.organizationId !== transfer.organizationId ||
+        event.storeId !== transfer.toStoreId || event.productId !== transfer.productId ||
+        !nonEmptyString(event.id) || !nonEmptyString(event.idempotencyKey) ||
+        seenIds.has(event.id) || seenKeys.has(event.idempotencyKey) ||
+        !Number.isSafeInteger(event.quantity) || event.quantity <= 0 ||
+        !Number.isSafeInteger(event.acceptedQuantity) || event.acceptedQuantity < 0 ||
+        !Number.isSafeInteger(event.refusedQuantity) || event.refusedQuantity < 0 ||
+        !Number.isSafeInteger(event.damagedQuantity) || event.damagedQuantity < 0 ||
+        event.acceptedQuantity + event.refusedQuantity + event.damagedQuantity !== event.quantity ||
+        !nonEmptyString(event.receivedBy) || !Number.isFinite(Date.parse(event.receivedAt))) {
+      return { valid: false, reason: 'invalid_receipt_history' };
+    }
+    const priorPermission = authorizeStoreAction(bundle, event.receivedBy, transfer.toStoreId, 'transfers:receive');
+    if (!priorPermission.allowed) return { valid: false, reason: 'invalid_receipt_history_actor' };
+    seenIds.add(event.id); seenKeys.add(event.idempotencyKey);
+    priorAccounted += event.quantity;
+    priorAccepted += event.acceptedQuantity;
+    priorRefused += event.refusedQuantity;
+    priorDamaged += event.damagedQuantity;
+    if (![priorAccounted, priorAccepted, priorRefused, priorDamaged].every(Number.isSafeInteger)) {
+      return { valid: false, reason: 'receipt_history_overflow' };
+    }
+  }
+  if (!nonEmptyString(receipt.id) || !nonEmptyString(receipt.idempotencyKey) ||
+      seenIds.has(receipt.id) || seenKeys.has(receipt.idempotencyKey) ||
+      receipt.transferId !== transfer.id || receipt.organizationId !== transfer.organizationId ||
+      receipt.storeId !== transfer.toStoreId || receipt.fromStoreId !== transfer.fromStoreId ||
+      receipt.toStoreId !== transfer.toStoreId || receipt.productId !== transfer.productId ||
+      !Number.isSafeInteger(receipt.quantity) || receipt.quantity <= 0 ||
+      !Number.isSafeInteger(receipt.acceptedQuantity) || receipt.acceptedQuantity < 0 ||
+      !Number.isSafeInteger(receipt.refusedQuantity) || receipt.refusedQuantity < 0 ||
+      !Number.isSafeInteger(receipt.damagedQuantity) || receipt.damagedQuantity < 0 ||
+      receipt.acceptedQuantity + receipt.refusedQuantity + receipt.damagedQuantity !== receipt.quantity ||
+      receipt.receivedBy !== actorUid) {
+    return { valid: false, reason: 'transfer_receipt_mismatch_or_replay' };
+  }
+  const receivedMs = Date.parse(receipt.receivedAt), nowMs = Date.parse(now);
+  if (!Number.isFinite(receivedMs) || !Number.isFinite(nowMs) ||
+      receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_receipt_timestamp' };
+  }
+  const accounted = priorAccounted + receipt.quantity;
+  const accepted = priorAccepted + receipt.acceptedQuantity;
+  const refused = priorRefused + receipt.refusedQuantity;
+  const damaged = priorDamaged + receipt.damagedQuantity;
+  if (![accounted, accepted, refused, damaged].every(Number.isSafeInteger) ||
+      accounted > transfer.quantity) {
+    return { valid: false, reason: 'receipt_exceeds_transfer_quantity' };
+  }
+  const resultingStockQuantity = destinationStock.quantity + receipt.acceptedQuantity;
+  if (!Number.isSafeInteger(resultingStockQuantity)) {
+    return { valid: false, reason: 'destination_stock_overflow' };
+  }
+  const remainingToAccountFor = transfer.quantity - accounted;
+  const resultingStatus = remainingToAccountFor > 0 ? 'partially_received' :
+    (accepted === 0 && refused > 0 ? 'refused' :
+      (refused > 0 || damaged > 0 ? 'received_with_issues' : 'received'));
+  return {
+    valid: true, reason: 'stock_transfer_receipt_event_valid',
+    acceptedQuantityToAdd: receipt.acceptedQuantity,
+    totalAccounted: accounted, totalAccepted: accepted,
+    totalRefused: refused, totalDamaged: damaged,
+    remainingToAccountFor, resultingStatus, resultingStockQuantity
+  };
+}
+
+/**
+ * Prepare (do not send) a reminder suggestion for a destination-store seller.
+ * A trusted scheduled backend must re-check current membership and transfer
+ * state, deduplicate reminders and deliver it after the due date + grace period.
+ */
+function buildStockTransferReminderSuggestion(
+  bundle, transfer, sellerUid, now = new Date().toISOString(), graceMinutes = 60
+) {
+  if (!isRecord(transfer) || !Number.isSafeInteger(graceMinutes) || graceMinutes < 0) {
+    return { eligible: false, reason: 'invalid_reminder_context' };
+  }
+  if (!['in_transit', 'partially_received'].includes(transfer.status) ||
+      !nonEmptyString(transfer.expectedAt) || !Number.isFinite(Date.parse(transfer.expectedAt))) {
+    return { eligible: false, reason: 'transfer_not_pending_or_missing_due_date' };
+  }
+  const nowMs = Date.parse(now);
+  const dueMs = Date.parse(transfer.expectedAt) + graceMinutes * 60 * 1000;
+  if (!Number.isFinite(nowMs) || nowMs < dueMs) {
+    return { eligible: false, reason: 'reminder_not_due' };
+  }
+  const permission = authorizeStoreAction(bundle, sellerUid, transfer.toStoreId, 'transfers:receive');
+  if (!permission.allowed || bundle.members.find(m => m.uid === sellerUid)?.role !== 'seller') {
+    return { eligible: false, reason: permission.reason || 'destination_seller_required' };
+  }
+  return {
+    eligible: true, recipientUid: sellerUid, transferId: transfer.id,
+    message: 'Bonjour, la commande attend toujours votre confirmation de réception dans COMPTIVA. Merci d’indiquer si elle est bien reçue, partiellement reçue ou non reçue, avec les quantités et un motif si nécessaire.'
+  };
 }
 
 
