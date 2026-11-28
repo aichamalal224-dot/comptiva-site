@@ -12,6 +12,7 @@ const {
   validateSellerStoreAssignment,
   authorizeWithCurrentMembership,
   validateStockTransferCreation,
+  validateStockTransferDispatch,
   validateStockTransferReceipt,
   validateStockTransferReceiptEvent,
   buildStockTransferReminderSuggestion,
@@ -429,6 +430,39 @@ assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
   ...transfer, quantity: 1.5
 }, '2026-11-27T14:01:00.000Z').valid, false,
   'fractional transfer quantity is rejected');
+const sourceTransferStock = {
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-1', quantity: 9
+};
+const dispatchCheck = validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  sourceTransferStock, '2026-11-27T14:01:00.000Z');
+assert.equal(dispatchCheck.valid, true, 'owner can prevalidate dispatch from source stock');
+assert.equal(dispatchCheck.resultingSourceStockQuantity, 4,
+  'dispatch prevalidation debits exactly the transferred quantity from source stock');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  { ...sourceTransferStock, quantity: 4 }, '2026-11-27T14:01:00.000Z').reason,
+  'insufficient_source_stock', 'transfer dispatch cannot exceed available source stock');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  { ...sourceTransferStock, storeId: 'store-B' }, '2026-11-27T14:01:00.000Z').reason,
+  'invalid_transfer_dispatch_fields', 'dispatch cannot debit destination or unrelated store stock');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  sourceTransferStock, '2026-11-27T14:01:00.000Z',
+  { id: 'dispatch-movement-existing' }).reason,
+  'transfer_dispatch_already_applied', 'dispatch movement replay is rejected');
+assert.equal(validateStockTransferDispatch(bundle, 'seller-A', transfer,
+  sourceTransferStock, '2026-11-27T14:01:00.000Z').valid, false,
+  'seller cannot dispatch owner-controlled inter-store transfers');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  { ...sourceTransferStock, quantity: 1.5 }, '2026-11-27T14:01:00.000Z').reason,
+  'invalid_transfer_dispatch_fields', 'fractional source stock is rejected for dispatch');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
+  { ...sourceTransferStock, organizationId: 'org-other' },
+  '2026-11-27T14:01:00.000Z').reason,
+  'invalid_transfer_dispatch_fields', 'dispatch cannot debit stock from another organization');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1',
+  { ...transfer, createdAt: '2026-11-27T14:00:00.000Z' }, sourceTransferStock,
+  '2026-11-27T14:10:00.000Z').reason,
+  'invalid_transfer_dispatch_timestamp', 'stale transfer dispatch proposal is rejected');
+
 const receipt = {
   transferId: 'transfer-1', organizationId: 'org-1',
   storeId: 'store-B', fromStoreId: 'store-A', toStoreId: 'store-B',
@@ -1359,4 +1393,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 322 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 330 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
