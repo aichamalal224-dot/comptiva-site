@@ -79,7 +79,7 @@ Ce validateur est une prévalidation pure. Le serveur doit charger lui-même l'�
 
 ## 7. Tests et limites
 
-Des scénarios automatisés ont été ajoutés au fichier `multi-store-model.test.js` pour l'acceptation/refus vendeur, l'isolement magasin, les motifs de refus, les rejeux, les affectations et les transitions fournisseur. Le compteur affiché par le fichier de test a été ajusté à 296 assertions attendues, mais **l'exécution locale n'a pas été possible dans cette session** : ne pas considérer ce compteur comme un résultat de test exécuté.
+Des scénarios automatisés ont été ajoutés au fichier `multi-store-model.test.js` pour l'acceptation/refus vendeur, l'isolement magasin, les motifs de refus, les rejeux, les affectations et les transitions fournisseur. Le compteur affiché par le fichier de test a été ajusté à 295 appels d'assertion présents dans le fichier, mais **l'exécution locale n'a pas été possible dans cette session** : ne pas considérer ce compteur comme un résultat de test exécuté.
 
 Non réalisés :
 - exécution Node du harnais ;
