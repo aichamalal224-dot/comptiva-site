@@ -492,6 +492,21 @@ assert.equal(partialCheck2.totalAccepted, 3, 'receipt history accumulates accept
 assert.equal(partialCheck2.totalRefused, 1, 'receipt history accumulates refused quantity');
 assert.equal(partialCheck2.totalDamaged, 1, 'receipt history accumulates damaged quantity');
 assert.equal(partialCheck2.resultingStockQuantity, 13, 'damaged and refused units never enter stock');
+const fullRefusal = validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, {
+    ...partialReceipt1, id: 'receipt-refused-all', idempotencyKey: 'receipt-refused-all-key',
+    quantity: 5, acceptedQuantity: 0, refusedQuantity: 5, damagedQuantity: 0
+  }, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+);
+assert.equal(fullRefusal.valid, true, 'destination seller can report a fully refused delivery');
+assert.equal(fullRefusal.resultingStatus, 'refused', 'fully refused delivery is explicitly marked refused');
+assert.equal(fullRefusal.resultingStockQuantity, 10, 'fully refused delivery adds nothing to destination stock');
+const sellerWithoutReceiptPermission = structuredClone(bundle);
+sellerWithoutReceiptPermission.members[2].permissions = ['sales:read'];
+assert.equal(validateStockTransferReceiptEvent(
+  sellerWithoutReceiptPermission, 'seller-B', transfer, partialReceipt1, [],
+  destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).valid, false, 'patron can explicitly remove receipt confirmation permission from a seller');
 assert.equal(validateStockTransferReceiptEvent(
   bundle, 'seller-A', transfer, partialReceipt1, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
@@ -1098,4 +1113,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 247 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 269 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
