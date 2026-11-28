@@ -558,6 +558,17 @@ assert.equal(validateStockTransferReceiptEvent(
   partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).reason, 'transfer_status_receipt_history_mismatch',
   'partially received transfer requires a persisted prior receipt event');
+const fullyAccountedPriorReceipt = {
+  ...partialReceipt1, id: 'receipt-already-complete',
+  idempotencyKey: 'receipt-already-complete-key', quantity: 5,
+  acceptedQuantity: 5, refusedQuantity: 0, damagedQuantity: 0
+};
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', { ...transfer, status: 'partially_received' },
+  partialReceipt1, [fullyAccountedPriorReceipt], destinationStockSnapshot,
+  '2026-11-27T14:03:00.000Z'
+).reason, 'transfer_status_receipt_history_mismatch',
+  'partially received transfer cannot have a history that already accounts for the full dispatched quantity');
 const partialCheck1 = validateStockTransferReceiptEvent(
   bundle, 'seller-B', transfer, partialReceipt1, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
@@ -1556,4 +1567,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 365 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 366 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
