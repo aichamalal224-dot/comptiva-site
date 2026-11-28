@@ -927,6 +927,14 @@ assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
   { ...purchaseStockSnapshot, quantity: 19 }, '2026-11-28T10:08:00.000Z').reason,
   'invalid_or_duplicate_prior_purchase_receipt', 'receipt history rejects invalid prior timestamps');
 assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  secondPurchaseReceipt, [{ ...firstPurchaseReceipt, receivedAt: '2026-11-28T10:09:00.000Z' }],
+  { ...purchaseStockSnapshot, quantity: 19 }, '2026-11-28T10:08:00.000Z').reason,
+  'invalid_or_duplicate_prior_purchase_receipt', 'future-dated purchase receipt history is rejected');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
+  secondPurchaseReceipt, [{ ...firstPurchaseReceipt, receivedBy: 'seller-B' }],
+  { ...purchaseStockSnapshot, quantity: 19 }, '2026-11-28T10:08:00.000Z').reason,
+  'invalid_prior_purchase_receipt_actor', 'purchase receipt history cannot be attributed to an unauthorized seller');
+assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
   { ...firstPurchaseReceipt, id: 'receipt-overflow', idempotencyKey: 'key-overflow' },
   [], { ...purchaseStockSnapshot, quantity: Number.MAX_SAFE_INTEGER },
   '2026-11-28T10:06:00.000Z').reason,
@@ -1275,4 +1283,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 303 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 305 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
