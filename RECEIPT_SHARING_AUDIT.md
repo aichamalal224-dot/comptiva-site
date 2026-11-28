@@ -40,3 +40,25 @@ Le texte partagé comprend le numéro de reçu, la date, le client, l'article, l
 4. Tester les trois parcours sur appareils et navigateurs réels avant publication.
 
 Ces fonctions ont été ajoutées à la branche d'audit uniquement. Elles ne sont pas publiées sur `main`.
+
+
+## Correction du profil commerçant et persistance
+
+Une étape supplémentaire a été ajoutée sur la branche d'audit :
+
+- Un bouton « Profil du commerce » est accessible depuis la page Ventes.
+- Le profil accepte le nom obligatoire du commerce, son téléphone et son adresse facultatifs.
+- Le profil est stocké dans les données du compte commerçant (`db.profile`), et non dans une variable globale partagée entre utilisateurs.
+- Le reçu imprimé et le texte envoyé par WhatsApp/e-mail affichent désormais le nom, le téléphone et l'adresse du commerce lorsqu'ils sont renseignés.
+- Les champs injectés dans le reçu imprimé sont échappés avant insertion dans le HTML.
+- La validation des données Firestore accepte uniquement un objet profil simple et vérifie les types des champs.
+- La fusion local/cloud conserve le profil, en respectant la même préférence local/serveur que les tableaux existants.
+- La restauration de sauvegarde contrôle également la structure du profil. Les anciennes sauvegardes sans profil restent compatibles.
+
+### Point de vigilance
+
+Le profil est ajouté à la structure existante de données, qui est actuellement synchronisée en un seul document Firestore. Cela permet de conserver le profil dans ce modèle, mais ne résout pas les limites de concurrence de cette architecture ni ne constitue une validation multi-appareils réelle.
+
+### Vérifications réalisées
+
+Contrôle statique du code et relecture des modifications GitHub. Aucun test automatisé exécuté, aucun essai réel d'impression ou de partage sur téléphone, aucune validation Firebase en production. La génération d'un PDF téléchargeable/joignable reste à faire.
