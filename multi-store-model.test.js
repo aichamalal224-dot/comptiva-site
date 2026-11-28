@@ -1060,6 +1060,20 @@ assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
   'invalid_sale_return_timestamp', 'invalid reference time is rejected before history evaluation');
 const returnCheck = validateSaleReturn(bundle, 'owner-1', saleForReturn,
   firstReturn, [], [], returnStock, '2026-11-28T10:06:00.000Z');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  { ...firstReturn, amount: 20000, cashRefundAmount: 20000 },
+  [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_sale_return_fields', 'single-unit refund cannot exceed that unit sale price');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-unit-over', idempotencyKey: 'prior-unit-over-key',
+    amount: 20000, cashRefundAmount: 20000 }],
+  [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'historical return cannot exceed value of returned units');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-quantity-over', idempotencyKey: 'prior-quantity-over-key',
+    quantity: 1, amount: 20000, cashRefundAmount: 20000, restockQuantity: 1 }],
+  [], returnStock, '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'historical return value must match returned quantity ceiling');
 assert.equal(returnCheck.valid, true, 'owner can prevalidate a valid paid-sale return');
 assert.equal(returnCheck.remainingReturnableQuantity, 2, 'return tracks remaining returnable quantity');
 assert.equal(returnCheck.refundedAfter, 10000, 'return tracks cumulative cash refund');
