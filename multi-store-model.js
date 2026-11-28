@@ -917,7 +917,9 @@ function validateStockTransferDispatchMovementLink(transfer, movement) {
  */
 function validateStockTransferReceiptMovementLink(receipt, movement) {
   if (!isRecord(receipt) || !nonEmptyString(receipt.id) ||
-      !nonEmptyString(receipt.organizationId) || !nonEmptyString(receipt.storeId) ||
+      !nonEmptyString(receipt.transferId) || !nonEmptyString(receipt.organizationId) ||
+      !nonEmptyString(receipt.fromStoreId) || !nonEmptyString(receipt.toStoreId) ||
+      receipt.storeId !== receipt.toStoreId || !nonEmptyString(receipt.storeId) ||
       !nonEmptyString(receipt.productId) || !nonEmptyString(receipt.receivedBy) ||
       !Number.isSafeInteger(receipt.acceptedQuantity) || receipt.acceptedQuantity < 0) {
     return { valid: false, reason: 'invalid_transfer_receipt_movement_context' };
