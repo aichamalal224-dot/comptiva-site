@@ -1484,6 +1484,80 @@ function projectSellerPayment(payment) {
   ]);
 }
 
+/**
+ * Validate a single transition for patron-to-seller work orders or supplier orders.
+ * This deliberately does not handle inter-store transfers, which have their own
+ * stock-aware lifecycle. The trusted backend must load the persisted previous
+ * state, re-check current membership, and commit transition + audit event atomically.
+ */
+function validateBusinessOrderTransition(bundle, actorUid, previous, next,
+  existingTransitionIds = [], now = new Date().toISOString()) {
+  if (!isRecord(previous) || !isRecord(next) || !Array.isArray(existingTransitionIds)) {
+    return { valid: false, reason: 'invalid_order_transition_context' };
+  }
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const type = previous.workflowType;
+  if (!['patron_task', 'supplier_order'].includes(type) ||
+      next.workflowType !== type ||
+      !nonEmptyString(previous.id) || next.orderId !== previous.id ||
+      previous.organizationId !== bundle.organization.id ||
+      next.organizationId !== previous.organizationId ||
+      !nonEmptyString(previous.storeId) || next.storeId !== previous.storeId ||
+      !bundle.stores.some(s => s.id === previous.storeId) ||
+      !nonEmptyString(previous.createdBy) || next.createdBy !== previous.createdBy ||
+      !nonEmptyString(next.transitionId) || !nonEmptyString(next.idempotencyKey) ||
+      existingTransitionIds.includes(next.transitionId) ||
+      existingTransitionIds.includes(next.idempotencyKey) ||
+      !nonEmptyString(next.updatedBy) || next.updatedBy !== actorUid ||
+      !nonEmptyString(next.updatedAt) || !Number.isFinite(Date.parse(next.updatedAt))) {
+    return { valid: false, reason: 'invalid_order_transition_fields' };
+  }
+  const nowMs = Date.parse(now), updatedMs = Date.parse(next.updatedAt);
+  if (!Number.isFinite(nowMs) || updatedMs > nowMs || nowMs - updatedMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_order_transition_timestamp' };
+  }
+  const actor = bundle.members.find(m => m.uid === actorUid && m.status === 'active');
+  if (!actor) return { valid: false, reason: 'not_an_active_member' };
+  const owner = actor.role === 'owner' && actorUid === bundle.organization.ownerUid;
+  const assignedSeller = actor.role === 'seller' &&
+    actor.storeIds.includes(previous.storeId) &&
+    previous.assignedSellerUid === actorUid;
+  const from = previous.status, to = next.status;
+  let allowed = false;
+  if (type === 'patron_task') {
+    allowed = (owner && from === 'draft' && to === 'assigned') ||
+      (assignedSeller && from === 'assigned' && ['accepted', 'refused'].includes(to)) ||
+      (assignedSeller && from === 'accepted' && ['in_progress', 'completed'].includes(to)) ||
+      (assignedSeller && from === 'in_progress' && to === 'completed') ||
+      (owner && from === 'refused' && to === 'assigned') ||
+      (owner && !['completed', 'cancelled'].includes(from) && to === 'cancelled');
+    if (owner && to === 'assigned') {
+      const target = bundle.members.find(m => m.uid === next.assignedSellerUid &&
+        m.role === 'seller' && m.status === 'active' && m.storeIds.includes(previous.storeId));
+      if (!target) allowed = false;
+    }
+  } else {
+    allowed = owner &&
+      ((from === 'draft' && to === 'submitted') ||
+       (from === 'submitted' && ['supplier_accepted', 'supplier_refused'].includes(to)) ||
+       (from === 'supplier_refused' && to === 'submitted') ||
+       (from === 'supplier_accepted' && ['partially_received', 'received'].includes(to)) ||
+       (from === 'partially_received' && ['partially_received', 'received'].includes(to)));
+  }
+  if (!allowed) return { valid: false, reason: 'order_transition_not_allowed' };
+  if ((to === 'refused' || to === 'supplier_refused') &&
+      (!nonEmptyString(next.reason) || next.reason.trim().length < 3)) {
+    return { valid: false, reason: 'refusal_reason_required' };
+  }
+  if (type === 'patron_task' && to === 'accepted' &&
+      (!nonEmptyString(previous.assignedSellerUid) || previous.assignedSellerUid !== actorUid)) {
+    return { valid: false, reason: 'only_assigned_seller_can_accept' };
+  }
+  return { valid: true, reason: 'order_transition_valid', workflowType: type,
+    fromStatus: from, toStatus: to };
+}
+
 const api = {
   SELLER_DEFAULT_ACTIONS,
   OWNER_ACTIONS,
@@ -1513,6 +1587,7 @@ const api = {
   validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
+  validateBusinessOrderTransition,
   classifyStoreStockAlert,
   projectOwnerSellerPresence,
   projectSellerProduct,
