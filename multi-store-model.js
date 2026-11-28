@@ -1493,6 +1493,64 @@ function validateAuditEvent(bundle, actorUid, event, now = new Date().toISOStrin
   return { valid: true, reason: 'audit_event_valid' };
 }
 
+/**
+ * Validate one immutable stock-ledger movement and its organization-wide
+ * idempotency uniqueness against the trusted movement history supplied by the
+ * caller. The backend must query that history and atomically append this event
+ * with the corresponding inventory mutation.
+ */
+function validateStockMovementRecord(bundle, actorUid, movement, priorMovements = [], now = new Date().toISOString()) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(movement) || !Array.isArray(priorMovements)) {
+    return { valid: false, reason: 'invalid_stock_movement_context' };
+  }
+  const actionByType = {
+    sale_decrement: { action: 'sales:create', sign: -1 },
+    sale_return: { action: 'sales:return', sign: 1 },
+    sale_cancellation: { action: 'sales:cancel', sign: 1 },
+    stock_adjustment: { action: 'stock:adjust', sign: 0 },
+    transfer_dispatch: { action: 'transfers:create', sign: -1 },
+    transfer_receipt: { action: 'transfers:receive', sign: 1 },
+    purchase_receipt: { action: 'purchases:create', sign: 1 }
+  };
+  const definition = actionByType[movement.movementType];
+  if (!definition || !nonEmptyString(movement.id) ||
+      !nonEmptyString(movement.idempotencyKey) ||
+      !nonEmptyString(movement.operationId) ||
+      movement.organizationId !== bundle.organization.id ||
+      !nonEmptyString(movement.storeId) || !nonEmptyString(movement.productId) ||
+      !Number.isSafeInteger(movement.quantityDelta) || movement.quantityDelta === 0 ||
+      (definition.sign !== 0 && Math.sign(movement.quantityDelta) !== definition.sign) ||
+      !nonEmptyString(movement.createdBy) || movement.createdBy !== actorUid ||
+      typeof movement.createdAt !== 'string' || !Number.isFinite(Date.parse(movement.createdAt))) {
+    return { valid: false, reason: 'invalid_stock_movement_fields' };
+  }
+  const seenIds = new Set(), seenKeys = new Set();
+  for (const prior of priorMovements) {
+    if (!isRecord(prior) || !nonEmptyString(prior.id) ||
+        !nonEmptyString(prior.idempotencyKey) ||
+        prior.organizationId !== movement.organizationId ||
+        seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
+      return { valid: false, reason: 'invalid_stock_movement_history' };
+    }
+    seenIds.add(prior.id);
+    seenKeys.add(prior.idempotencyKey);
+  }
+  if (seenIds.has(movement.id) || seenKeys.has(movement.idempotencyKey)) {
+    return { valid: false, reason: 'stock_movement_replay' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, movement.storeId, definition.action);
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  const nowMs = Date.parse(now), createdMs = Date.parse(movement.createdAt);
+  if (!Number.isFinite(nowMs) || createdMs > nowMs ||
+      nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_stock_movement_timestamp' };
+  }
+  return { valid: true, reason: 'stock_movement_valid' };
+}
+
+
 /** Stock corrections require an owner, a reason and a replay-safe movement ID. */
 function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMovement = null, now = new Date().toISOString()) {
   if (!isRecord(adjustment) || !isRecord(stock)) {
@@ -1705,6 +1763,7 @@ const api = {
   validateSaleCancellationStock,
   validateSaleReturn,
   validateAuditEvent,
+  validateStockMovementRecord,
   validateStockAdjustment,
   validateBusinessOrderTransition,
   classifyStoreStockAlert,
