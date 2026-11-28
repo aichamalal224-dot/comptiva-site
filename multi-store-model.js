@@ -1448,6 +1448,53 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
  * A fully damaged return has no stock movement; a resellable quantity requires
  * one positive movement whose operationId is the immutable return ID.
  */
+/**
+ * Link a sale cancellation to the exact stock restoration it authorizes.
+ * Stock is restored only in the original sale store and for the original
+ * sold quantity; a sale without a stock product must not create a movement.
+ */
+function validateSaleCancellationMovementLink(bundle, actorUid, persistedSale, cancellation, movement) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(persistedSale) || !isRecord(cancellation)) {
+    return { valid: false, reason: 'invalid_sale_cancellation_movement_context' };
+  }
+  const productId = persistedSale.productId || persistedSale.stockProductId;
+  if (!nonEmptyString(persistedSale.id) ||
+      persistedSale.organizationId !== bundle.organization.id ||
+      !nonEmptyString(persistedSale.storeId) ||
+      !Number.isSafeInteger(persistedSale.quantity) || persistedSale.quantity <= 0 ||
+      cancellation.saleId !== persistedSale.id ||
+      cancellation.organizationId !== persistedSale.organizationId ||
+      cancellation.storeId !== persistedSale.storeId ||
+      !nonEmptyString(cancellation.id) ||
+      !nonEmptyString(cancellation.idempotencyKey) ||
+      cancellation.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_sale_cancellation_movement_context' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'sales:cancel', cancellation);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  if (!nonEmptyString(productId)) {
+    return movement == null
+      ? { valid: true, reason: 'no_stock_movement_required' }
+      : { valid: false, reason: 'unexpected_sale_cancellation_stock_movement' };
+  }
+  if (!isRecord(movement) ||
+      !nonEmptyString(movement.id) ||
+      !nonEmptyString(movement.idempotencyKey) ||
+      movement.movementType !== 'sale_cancellation' ||
+      movement.operationId !== cancellation.id ||
+      movement.organizationId !== persistedSale.organizationId ||
+      movement.storeId !== persistedSale.storeId ||
+      movement.productId !== productId ||
+      movement.createdBy !== actorUid ||
+      movement.quantityDelta !== persistedSale.quantity) {
+    return { valid: false, reason: 'sale_cancellation_stock_movement_mismatch' };
+  }
+  return { valid: true, reason: 'sale_cancellation_stock_movement_linked' };
+}
+
+
 function validateSaleReturnMovementLink(returnRecord, movement) {
   if (!isRecord(returnRecord) ||
       !nonEmptyString(returnRecord.id) ||
@@ -1806,6 +1853,7 @@ const api = {
   validateExpenseRecord,
   validateSaleCancellation,
   validateSaleCancellationStock,
+  validateSaleCancellationMovementLink,
   validateSaleReturn,
   validateSaleReturnMovementLink,
   validateAuditEvent,
