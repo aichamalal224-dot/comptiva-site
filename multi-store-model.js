@@ -1428,6 +1428,8 @@ const api = {
   authorizeWithCurrentMembership,
   validateStockTransferCreation,
   validateStockTransferReceipt,
+  validateStockTransferReceiptEvent,
+  buildStockTransferReminderSuggestion,
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
