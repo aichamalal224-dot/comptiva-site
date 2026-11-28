@@ -99,3 +99,14 @@ Le validateur `validateStockTransferReceiptEvent` refuse maintenant ces deux inc
 Deux assertions négatives supplémentaires couvrent ces états divergents. Le libellé statique du harnais passe de 330 à **332 assertions**. Les tests ne sont pas déclarés exécutés dans cette étape.
 
 Cette vérification améliore la cohérence du modèle, mais ne remplace pas le contrôle serveur : dans une transaction Firestore, le backend doit relire l'état courant du transfert et l'ensemble des événements de réception, vérifier leur cohérence et écrire le nouvel événement, le stock accepté et le nouvel état ensemble. Les événements de réception doivent être immuables et leur identifiant/idempotency key uniques au niveau de la base.
+
+
+## Correction — provenance et calcul sûr des ajustements de stock (28 novembre 2026)
+
+Le validateur d'ajustement de stock contrôlait l'autorisation du patron et le motif, mais ne faisait pas appliquer le contrat commun de provenance (identifiant, organisation, magasin, auteur, date de création). Il acceptait aussi un calcul résultant qui pouvait dépasser la limite des entiers sûrs JavaScript.
+
+Le contrôle `validateStockAdjustment` utilise désormais `validateOperationRecord` pour imposer la provenance et le droit d'action, exige un horodatage de création valide et récent (pas dans le futur, fenêtre de cinq minutes), et refuse tout résultat qui n'est pas un entier sûr ou qui rendrait le stock négatif.
+
+Trois assertions supplémentaires couvrent la date invalide, la date future et le dépassement arithmétique. Le libellé statique du harnais passe de 332 à **335 assertions**. Il ne s'agit pas d'une confirmation d'exécution des tests.
+
+Le journal de stock en production devra conserver chaque ajustement comme mouvement immuable avec un identifiant et une clé d'idempotence uniques, lier ce mouvement à l'opération source, puis mettre à jour le stock dans la même transaction serveur. Une correction ne doit jamais écraser l'historique ou modifier directement une quantité sans mouvement explicatif.
