@@ -161,3 +161,16 @@ Ajout de `validateSaleCancellationMovementLink` :
 Huit assertions supplémentaires couvrent l'absence de mouvement, une quantité erronée, un mauvais identifiant d'annulation, un mauvais magasin, une provenance d'auteur incohérente et le cas d'une vente sans produit de stock. Le libellé statique du harnais passe de 357 à **365 assertions** ; aucune exécution des tests n'est revendiquée.
 
 Ce validateur ne remplace pas la transaction serveur : celle-ci doit charger la vente et l'annulation persistées, vérifier l'absence de mouvement déjà appliqué, puis enregistrer annulation, effets financiers, mouvement positif, stock et audit de manière atomique. Un transfert ultérieur ne change jamais le magasin qui reçoit la restauration : c'est toujours le magasin d'origine de la vente.
+
+
+## Audit complémentaire — remboursement d'un remboursement de dette (28 novembre 2026)
+
+Le parcours principal n'expose toujours aucune action d'annulation de vente. Dans le prototype multi-magasin, l'annulation d'une vente et le retour client restent volontairement bloqués lorsqu'un remboursement de dette est déjà lié : il manque un flux comptable explicite pour rendre l'argent au client et réconcilier la dette.
+
+Ajout de `validateDebtPaymentReversal`, prévalidation propriétaire uniquement d'un remboursement intégral d'un remboursement de dette :
+- référence exacte au paiement d'origine et au même client, dette, organisation et magasin ;
+- montant rendu égal au paiement d'origine, sans remboursement partiel implicite ;
+- canal de sortie explicite (Espèces, Orange Money, Mobile Money, Virement ou Autre) et motif obligatoire ;
+- refus d'un second remboursement, d'un vendeur, d'une provenance incohérente ou d'une proposition périmée.
+
+**Limites importantes :** le paiement d'origine reste immuable ; ce helper ne modifie ni le solde de dette, ni la caisse, ni la vente. Il ne rend pas encore les remboursements inversés compatibles avec l'enregistrement de nouveaux paiements : le ledger doit intégrer les événements de reversal dans une transaction serveur avant toute réouverture de la dette. Il ne permet donc pas encore l'annulation d'une vente ayant des remboursements antérieurs. Aucun parcours n'est intégré à `index.html`.
