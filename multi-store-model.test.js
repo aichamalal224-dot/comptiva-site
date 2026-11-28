@@ -401,7 +401,7 @@ assert.equal(authorizeWithCurrentMembership(bundle, 'seller-A', 'store-A', 'sale
 const transfer = {
   id: 'transfer-1', idempotencyKey: 'transfer-key-1', organizationId: 'org-1', productId: 'product-1',
   fromStoreId: 'store-A', toStoreId: 'store-B', quantity: 5,
-  status: 'in_transit', createdBy: 'owner-1',
+  status: 'pending_dispatch', createdBy: 'owner-1',
   createdAt: '2026-11-27T14:00:00.000Z'
 };
 assert.equal(validateStockTransferCreation(bundle, 'owner-1', transfer,
@@ -441,6 +441,15 @@ const dispatchCheck = validateStockTransferDispatch(bundle, 'owner-1', transfer,
 assert.equal(dispatchCheck.valid, true, 'owner can prevalidate dispatch from source stock');
 assert.equal(dispatchCheck.resultingSourceStockQuantity, 4,
   'dispatch prevalidation debits exactly the transferred quantity from source stock');
+assert.equal(dispatchCheck.resultingStatus, 'in_transit',
+  'successful dispatch advances the transfer to in_transit');
+assert.equal(dispatchCheck.dispatchedAt, '2026-11-27T14:01:00.000Z',
+  'dispatch result records the server-supplied dispatch timestamp');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1',
+  { ...transfer, status: 'in_transit' }, sourceTransferStock,
+  '2026-11-27T14:01:00.000Z').reason,
+  'invalid_transfer_dispatch_fields',
+  'already dispatched transfer cannot be dispatched a second time');
 assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
   { ...sourceTransferStock, quantity: 4 }, '2026-11-27T14:01:00.000Z').reason,
   'insufficient_source_stock', 'transfer dispatch cannot exceed available source stock');
@@ -462,9 +471,14 @@ assert.equal(validateStockTransferDispatch(bundle, 'owner-1', transfer,
   '2026-11-27T14:01:00.000Z').reason,
   'invalid_transfer_dispatch_fields', 'dispatch cannot debit stock from another organization');
 assert.equal(validateStockTransferDispatch(bundle, 'owner-1',
-  { ...transfer, createdAt: '2026-11-27T14:00:00.000Z' }, sourceTransferStock,
+  { ...transfer, createdAt: '2026-11-27T13:00:00.000Z' }, sourceTransferStock,
+  '2026-11-27T14:10:00.000Z').valid, true,
+  'a pending transfer may be dispatched after waiting more than five minutes');
+assert.equal(validateStockTransferDispatch(bundle, 'owner-1',
+  { ...transfer, createdAt: '2026-11-27T14:11:00.000Z' }, sourceTransferStock,
   '2026-11-27T14:10:00.000Z').reason,
-  'invalid_transfer_dispatch_timestamp', 'stale transfer dispatch proposal is rejected');
+  'invalid_transfer_dispatch_timestamp', 'future-dated transfer creation is rejected');
+const dispatchedTransfer = { ...transfer, status: 'in_transit' };
 
 const receipt = {
   transferId: 'transfer-1', organizationId: 'org-1',
@@ -472,33 +486,33 @@ const receipt = {
   id: 'receipt-1', idempotencyKey: 'receipt-key-1', productId: 'product-1', quantity: 5,
   receivedBy: 'owner-1', receivedAt: '2026-11-27T14:02:00.000Z'
 };
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, receipt,
   '2026-11-27T14:03:00.000Z').valid, true,
   'owner can validate receipt at destination store');
-assert.equal(validateStockTransferReceipt(bundle, 'seller-B', transfer, { ...receipt, receivedBy: 'seller-B' },
+assert.equal(validateStockTransferReceipt(bundle, 'seller-B', dispatchedTransfer, { ...receipt, receivedBy: 'seller-B' },
   '2026-11-27T14:03:00.000Z').valid, true,
   'seller can confirm receipt in their assigned destination store');
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', {
-  ...transfer, status: 'received'
+  ...dispatchedTransfer, status: 'received'
 }, receipt, '2026-11-27T14:03:00.000Z').valid, false,
   'already received transfer cannot be received twice');
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, {
   ...receipt, quantity: 4
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'partial or altered quantity cannot silently complete transfer');
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, {
   ...receipt, storeId: 'store-A'
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'receipt must credit the designated destination store');
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, {
   ...receipt, fromStoreId: 'store-B'
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'receipt source store must match persisted transfer');
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, {
   ...receipt, idempotencyKey: ''
 }, '2026-11-27T14:03:00.000Z').valid, false,
   'receipt requires an idempotency key');
-assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, receipt,
   '2026-11-27T14:03:00.000Z', { id: 'receipt-existing' }).reason,
   'transfer_receipt_already_applied', 'duplicate receipt is rejected even if transfer snapshot is stale');
 
@@ -549,12 +563,12 @@ const partialReceipt1 = {
   receivedBy: 'seller-B', receivedAt: '2026-11-27T14:02:00.000Z'
 };
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt1, [partialReceipt1],
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt1, [partialReceipt1],
   destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).reason, 'transfer_status_receipt_history_mismatch',
   'in-transit transfer cannot already contain receipt history');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', { ...transfer, status: 'partially_received' },
+  bundle, 'seller-B', { ...dispatchedTransfer, status: 'partially_received' },
   partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).reason, 'transfer_status_receipt_history_mismatch',
   'partially received transfer requires a persisted prior receipt event');
@@ -564,13 +578,13 @@ const fullyAccountedPriorReceipt = {
   acceptedQuantity: 5, refusedQuantity: 0, damagedQuantity: 0
 };
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', { ...transfer, status: 'partially_received' },
+  bundle, 'seller-B', { ...dispatchedTransfer, status: 'partially_received' },
   partialReceipt1, [fullyAccountedPriorReceipt], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
 ).reason, 'transfer_status_receipt_history_mismatch',
   'partially received transfer cannot have a history that already accounts for the full dispatched quantity');
 const partialCheck1 = validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt1, [], destinationStockSnapshot,
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt1, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
 );
 assert.equal(partialCheck1.valid, true, 'assigned destination seller can record partial receipt');
@@ -578,17 +592,17 @@ assert.equal(partialCheck1.resultingStatus, 'partially_received', 'partial deliv
 assert.equal(partialCheck1.remainingToAccountFor, 2, 'partial receipt exposes remaining quantity');
 assert.equal(partialCheck1.resultingStockQuantity, 12, 'only accepted units enter destination stock');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', { ...transfer, fromStoreId: 'store-unknown' },
+  bundle, 'seller-B', { ...dispatchedTransfer, fromStoreId: 'store-unknown' },
   partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).reason, 'invalid_transfer_state',
   'receipt rejects a transfer whose source store is not in the organization');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', { ...transfer, fromStoreId: 'store-B' },
+  bundle, 'seller-B', { ...dispatchedTransfer, fromStoreId: 'store-B' },
   partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).reason, 'invalid_transfer_state',
   'receipt rejects a transfer whose source and destination stores are identical');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', { ...transfer, fromStoreId: undefined },
+  bundle, 'seller-B', { ...dispatchedTransfer, fromStoreId: undefined },
   { ...partialReceipt1, fromStoreId: undefined }, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
 ).reason, 'invalid_transfer_state',
@@ -599,7 +613,7 @@ const partialReceipt2 = {
   receivedAt: '2026-11-27T14:04:00.000Z'
 };
 const partialCheck2 = validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt2, [partialReceipt1],
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt2, [partialReceipt1],
   { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
 );
 assert.equal(partialCheck2.valid, true, 'second receipt event can complete a partial transfer');
@@ -609,7 +623,7 @@ assert.equal(partialCheck2.totalRefused, 1, 'receipt history accumulates refused
 assert.equal(partialCheck2.totalDamaged, 1, 'receipt history accumulates damaged quantity');
 assert.equal(partialCheck2.resultingStockQuantity, 13, 'damaged and refused units never enter stock');
 const fullRefusal = validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, {
+  bundle, 'seller-B', dispatchedTransfer, {
     ...partialReceipt1, id: 'receipt-refused-all', idempotencyKey: 'receipt-refused-all-key',
     quantity: 5, acceptedQuantity: 0, refusedQuantity: 5, damagedQuantity: 0
   }, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
@@ -624,40 +638,40 @@ assert.equal(validateStockTransferReceiptEvent(
   destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'patron can explicitly remove receipt confirmation permission from a seller');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-A', transfer, partialReceipt1, [], destinationStockSnapshot,
+  bundle, 'seller-A', dispatchedTransfer, partialReceipt1, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
 ).valid, false, 'seller assigned to another store cannot confirm destination receipt');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, { ...partialReceipt1, quantity: 6 },
+  bundle, 'seller-B', dispatchedTransfer, { ...partialReceipt1, quantity: 6 },
   [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'receipt event cannot exceed dispatched quantity');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, { ...partialReceipt1, acceptedQuantity: 3 },
+  bundle, 'seller-B', dispatchedTransfer, { ...partialReceipt1, acceptedQuantity: 3 },
   [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'accepted refused damaged quantities must reconcile');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt1, [partialReceipt1],
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt1, [partialReceipt1],
   destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'receipt ID and idempotency replay are rejected');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt2,
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt2,
   [{ ...partialReceipt1, fromStoreId: 'store-unknown' }],
   { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
 ).reason, 'invalid_receipt_history',
   'prior receipt history must preserve the transfer source store');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt2,
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt2,
   [{ ...partialReceipt1, receivedAt: '2026-11-27T14:06:00.000Z' }],
   { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
 ).reason, 'invalid_receipt_history',
   'future-dated prior receipt events are rejected');
 assert.equal(validateStockTransferReceiptEvent(
-  bundle, 'seller-B', transfer, partialReceipt1, [],
+  bundle, 'seller-B', dispatchedTransfer, partialReceipt1, [],
   { ...destinationStockSnapshot, quantity: Number.MAX_SAFE_INTEGER },
   '2026-11-27T14:03:00.000Z'
 ).reason, 'destination_stock_overflow', 'destination stock overflow is rejected');
 const reminderTransfer = {
-  ...transfer, expectedAt: '2026-11-27T13:00:00.000Z', status: 'in_transit'
+  ...dispatchedTransfer, expectedAt: '2026-11-27T13:00:00.000Z', status: 'in_transit'
 };
 const reminder = buildStockTransferReminderSuggestion(
   bundle, reminderTransfer, 'seller-B', '2026-11-27T15:00:00.000Z', 60
@@ -1567,4 +1581,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 366 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 372 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
