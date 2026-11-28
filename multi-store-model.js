@@ -639,6 +639,77 @@ function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receip
 
 
 /**
+ * Classify store stock for the UI. The patron can run this for every store;
+ * sellers may only see the assigned store projection. Threshold is per
+ * product/store and must be maintained by an authorized owner.
+ */
+function classifyStoreStockAlert(stock) {
+  if (!isRecord(stock) || !Number.isSafeInteger(stock.quantity) ||
+      stock.quantity < 0 || !Number.isSafeInteger(stock.alertAt) || stock.alertAt < 0) {
+    return { valid: false, level: 'unknown', label: 'Donnée de stock à vérifier' };
+  }
+  if (stock.quantity === 0) {
+    return { valid: true, level: 'red', code: 'out_of_stock', label: 'Rupture de stock' };
+  }
+  if (stock.quantity <= stock.alertAt) {
+    return { valid: true, level: 'red', code: 'low_stock', label: 'Stock faible' };
+  }
+  return { valid: true, level: 'green', code: 'sufficient_stock', label: 'Stock suffisant' };
+}
+
+/**
+ * Owner-facing seller presence summary. A fresh server heartbeat indicates
+ * online. Explicit sign-out indicates offline. A stale/missing heartbeat is
+ * deliberately "unknown", not offline: network loss must not be misreported
+ * as a deliberate logout. Presence must be written by trusted server logic.
+ */
+function projectOwnerSellerPresence(
+  bundle, viewerUid, sellerUid, presence,
+  now = new Date().toISOString(), heartbeatFreshSeconds = 120
+) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  const viewer = bundle.members.find(member => member.uid === viewerUid);
+  const seller = bundle.members.find(member => member.uid === sellerUid);
+  if (!viewer || viewer.status !== 'active' || viewer.role !== 'owner' ||
+      viewer.uid !== bundle.organization.ownerUid) {
+    return { valid: false, reason: 'owner_access_required' };
+  }
+  if (!seller || seller.role !== 'seller' || seller.organizationId !== bundle.organization.id) {
+    return { valid: false, reason: 'seller_not_found' };
+  }
+  if (!isRecord(presence) || presence.uid !== sellerUid ||
+      presence.organizationId !== bundle.organization.id) {
+    return { valid: false, reason: 'invalid_presence_record' };
+  }
+  const nowMs = Date.parse(now);
+  const heartbeatMs = Date.parse(presence.heartbeatAt || '');
+  const lastSeenMs = Date.parse(presence.lastSeenAt || '');
+  if (!Number.isFinite(nowMs) || !Number.isSafeInteger(heartbeatFreshSeconds) ||
+      heartbeatFreshSeconds < 1) {
+    return { valid: false, reason: 'invalid_presence_clock' };
+  }
+  let state = 'unknown';
+  if (presence.sessionState === 'signed_out') state = 'offline';
+  else if (presence.sessionState === 'active' && Number.isFinite(heartbeatMs) &&
+      heartbeatMs <= nowMs && nowMs - heartbeatMs <= heartbeatFreshSeconds * 1000) {
+    state = 'online';
+  } else if (presence.sessionState === 'active') state = 'connection_unconfirmed';
+  return {
+    valid: true, sellerUid, state,
+    label: state === 'online' ? 'Connecté' :
+      state === 'offline' ? 'Déconnecté' :
+      state === 'connection_unconfirmed' ? 'Connexion non confirmée' : 'Présence inconnue',
+    storeIds: [...seller.storeIds],
+    lastSeenAt: Number.isFinite(lastSeenMs) && lastSeenMs <= nowMs
+      ? presence.lastSeenAt : null,
+    heartbeatAt: Number.isFinite(heartbeatMs) && heartbeatMs <= nowMs
+      ? presence.heartbeatAt : null
+  };
+}
+
+
+/**
  * Validate one delivery-receipt event, including partial, refused and damaged
  * quantities. Sellers may confirm only at a store assigned to them. The owner
  * can confirm at any organization store. A trusted transaction must re-read
@@ -1442,6 +1513,8 @@ const api = {
   validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
+  classifyStoreStockAlert,
+  projectOwnerSellerPresence,
   projectSellerProduct,
   validateSellerOperationalProduct,
   validateSellerOperationalRecord,
