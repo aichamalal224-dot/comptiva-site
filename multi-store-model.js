@@ -677,6 +677,10 @@ function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receip
       receipt.receivedBy !== actorUid) {
     return { valid: false, reason: 'transfer_receipt_mismatch_or_replay' };
   }
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) {
+    return { valid: false, reason: 'invalid_receipt_timestamp' };
+  }
   const receivedMs = Date.parse(receipt.receivedAt);
   if (!Number.isFinite(receivedMs) ||
       receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
@@ -879,6 +883,62 @@ function validateStockTransferReceiptEvent(
     totalRefused: refused, totalDamaged: damaged,
     remainingToAccountFor, resultingStatus, resultingStockQuantity
   };
+}
+
+
+/**
+ * Link the source-stock debit to the exact persisted transfer.
+ * The backend must atomically write this movement, stock debit and transfer state.
+ */
+function validateStockTransferDispatchMovementLink(transfer, movement) {
+  if (!isRecord(transfer) || !nonEmptyString(transfer.id) ||
+      !nonEmptyString(transfer.organizationId) || !nonEmptyString(transfer.fromStoreId) ||
+      !nonEmptyString(transfer.productId) || !nonEmptyString(transfer.createdBy) ||
+      !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0) {
+    return { valid: false, reason: 'invalid_transfer_dispatch_movement_context' };
+  }
+  if (!isRecord(movement) || !nonEmptyString(movement.id) ||
+      !nonEmptyString(movement.idempotencyKey) ||
+      movement.movementType !== 'transfer_dispatch' ||
+      movement.operationId !== transfer.id ||
+      movement.organizationId !== transfer.organizationId ||
+      movement.storeId !== transfer.fromStoreId ||
+      movement.productId !== transfer.productId ||
+      movement.createdBy !== transfer.createdBy ||
+      movement.quantityDelta !== -transfer.quantity) {
+    return { valid: false, reason: 'transfer_dispatch_movement_mismatch' };
+  }
+  return { valid: true, reason: 'transfer_dispatch_movement_linked' };
+}
+
+/**
+ * Link only accepted receipt units to destination stock. Refused/damaged units
+ * must never create a positive stock movement.
+ */
+function validateStockTransferReceiptMovementLink(receipt, movement) {
+  if (!isRecord(receipt) || !nonEmptyString(receipt.id) ||
+      !nonEmptyString(receipt.organizationId) || !nonEmptyString(receipt.storeId) ||
+      !nonEmptyString(receipt.productId) || !nonEmptyString(receipt.receivedBy) ||
+      !Number.isSafeInteger(receipt.acceptedQuantity) || receipt.acceptedQuantity < 0) {
+    return { valid: false, reason: 'invalid_transfer_receipt_movement_context' };
+  }
+  if (receipt.acceptedQuantity === 0) {
+    return movement == null
+      ? { valid: true, reason: 'no_stock_movement_required' }
+      : { valid: false, reason: 'unexpected_transfer_receipt_stock_movement' };
+  }
+  if (!isRecord(movement) || !nonEmptyString(movement.id) ||
+      !nonEmptyString(movement.idempotencyKey) ||
+      movement.movementType !== 'transfer_receipt' ||
+      movement.operationId !== receipt.id ||
+      movement.organizationId !== receipt.organizationId ||
+      movement.storeId !== receipt.storeId ||
+      movement.productId !== receipt.productId ||
+      movement.createdBy !== receipt.receivedBy ||
+      movement.quantityDelta !== receipt.acceptedQuantity) {
+    return { valid: false, reason: 'transfer_receipt_movement_mismatch' };
+  }
+  return { valid: true, reason: 'transfer_receipt_movement_linked' };
 }
 
 /**
@@ -1846,6 +1906,8 @@ const api = {
   validateStockTransferDispatch,
   validateStockTransferReceipt,
   validateStockTransferReceiptEvent,
+  validateStockTransferDispatchMovementLink,
+  validateStockTransferReceiptMovementLink,
   buildStockTransferReminderSuggestion,
   validateSaleStockDecrement,
   validateSaleSettlement,
