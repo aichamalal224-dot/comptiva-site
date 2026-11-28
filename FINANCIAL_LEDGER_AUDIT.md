@@ -67,3 +67,9 @@ Le validateur d'annulation renvoie maintenant, en plus du montant total encaiss�
 ## Complément — intégrité de l'historique des remboursements de dette (28 novembre 2026)
 
 Le contrôle des remboursements vérifie maintenant chaque mouvement historique : auteur obligatoire, date valide et non future, auteur toujours autorisé sur le magasin concerné, et absence de marqueur de contre-passation non réconcilié. Un historique contenant un remboursement marqué comme annulé/contre-passé est bloqué plutôt que de risquer de calculer le solde en comptant ou en ignorant ce mouvement de façon ambiguë. Quatre assertions supplémentaires couvrent auteur non autorisé, date future, absence d'auteur et mouvement contre-passé. Une procédure dédiée de contre-passation avec écritures immuables et transaction serveur reste à construire ; cette validation ne réalise pas de remboursement inverse.
+
+## Complément — fiabilité des remboursements dans les rapports (28 novembre 2026)
+
+Le calcul des remboursements du jour ne doit pas additionner aveuglément les lignes de paiement. La fonction `paymentLedgerSummary(dateFilter)` vérifie maintenant que chaque remboursement possède un identifiant unique, référence exactement une dette existante et appartient à un historique de dette cohérent avant de produire un total. En cas de ligne orpheline, de doublon ou d'historique invalide, le total des remboursements du rapport devient « — » au lieu d'un montant potentiellement faux. Le total des dettes dans le rapport affiche également « À vérifier » si au moins un registre de dette est invalide.
+
+Cette correction est locale à l'affichage du rapport. Elle ne modifie ni les enregistrements ni le mécanisme de synchronisation. Les contre-passations de remboursements ne sont toujours pas intégrées aux calculs de soldes, et les transactions multi-appareils restent à construire. Aucun test navigateur ou Firebase n'a été exécuté pour cette modification.
