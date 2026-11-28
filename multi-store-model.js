@@ -1533,7 +1533,7 @@ function validateBusinessOrderTransition(bundle, actorUid, previous, next,
   if (type === 'patron_task') {
     allowed = (owner && from === 'draft' && to === 'assigned') ||
       (assignedSeller && from === 'assigned' && ['accepted', 'refused'].includes(to)) ||
-      (assignedSeller && from === 'accepted' && ['in_progress', 'completed'].includes(to)) ||
+      (assignedSeller && from === 'accepted' && to === 'in_progress') ||
       (assignedSeller && from === 'in_progress' && to === 'completed') ||
       (owner && from === 'refused' && to === 'assigned') ||
       (owner && !['completed', 'cancelled'].includes(from) && to === 'cancelled');
