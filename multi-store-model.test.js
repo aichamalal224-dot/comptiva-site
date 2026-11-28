@@ -1230,7 +1230,7 @@ assert.equal(validateStockAdjustment(bundle, 'owner-1', adjustment,
   'stock_adjustment_already_applied', 'stock adjustment replay is rejected');
 assert.equal(validateStockAdjustment(bundle, 'owner-1',
   { ...adjustment, createdAt: 'not-a-date' }, stockSnapshotForAdjustment, null).reason,
-  'missing_provenance', 'stock adjustment requires complete creation provenance');
+  'invalid_creation_timestamp', 'stock adjustment requires a valid creation timestamp');
 assert.equal(validateStockAdjustment(bundle, 'owner-1',
   { ...adjustment, createdAt: new Date(Date.now() + 60000).toISOString() },
   stockSnapshotForAdjustment, null).reason,
