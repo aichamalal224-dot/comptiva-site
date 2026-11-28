@@ -129,3 +129,19 @@ Trois assertions supplémentaires couvrent le retour d'une unité surévalué, u
 Quatre assertions supplémentaires couvrent le blocage dans les deux helpers et le rejet d'un historique absent/invalide. Le libellé statique du harnais passe de 346 à **350 assertions** ; les tests ne sont pas déclarés exécutés.
 
 Le backend doit toujours charger lui-même tous les retours associés à la vente, sans accepter une liste fournie par le client, puis vérifier ces données et les mouvements de stock dans une transaction atomique.
+
+
+## Correction — liaison stricte entre retour client et mouvement de stock (28 novembre 2026)
+
+Le validateur du retour calculait correctement la quantité à remettre en stock, mais le prototype ne fournissait pas encore de contrôle dédié garantissant que l'écriture du journal correspond exactement au retour concerné.
+
+Ajout de `validateSaleReturnMovementLink` :
+- si `restockQuantity > 0`, un mouvement `sale_return` est obligatoire ;
+- le mouvement doit référencer l'identifiant exact du retour comme `operationId` ;
+- organisation, magasin, produit et auteur doivent correspondre ;
+- le delta positif doit être exactement égal à `restockQuantity` ;
+- si tous les articles sont endommagés (`restockQuantity = 0`), aucun mouvement de stock n'est permis.
+
+Sept assertions couvrent le lien exact, la quantité, le retour source, le magasin et le cas entièrement endommagé. Le libellé statique du harnais passe de 350 à **357 assertions** ; les tests ne sont pas déclarés exécutés.
+
+Ce contrôle est un contrat de cohérence, pas une écriture transactionnelle. Le serveur doit créer le retour, le mouvement et le nouvel état du stock dans une transaction atomique, avec unicité d'idempotence. Le client ne doit pas pouvoir fournir un mouvement arbitraire ou un historique incomplet.
