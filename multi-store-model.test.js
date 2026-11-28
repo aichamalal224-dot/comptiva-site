@@ -407,6 +407,10 @@ const transfer = {
 assert.equal(validateStockTransferCreation(bundle, 'owner-1', transfer,
   '2026-11-27T14:01:00.000Z').valid, true,
   'owner can create a valid inter-store stock transfer');
+assert.equal(validateStockTransferCreation(bundle, 'owner-1', {
+  ...transfer, status: 'in_transit'
+}, '2026-11-27T14:01:00.000Z').valid, false,
+  'transfer cannot be created already marked as dispatched');
 assert.equal(validateStockTransferCreation(bundle, 'seller-A', transfer,
   '2026-11-27T14:01:00.000Z').valid, false,
   'seller cannot initiate stock transfers');
@@ -634,7 +638,7 @@ assert.equal(fullRefusal.resultingStockQuantity, 10, 'fully refused delivery add
 const sellerWithoutReceiptPermission = structuredClone(bundle);
 sellerWithoutReceiptPermission.members[2].permissions = ['sales:read'];
 assert.equal(validateStockTransferReceiptEvent(
-  sellerWithoutReceiptPermission, 'seller-B', transfer, partialReceipt1, [],
+  sellerWithoutReceiptPermission, 'seller-B', dispatchedTransfer, partialReceipt1, [],
   destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'patron can explicitly remove receipt confirmation permission from a seller');
 assert.equal(validateStockTransferReceiptEvent(
@@ -1581,4 +1585,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 372 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 373 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
