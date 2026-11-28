@@ -81,3 +81,8 @@ Deux tests de non-régression couvrent l'événement antérieur daté dans le fu
 ## Audit complémentaire — historique des retours clients (28 novembre 2026)
 
 Le contrôle des retours refuse désormais les événements antérieurs datés après l'heure de référence et vérifie que chaque auteur historique disposait de l'autorisation patronale `sales:return` pour le magasin concerné. L'heure de référence invalide est rejetée dès l'entrée du validateur. Trois tests de non-régression couvrent ces cas. Le validateur reste une prévalidation pure : l'historique doit provenir du stockage serveur de confiance et être vérifié dans la même transaction que le retour, le remboursement et la remise en stock.
+
+
+## Audit complémentaire — cohérence annulation/stock (28 novembre 2026)
+
+Correction d'une divergence entre les deux validateurs d'annulation : le calcul financier de la quantité à restaurer utilisait uniquement `stockProductId`, tandis que le validateur de stock acceptait aussi `productId`. Le calcul utilise maintenant la même référence de repli (`productId || stockProductId`). Le validateur de stock refuse aussi explicitement une vente déjà marquée annulée, même si aucun mouvement n'est fourni au helper. Deux tests de non-régression couvrent ces cas. Cela ne remplace pas la transaction serveur ni la recherche des mouvements existants par identifiant de vente/clé d'idempotence.
