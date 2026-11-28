@@ -1234,6 +1234,10 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
       !Array.isArray(priorReturns) || !Array.isArray(linkedPayments) || !isRecord(stock)) {
     return { valid: false, reason: 'invalid_sale_return_context' };
   }
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) {
+    return { valid: false, reason: 'invalid_sale_return_timestamp' };
+  }
   if (persistedSale.cancelledAt || persistedSale.status === 'cancelled') {
     return { valid: false, reason: 'cancelled_sale_cannot_be_returned' };
   }
@@ -1293,6 +1297,8 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
         prior.restockQuantity + prior.damagedQuantity !== prior.quantity ||
         !nonEmptyString(prior.reason) || !nonEmptyString(prior.createdBy) ||
         !Number.isFinite(Date.parse(prior.createdAt)) ||
+        Date.parse(prior.createdAt) > nowMs ||
+        !authorizeStoreAction(bundle, prior.createdBy, persistedSale.storeId, 'sales:return').allowed ||
         (persistedSale.saleType === 'paid' &&
           (prior.cashRefundAmount !== prior.amount || prior.creditReductionAmount !== 0)) ||
         (persistedSale.saleType === 'credit' &&
@@ -1331,9 +1337,9 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
   }
   const provenance = validateOperationRecord(bundle, actorUid, 'sales:return', returnRecord);
   if (!provenance.valid) return { valid: false, reason: provenance.reason };
-  const nowMs = Date.parse(now), createdMs = Date.parse(returnRecord.createdAt);
-  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
-      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+  const createdMs = Date.parse(returnRecord.createdAt);
+  if (!Number.isFinite(createdMs) || createdMs > nowMs ||
+      nowMs - createdMs > 5 * 60 * 1000) {
     return { valid: false, reason: 'invalid_sale_return_timestamp' };
   }
   return {
