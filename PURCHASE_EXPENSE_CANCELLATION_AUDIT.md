@@ -62,3 +62,10 @@ Ajout de `validateSaleReturn` et de l'action patron `sales:return`. Le helper v�
 Limite : les ventes à crédit avec remboursements antérieurs exigent un flux de remboursement/réduction de dette dédié et restent bloquées. Le montant de retour est fourni par l'opération autorisée ; aucune politique de prorata/remise n'est inventée ici. Le helper ne modifie ni stock ni caisse : le serveur doit exécuter atomiquement retour, remboursement/réduction de dette, stock et journal d'audit.
 
 Le dernier durcissement contrôle aussi les allocations, l'identité de l'auteur, la date et les cumuls de l'historique des retours déjà enregistrés. Trois tests couvrent un historique antérieur incohérent.
+
+
+## Complément — annulation après transfert ultérieur du stock (28 novembre 2026)
+
+Ajout de `validateSaleCancellationStock`. Lorsqu'une vente est annulée après un transfert ultérieur d'autres unités du même produit, le mouvement de restauration est rattaché au magasin d'origine de la vente, jamais automatiquement au magasin destinataire du transfert. Le helper vérifie l'organisation, le magasin, le produit, la provenance patron, l'existence d'un mouvement déjà appliqué et le risque de dépassement numérique. Cinq assertions couvrent restauration dans le magasin initial, double restauration, magasin falsifié, vendeur non autorisé et overflow. Harnais isolé : **247 assertions**.
+
+Limite : ce helper suppose que les unités annulées reviennent physiquement au magasin de la vente. Si le retour physique se fait dans un autre magasin, il faudra enregistrer un transfert/retour de stock distinct et autorisé plutôt que de créditer arbitrairement le stock initial. L'annulation financière, la restauration de stock et le journal doivent être atomiques côté serveur.
