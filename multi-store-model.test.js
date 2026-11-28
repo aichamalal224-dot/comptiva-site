@@ -27,6 +27,7 @@ const {
   validateSaleCancellation,
   validateSaleCancellationStock,
   validateSaleReturn,
+  validateSaleReturnMovementLink,
   validateAuditEvent,
   validateStockAdjustment,
   validateStockMovementRecord,
@@ -1307,6 +1308,35 @@ assert.equal(validateStockMovementRecord(bundle, 'owner-1', stockMovement,
   '2026-11-28T11:01:00.000Z').reason,
   'invalid_stock_movement_history', 'corrupt duplicate movement history is rejected');
 
+// A customer return must map to exactly its resellable stock quantity.
+const returnMovement = {
+  id: 'movement-return-1', idempotencyKey: 'movement-return-key-1',
+  movementType: 'sale_return', operationId: firstReturn.id,
+  organizationId: firstReturn.organizationId, storeId: firstReturn.storeId,
+  productId: firstReturn.productId, quantityDelta: firstReturn.restockQuantity,
+  createdBy: firstReturn.createdBy
+};
+assert.equal(validateSaleReturnMovementLink(firstReturn, returnMovement).valid, true,
+  'resellable returned units require one matching positive stock movement');
+assert.equal(validateSaleReturnMovementLink(firstReturn, null).reason,
+  'sale_return_stock_movement_mismatch', 'resellable return cannot omit its stock movement');
+assert.equal(validateSaleReturnMovementLink(firstReturn,
+  { ...returnMovement, quantityDelta: returnMovement.quantityDelta + 1 }).reason,
+  'sale_return_stock_movement_mismatch', 'return movement quantity must equal resellable returned quantity');
+assert.equal(validateSaleReturnMovementLink(firstReturn,
+  { ...returnMovement, operationId: 'another-return' }).reason,
+  'sale_return_stock_movement_mismatch', 'return movement must reference the exact return record');
+assert.equal(validateSaleReturnMovementLink(firstReturn,
+  { ...returnMovement, storeId: 'store-B' }).reason,
+  'sale_return_stock_movement_mismatch', 'return movement cannot credit another store');
+assert.equal(validateSaleReturnMovementLink(
+  { ...firstReturn, restockQuantity: 0, damagedQuantity: firstReturn.quantity }, null).valid,
+  true, 'fully damaged return requires no stock movement');
+assert.equal(validateSaleReturnMovementLink(
+  { ...firstReturn, restockQuantity: 0, damagedQuantity: firstReturn.quantity },
+  returnMovement).reason, 'unexpected_sale_return_stock_movement',
+  'fully damaged return cannot create a stock increase');
+
 const auditEvent = {
   id: 'audit-1', organizationId: 'org-1', storeId: 'store-A',
   actorUid: 'seller-A', action: 'sale.created',
@@ -1481,4 +1511,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 350 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 357 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
