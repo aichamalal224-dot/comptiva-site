@@ -15,6 +15,8 @@ const {
   validateStockTransferReceipt,
   validateStockTransferReceiptEvent,
   buildStockTransferReminderSuggestion,
+  classifyStoreStockAlert,
+  projectOwnerSellerPresence,
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
@@ -462,6 +464,40 @@ assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
   '2026-11-27T14:03:00.000Z', { id: 'receipt-existing' }).reason,
   'transfer_receipt_already_applied', 'duplicate receipt is rejected even if transfer snapshot is stale');
+
+
+// Red/green stock alerts and owner visibility of seller connection presence.
+assert.deepEqual(classifyStoreStockAlert({ quantity: 0, alertAt: 3 }), {
+  valid: true, level: 'red', code: 'out_of_stock', label: 'Rupture de stock'
+}, 'zero stock displays a red out-of-stock alert');
+assert.equal(classifyStoreStockAlert({ quantity: 2, alertAt: 3 }).level, 'red',
+  'stock at or below threshold displays red low-stock alert');
+assert.equal(classifyStoreStockAlert({ quantity: 4, alertAt: 3 }).level, 'green',
+  'stock above threshold displays green sufficient-stock alert');
+assert.equal(classifyStoreStockAlert({ quantity: -1, alertAt: 3 }).valid, false,
+  'negative stock is invalid for alert display');
+const sellerPresence = {
+  uid: 'seller-B', organizationId: 'org-1', sessionState: 'active',
+  heartbeatAt: '2026-11-28T15:00:00.000Z',
+  lastSeenAt: '2026-11-28T15:00:00.000Z'
+};
+assert.equal(projectOwnerSellerPresence(
+  bundle, 'owner-1', 'seller-B', sellerPresence, '2026-11-28T15:00:30.000Z'
+).state, 'online', 'patron sees seller as connected with a fresh heartbeat');
+assert.equal(projectOwnerSellerPresence(
+  bundle, 'owner-1', 'seller-B',
+  { ...sellerPresence, sessionState: 'signed_out' }, '2026-11-28T15:00:30.000Z'
+).state, 'offline', 'patron sees explicit seller sign-out as offline');
+assert.equal(projectOwnerSellerPresence(
+  bundle, 'owner-1', 'seller-B', sellerPresence, '2026-11-28T15:10:00.000Z'
+).state, 'connection_unconfirmed', 'stale heartbeat is not falsely labelled offline');
+assert.equal(projectOwnerSellerPresence(
+  bundle, 'seller-A', 'seller-B', sellerPresence, '2026-11-28T15:00:30.000Z'
+).valid, false, 'seller cannot access owner-wide presence view');
+assert.equal(projectOwnerSellerPresence(
+  bundle, 'owner-1', 'seller-B',
+  { ...sellerPresence, uid: 'seller-A' }, '2026-11-28T15:00:30.000Z'
+).valid, false, 'presence record identity must match requested seller');
 
 
 // Destination-store seller receipt lifecycle: partial, refused and damaged units.
@@ -1119,4 +1155,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 272 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 283 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
