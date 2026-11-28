@@ -62,3 +62,8 @@ Cette protection reste une spécification côté modèle. Les documents lus par 
 ## Complément — ventilation des contre-écritures d'annulation (28 novembre 2026)
 
 Le validateur d'annulation renvoie maintenant, en plus du montant total encaissé à contre-passer, le moyen de paiement d'origine. Pour une vente en paiement mixte, il restitue séparément les parts espèces et mobile, validées par `validateSaleSettlement`. Le montant de dette à contre-passer est désormais strictement le `creditAmount` validé, sans valeur de repli implicite. Cinq assertions supplémentaires couvrent la conservation de la ventilation mixte. Cela ne réalise pas les remboursements : la contre-écriture et le mouvement de caisse doivent encore être créés atomiquement par un backend de confiance, sans modifier l'historique original.
+
+
+## Complément — intégrité de l'historique des remboursements de dette (28 novembre 2026)
+
+Le contrôle des remboursements vérifie maintenant chaque mouvement historique : auteur obligatoire, date valide et non future, auteur toujours autorisé sur le magasin concerné, et absence de marqueur de contre-passation non réconcilié. Un historique contenant un remboursement marqué comme annulé/contre-passé est bloqué plutôt que de risquer de calculer le solde en comptant ou en ignorant ce mouvement de façon ambiguë. Quatre assertions supplémentaires couvrent auteur non autorisé, date future, absence d'auteur et mouvement contre-passé. Une procédure dédiée de contre-passation avec écritures immuables et transaction serveur reste à construire ; cette validation ne réalise pas de remboursement inverse.
