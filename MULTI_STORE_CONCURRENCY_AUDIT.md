@@ -152,3 +152,16 @@ Autre correction : une demande d'expédition ne devient plus invalide simplement
 Six assertions supplémentaires couvrent le statut obtenu après expédition, l'horodatage, le refus d'une seconde expédition, l'autorisation d'une expédition tardive et le rejet d'une date future. Le libellé statique du harnais passe de **366 à 372 assertions** ; les tests ne sont pas déclarés exécutés.
 
 **Migration et compatibilité :** les documents existants marqués `in_transit` doivent être considérés comme déjà expédiés uniquement si un mouvement `transfer_dispatch` correspondant existe dans le journal autoritatif. Ne pas les convertir automatiquement depuis le navigateur. Les anciens transferts sans mouvement correspondant nécessitent une réconciliation contrôlée avant intégration.
+
+
+## Correction — liaison stricte des mouvements de transfert (28 novembre 2026)
+
+L'audit a ajouté deux contrôles de rapprochement entre le transfert persistant et le journal immuable :
+- validateStockTransferDispatchMovementLink exige un mouvement transfer_dispatch référant exactement l'identifiant du transfert, l'organisation, le magasin source, le produit, le patron auteur et un delta négatif égal à toute la quantité expédiée.
+- validateStockTransferReceiptMovementLink exige, pour chaque réception, un mouvement transfer_receipt référant exactement l'événement de réception, le magasin destinataire, le produit, l'auteur et le delta positif égal aux seules unités acceptées. Si aucune unité n'est acceptée, aucun mouvement de stock n'est permis.
+
+Dix assertions supplémentaires couvrent les liens exacts, les quantités, le sens du mouvement, les magasins et l'absence de crédit en cas de refus total. Le libellé statique du harnais passe de 373 à 383 assertions ; ce nombre n'est pas une preuve d'exécution.
+
+L'audit a également corrigé l'horodatage manquant dans validateStockTransferReceipt, qui pouvait provoquer une erreur d'exécution lors du contrôle de la date. La fonction valide maintenant explicitement l'heure de référence avant de comparer l'heure de réception.
+
+Limite de production : ces fonctions ne créent ni ne verrouillent les mouvements. Le serveur doit encore imposer l'unicité des clés, relire transfert, réception, stock et journal autoritatifs, puis effectuer le débit/crédit, l'écriture du mouvement et le changement d'état dans une transaction atomique. Aucune intégration dans l'application principale ni opération Firebase n'a été effectuée.
