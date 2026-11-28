@@ -1444,6 +1444,42 @@ function validateSaleReturn(bundle, actorUid, persistedSale, returnRecord, prior
 }
 
 /**
+ * Link a customer return to exactly the stock movement it is allowed to create.
+ * A fully damaged return has no stock movement; a resellable quantity requires
+ * one positive movement whose operationId is the immutable return ID.
+ */
+function validateSaleReturnMovementLink(returnRecord, movement) {
+  if (!isRecord(returnRecord) ||
+      !nonEmptyString(returnRecord.id) ||
+      !nonEmptyString(returnRecord.organizationId) ||
+      !nonEmptyString(returnRecord.storeId) ||
+      !nonEmptyString(returnRecord.productId) ||
+      !Number.isSafeInteger(returnRecord.restockQuantity) ||
+      returnRecord.restockQuantity < 0) {
+    return { valid: false, reason: 'invalid_sale_return_movement_context' };
+  }
+  if (returnRecord.restockQuantity === 0) {
+    return movement == null
+      ? { valid: true, reason: 'no_stock_movement_required' }
+      : { valid: false, reason: 'unexpected_sale_return_stock_movement' };
+  }
+  if (!isRecord(movement) ||
+      !nonEmptyString(movement.id) ||
+      !nonEmptyString(movement.idempotencyKey) ||
+      movement.movementType !== 'sale_return' ||
+      movement.operationId !== returnRecord.id ||
+      movement.organizationId !== returnRecord.organizationId ||
+      movement.storeId !== returnRecord.storeId ||
+      movement.productId !== returnRecord.productId ||
+      movement.createdBy !== returnRecord.createdBy ||
+      movement.quantityDelta !== returnRecord.restockQuantity) {
+    return { valid: false, reason: 'sale_return_stock_movement_mismatch' };
+  }
+  return { valid: true, reason: 'sale_return_stock_movement_linked' };
+}
+
+
+/**
  * Audit events are append-only evidence. The trusted backend must stamp
  * actorUid/server timestamp, derive action from the authorized operation,
  * and deny client update/delete. This helper validates the event envelope.
@@ -1771,6 +1807,7 @@ const api = {
   validateSaleCancellation,
   validateSaleCancellationStock,
   validateSaleReturn,
+  validateSaleReturnMovementLink,
   validateAuditEvent,
   validateStockMovementRecord,
   validateStockAdjustment,
