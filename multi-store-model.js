@@ -726,10 +726,13 @@ function validateStockTransferReceiptEvent(
     return { valid: false, reason: 'invalid_transfer_receipt_context' };
   }
   const transfer = previousTransfer;
+  const sourceStore = bundle.stores.find(store => store.id === transfer.fromStoreId);
   const destinationStore = bundle.stores.find(store => store.id === transfer.toStoreId);
   if (!nonEmptyString(transfer.id) || !nonEmptyString(transfer.idempotencyKey) ||
       transfer.organizationId !== bundle.organization.id ||
-      !destinationStore || destinationStore.organizationId !== bundle.organization.id ||
+      !sourceStore || !destinationStore || sourceStore.id === destinationStore.id ||
+      sourceStore.organizationId !== bundle.organization.id ||
+      destinationStore.organizationId !== bundle.organization.id ||
       !nonEmptyString(transfer.productId) ||
       !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
       !['in_transit', 'partially_received'].includes(transfer.status)) {
