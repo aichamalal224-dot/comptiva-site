@@ -101,3 +101,18 @@ Un contrôle croisé entre le formulaire de vente de `index.html` et `validateSa
 **Correction de conception requise avant intégration :** chaque retour payé doit enregistrer explicitement le canal réellement utilisé pour rembourser (espèces, Orange Money, Mobile Money ou ventilation mixte), avec les montants séparés par canal et une égalité stricte entre ces montants et le total remboursé. La réduction de crédit doit rester distincte d'un remboursement encaissé. Le backend devra vérifier les plafonds cumulés, la vente d'origine et les remboursements déjà enregistrés dans une transaction. Si le commerçant rembourse par un canal différent de celui de l'encaissement initial, ce choix doit être explicite et auditable, jamais déduit silencieusement.
 
 **État :** anomalie identifiée et documentée ; aucun changement de logique n'est fait sans contrat de remboursement explicite. Le retour client n'est pas intégré à l'application principale. Aucun test Firebase, paiement réel ou remboursement n'a été exécuté.
+
+
+## Correction — plafonnement du remboursement par quantité retournée (28 novembre 2026)
+
+Le contrôle cumulatif plafonnait déjà le remboursement à la valeur totale de la vente, mais ne reliait pas assez strictement le montant retourné à la quantité effectivement retournée. Une demande pouvait ainsi déclarer le retour d'une seule unité tout en demandant un remboursement correspondant à plusieurs unités, tant que le total de vente n'était pas dépassé.
+
+Le précontrôle du prototype impose désormais :
+- un prix unitaire de vente entier, positif et exploitable, avec une multiplication quantité × prix unitaire sans dépassement de l'entier sûr ;
+- pour chaque retour historique, un montant qui ne dépasse pas la valeur unitaire maximale des quantités retournées ;
+- pour le nouveau retour, le même plafond individuel et le plafond cumulé quantité × prix unitaire, en plus du plafond global de la vente et des plafonds espèces/crédit ;
+- le rejet d'un historique incohérent, plutôt que son recalcul silencieux.
+
+Trois assertions supplémentaires couvrent le retour d'une unité surévalué, un retour historique trop élevé par unité et l'incohérence quantité/montant dans l'historique.
+
+**Limites :** ce plafond utilise le prix unitaire enregistré sur la vente. Les remises globales, taxes, prix négociés ou règles d'allocation au prorata ne sont pas définis dans le modèle actuel ; il faut les formaliser avant d'autoriser ces cas. Ce helper reste une prévalidation pure : le backend devra relire vente, retours, stock et clé d'idempotence dans une transaction atomique avant toute écriture. Aucun mouvement de stock ni remboursement réel n'a été exécuté.
