@@ -86,3 +86,18 @@ Le contrôle des retours refuse désormais les événements antérieurs datés a
 ## Audit complémentaire — cohérence annulation/stock (28 novembre 2026)
 
 Correction d'une divergence entre les deux validateurs d'annulation : le calcul financier de la quantité à restaurer utilisait uniquement `stockProductId`, tandis que le validateur de stock acceptait aussi `productId`. Le calcul utilise maintenant la même référence de repli (`productId || stockProductId`). Le validateur de stock refuse aussi explicitement une vente déjà marquée annulée, même si aucun mouvement n'est fourni au helper. Deux tests de non-régression couvrent ces cas. Cela ne remplace pas la transaction serveur ni la recherche des mouvements existants par identifiant de vente/clé d'idempotence.
+
+
+
+## Audit complémentaire — canal de remboursement et paiements mobiles/mixte (28 novembre 2026)
+
+Un contrôle croisé entre le formulaire de vente de `index.html` et `validateSaleReturn` révèle un point bloquant avant toute intégration du retour client :
+
+- L'application accepte les ventes réglées en espèces, Orange Money, Mobile Money ou en paiement mixte espèces + mobile money.
+- Le contrat actuel du retour ne comporte que `cashRefundAmount` et `creditReductionAmount`. Pour toute vente de type `paid`, il impose que la totalité du retour soit comptabilisée comme remboursement en espèces.
+- Il ne permet donc pas de décrire correctement un remboursement effectué par Orange Money/Mobile Money, ni de ventiler un remboursement mixte. Il pourrait produire un historique de caisse trompeur si on l'intégrait tel quel.
+- Le montant remboursé reste une valeur fournie par l'opération autorisée ; aucune règle de prorata ou de remise commerciale n'est actuellement définie. Il ne faut pas inventer automatiquement un prix de retour à partir de la quantité.
+
+**Correction de conception requise avant intégration :** chaque retour payé doit enregistrer explicitement le canal réellement utilisé pour rembourser (espèces, Orange Money, Mobile Money ou ventilation mixte), avec les montants séparés par canal et une égalité stricte entre ces montants et le total remboursé. La réduction de crédit doit rester distincte d'un remboursement encaissé. Le backend devra vérifier les plafonds cumulés, la vente d'origine et les remboursements déjà enregistrés dans une transaction. Si le commerçant rembourse par un canal différent de celui de l'encaissement initial, ce choix doit être explicite et auditable, jamais déduit silencieusement.
+
+**État :** anomalie identifiée et documentée ; aucun changement de logique n'est fait sans contrat de remboursement explicite. Le retour client n'est pas intégré à l'application principale. Aucun test Firebase, paiement réel ou remboursement n'a été exécuté.
