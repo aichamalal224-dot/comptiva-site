@@ -1063,7 +1063,7 @@ const returnCheck = validateSaleReturn(bundle, 'owner-1', saleForReturn,
 assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
   { ...firstReturn, amount: 20000, cashRefundAmount: 20000 },
   [], [], returnStock, '2026-11-28T10:06:00.000Z').reason,
-  'invalid_sale_return_fields', 'single-unit refund cannot exceed that unit sale price');
+  'return_exceeds_unreturned_sale_value', 'single-unit refund cannot exceed that unit sale price');
 assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
   firstReturn, [{ ...firstReturn, id: 'prior-unit-over', idempotencyKey: 'prior-unit-over-key',
     amount: 20000, cashRefundAmount: 20000 }],
