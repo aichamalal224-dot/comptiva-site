@@ -125,3 +125,14 @@ Ajout de `validateStockMovementRecord`, validateur commun pour les événements 
 Onze assertions couvrent le sens des mouvements, les doublons, les permissions, les organisations, les dates et l'historique corrompu. Le libellé statique du harnais indique maintenant **346 assertions** ; les tests n'ont pas été exécutés.
 
 **Limite importante :** ce validateur ne crée pas le journal, ne prouve pas qu'un historique transmis est complet et ne verrouille pas les écritures concurrentes. En production, le backend doit interroger le journal autoritatif, imposer une contrainte d'unicité réelle sur `(organizationId, idempotencyKey)` et sur l'identifiant, relire l'inventaire et l'opération source, puis écrire mouvement + nouvelle quantité + état métier dans une transaction atomique. Les mouvements doivent être append-only, non modifiables et non supprimables par les clients. Les mouvements de réception/retour dont la quantité réellement ajoutée est nulle ne doivent pas créer de mouvement de stock nul.
+
+
+## Correction — un transfert partiellement reçu ne peut pas être déjà entièrement comptabilisé (28 novembre 2026)
+
+L'audit a trouvé un état impossible que le contrôle précédent laissait subsister : un transfert encore marqué `partially_received` pouvait présenter un historique dont les quantités cumulées atteignaient déjà la quantité totale expédiée. Le transfert aurait alors dû être clôturé (`received`, `received_with_issues` ou `refused`) ; toute nouvelle réception était ensuite bloquée par dépassement, mais l'état restait trompeur pour le patron et le vendeur.
+
+Le contrôle d'état de `validateStockTransferReceiptEvent` exige désormais, pour `partially_received`, que le cumul historique soit strictement supérieur à zéro et strictement inférieur à la quantité expédiée. Un historique déjà complet est refusé avec `transfer_status_receipt_history_mismatch`.
+
+Une assertion négative supplémentaire couvre ce cas. Le libellé statique du harnais passe de **365 à 366 assertions** ; les tests ne sont pas déclarés exécutés.
+
+**Limite de production :** le backend doit toujours relire le transfert et l'intégralité des événements de réception dans une transaction, calculer le statut depuis les quantités cumulées, et persister le statut final avec le dernier événement et le crédit de stock. Cette correction ne résout pas encore l'ambiguïté de cycle de vie entre la création du transfert (qui utilise déjà `in_transit`) et l'étape distincte de débit d'expédition ; ce contrat doit être clarifié avant intégration afin d'éviter un transfert présenté comme expédié avant le débit réel.
