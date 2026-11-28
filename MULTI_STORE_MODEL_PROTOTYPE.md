@@ -71,3 +71,10 @@ Les droits vendeur `transfers:read` et `transfers:receive` permettent au vendeur
 
 
 **Dernière vérification locale du prototype (28 novembre 2026) :** 269 assertions réussies dans le harnais JavaScript isolé. Ce résultat porte uniquement sur les fonctions pures du prototype, pas sur l'application COMPTIVA connectée à Firebase.
+
+
+## Extension — alertes de stock et présence des vendeurs
+
+`classifyStoreStockAlert` renvoie un état rouge si le stock est nul ou inférieur/égal au seuil d'alerte du produit dans ce magasin, vert s'il est supérieur au seuil, et inconnu si les données sont invalides. Le patron doit consulter les alertes agrégées de tous ses magasins ; le vendeur ne consulte que les alertes du ou des magasins qui lui sont affectés. Le seuil doit être paramétrable par le patron et par produit/magasin. Cette fonction classe l'état mais n'envoie pas de notification.
+
+`projectOwnerSellerPresence` prépare la vue patron de présence des vendeurs : connecté si un heartbeat serveur récent confirme une session active ; déconnecté uniquement après une déconnexion explicite ; sinon « connexion non confirmée » ou « présence inconnue ». Cela évite de confondre une perte de réseau, une fermeture brutale de l'application ou un téléphone éteint avec une déconnexion volontaire. Le serveur doit maintenir les heartbeats et l'heure de dernière activité, sécuriser les écritures et gérer les sessions multi-appareils. Ces fonctions restent des prévalidations/projections pures, non intégrées à l'application.
