@@ -110,3 +110,18 @@ Le contrôle `validateStockAdjustment` utilise désormais `validateOperationReco
 Trois assertions supplémentaires couvrent la date invalide, la date future et le dépassement arithmétique. Le libellé statique du harnais passe de 332 à **335 assertions**. Il ne s'agit pas d'une confirmation d'exécution des tests.
 
 Le journal de stock en production devra conserver chaque ajustement comme mouvement immuable avec un identifiant et une clé d'idempotence uniques, lier ce mouvement à l'opération source, puis mettre à jour le stock dans la même transaction serveur. Une correction ne doit jamais écraser l'historique ou modifier directement une quantité sans mouvement explicatif.
+
+
+## Correction — contrat du journal immuable des mouvements de stock (28 novembre 2026)
+
+Ajout de `validateStockMovementRecord`, validateur commun pour les événements du grand livre de stock. Il impose :
+- un identifiant de mouvement, une clé d'idempotence et une référence à l'opération source ;
+- l'organisation, le magasin, le produit, l'auteur et la date ;
+- un type de mouvement autorisé et un sens cohérent du delta (sortie négative pour vente/expédition, entrée positive pour retour/annulation/réception ; ajustement signé) ;
+- l'autorisation de l'acteur dans le magasin concerné ;
+- l'unicité de l'identifiant et de la clé d'idempotence par organisation, contrôlée contre l'historique fourni ;
+- une date récente, non future, pour une nouvelle écriture.
+
+Onze assertions couvrent le sens des mouvements, les doublons, les permissions, les organisations, les dates et l'historique corrompu. Le libellé statique du harnais indique maintenant **346 assertions** ; les tests n'ont pas été exécutés.
+
+**Limite importante :** ce validateur ne crée pas le journal, ne prouve pas qu'un historique transmis est complet et ne verrouille pas les écritures concurrentes. En production, le backend doit interroger le journal autoritatif, imposer une contrainte d'unicité réelle sur `(organizationId, idempotencyKey)` et sur l'identifiant, relire l'inventaire et l'opération source, puis écrire mouvement + nouvelle quantité + état métier dans une transaction atomique. Les mouvements doivent être append-only, non modifiables et non supprimables par les clients. Les mouvements de réception/retour dont la quantité réellement ajoutée est nulle ne doivent pas créer de mouvement de stock nul.
