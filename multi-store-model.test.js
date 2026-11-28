@@ -996,6 +996,19 @@ const firstReturn = {
   restockQuantity: 1, damagedQuantity: 0, reason: 'Produit retourné intact',
   createdBy: 'owner-1', createdAt: '2026-11-28T10:05:00.000Z'
 };
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-future', idempotencyKey: 'prior-future-key',
+    createdAt: '2026-11-28T10:07:00.000Z' }], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'future-dated prior sale returns are rejected');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [{ ...firstReturn, id: 'prior-actor', idempotencyKey: 'prior-actor-key',
+    createdBy: 'seller-A' }], [], returnStock,
+  '2026-11-28T10:06:00.000Z').reason,
+  'invalid_existing_sale_return_history', 'prior return history must be attributed to an authorized owner');
+assert.equal(validateSaleReturn(bundle, 'owner-1', saleForReturn,
+  firstReturn, [], [], returnStock, 'not-a-date').reason,
+  'invalid_sale_return_timestamp', 'invalid reference time is rejected before history evaluation');
 const returnCheck = validateSaleReturn(bundle, 'owner-1', saleForReturn,
   firstReturn, [], [], returnStock, '2026-11-28T10:06:00.000Z');
 assert.equal(returnCheck.valid, true, 'owner can prevalidate a valid paid-sale return');
@@ -1283,4 +1296,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 305 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 308 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
