@@ -76,3 +76,13 @@ Contrôle statique du code et relecture des modifications GitHub. Aucun test aut
 
 - Relecture statique des fonctions de calcul, impression et partage après écriture sur la branche.
 - Aucun test automatisé ni essai réel d'impression, WhatsApp ou e-mail exécuté. Aucune modification de Firebase, aucun déploiement et aucune fusion vers `main`.
+
+
+## Reçus de remboursement — impression et partage — 28 novembre 2026
+
+- La liste des remboursements propose maintenant l'impression, le partage WhatsApp et la préparation d'un e-mail pour chaque remboursement.
+- Le reçu affiche le profil du commerce, le client, le montant de la dette, le montant remboursé, le mode de paiement, le cumul remboursé à la date de ce paiement et le solde restant immédiatement après ce paiement.
+- L'historique est ordonné par date de paiement, puis par ordre d'enregistrement lorsque plusieurs paiements ont la même date. Les paiements postérieurs ne sont pas inclus dans le cumul présenté sur un reçu antérieur.
+- Avant d'imprimer ou de partager, le code contrôle l'unicité de l'identifiant du remboursement et de la dette, les montants entiers strictement positifs, le format des dates et l'absence de total remboursé supérieur à la dette. En cas d'incohérence, l'opération est bloquée avec un message explicite.
+- WhatsApp et e-mail préparent le texte ; l'utilisateur doit confirmer l'envoi dans l'application correspondante. Aucun envoi automatique ni pièce jointe PDF n'est créé.
+- Contrôle effectué : relecture statique des fonctions et des actions ajoutées sur la branche. Aucun test automatisé ni essai sur appareil réel n'a été exécuté.
