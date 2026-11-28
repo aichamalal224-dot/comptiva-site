@@ -947,6 +947,51 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
 
 
 /**
+ * Prevalidate the stock side of a sale cancellation. Stock is restored to the
+ * store where the sale originally consumed it, not to a later transfer target.
+ * The caller must load the persisted sale, cancellation and stock movement
+ * from trusted storage; the backend must atomically write cancellation,
+ * refund/debt reversal, stock increment and audit event.
+ */
+function validateSaleCancellationStock(bundle, actorUid, persistedSale, cancellation, stock, existingMovement = null) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(persistedSale) || !isRecord(cancellation) || !isRecord(stock)) {
+    return { valid: false, reason: 'invalid_sale_cancellation_stock_context' };
+  }
+  if (existingMovement !== null && existingMovement !== undefined) {
+    return { valid: false, reason: 'sale_cancellation_stock_already_restored' };
+  }
+  const productId = persistedSale.productId || persistedSale.stockProductId;
+  if (!nonEmptyString(persistedSale.id) ||
+      persistedSale.organizationId !== bundle.organization.id ||
+      !nonEmptyString(persistedSale.storeId) || !nonEmptyString(productId) ||
+      cancellation.saleId !== persistedSale.id ||
+      cancellation.organizationId !== persistedSale.organizationId ||
+      cancellation.storeId !== persistedSale.storeId ||
+      !nonEmptyString(cancellation.id) || !nonEmptyString(cancellation.idempotencyKey) ||
+      cancellation.createdBy !== actorUid ||
+      stock.organizationId !== persistedSale.organizationId ||
+      stock.storeId !== persistedSale.storeId || stock.productId !== productId ||
+      !Number.isSafeInteger(stock.quantity) || stock.quantity < 0 ||
+      !Number.isSafeInteger(persistedSale.quantity) || persistedSale.quantity <= 0) {
+    return { valid: false, reason: 'invalid_sale_cancellation_stock_fields' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'sales:cancel', cancellation);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const resultingStockQuantity = stock.quantity + persistedSale.quantity;
+  if (!Number.isSafeInteger(resultingStockQuantity)) {
+    return { valid: false, reason: 'sale_cancellation_stock_overflow' };
+  }
+  return {
+    valid: true,
+    reason: 'sale_cancellation_stock_prevalidated',
+    restoredToStoreId: persistedSale.storeId,
+    resultingStockQuantity
+  };
+}
+
+/**
  * Prevalidate a customer return against a persisted sale, prior returns and
  * stock snapshot. Returns linked to prior repayments are deliberately refused
  * until a dedicated debt/refund transaction exists. A server transaction must
@@ -1252,6 +1297,7 @@ const api = {
   validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateSaleCancellationStock,
   validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
