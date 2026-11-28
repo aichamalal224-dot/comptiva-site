@@ -160,11 +160,11 @@ L'audit a ajouté deux contrôles de rapprochement entre le transfert persistant
 - validateStockTransferDispatchMovementLink exige un mouvement transfer_dispatch référant exactement l'identifiant du transfert, l'organisation, le magasin source, le produit, le patron auteur et un delta négatif égal à toute la quantité expédiée.
 - validateStockTransferReceiptMovementLink exige, pour chaque réception, un mouvement transfer_receipt référant exactement l'événement de réception, le magasin destinataire, le produit, l'auteur et le delta positif égal aux seules unités acceptées. Si aucune unité n'est acceptée, aucun mouvement de stock n'est permis.
 
-Dix assertions supplémentaires couvrent les liens exacts, les quantités, le sens du mouvement, les magasins et l'absence de crédit en cas de refus total. Le libellé statique du harnais passe de 373 à 386 assertions ; ce nombre n'est pas une preuve d'exécution.
+Onze assertions supplémentaires couvrent les liens exacts, les quantités, le sens du mouvement, les magasins et l'absence de crédit en cas de refus total. Le libellé statique du harnais passe de 373 à 385 assertions ; ce nombre n'est pas une preuve d'exécution.
 
 L'audit a également corrigé l'horodatage manquant dans validateStockTransferReceipt, qui pouvait provoquer une erreur d'exécution lors du contrôle de la date. La fonction valide maintenant explicitement l'heure de référence avant de comparer l'heure de réception.
 
 Limite de production : ces fonctions ne créent ni ne verrouillent les mouvements. Le serveur doit encore imposer l'unicité des clés, relire transfert, réception, stock et journal autoritatifs, puis effectuer le débit/crédit, l'écriture du mouvement et le changement d'état dans une transaction atomique. Aucune intégration dans l'application principale ni opération Firebase n'a été effectuée.
 
 
-Contrôle complémentaire : le validateur de réception complète refuse désormais un horodatage de référence invalide. Le lien du mouvement de réception vérifie aussi que le magasin comptabilisé est bien le magasin déclaré comme destination dans l'événement. Deux tests négatifs supplémentaires couvrent ces protections ; le libellé statique indique 386 assertions.
+Contrôle complémentaire : le validateur de réception complète refuse désormais un horodatage de référence invalide. Le lien du mouvement de réception vérifie aussi que le magasin comptabilisé est bien le magasin déclaré comme destination dans l'événement. Deux tests négatifs supplémentaires couvrent ces protections ; le libellé statique indique 385 assertions.
