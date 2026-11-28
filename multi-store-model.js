@@ -1524,6 +1524,11 @@ function validateBusinessOrderTransition(bundle, actorUid, previous, next,
     actor.storeIds.includes(previous.storeId) &&
     previous.assignedSellerUid === actorUid;
   const from = previous.status, to = next.status;
+  const mayReassign = type === 'patron_task' && owner && to === 'assigned' &&
+    ['draft', 'refused'].includes(from);
+  if (!mayReassign && next.assignedSellerUid !== previous.assignedSellerUid) {
+    return { valid: false, reason: 'assigned_seller_is_immutable_for_transition' };
+  }
   let allowed = false;
   if (type === 'patron_task') {
     allowed = (owner && from === 'draft' && to === 'assigned') ||
