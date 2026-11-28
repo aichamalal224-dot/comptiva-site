@@ -69,3 +69,10 @@ Le dernier durcissement contrôle aussi les allocations, l'identité de l'auteur
 Ajout de `validateSaleCancellationStock`. Lorsqu'une vente est annulée après un transfert ultérieur d'autres unités du même produit, le mouvement de restauration est rattaché au magasin d'origine de la vente, jamais automatiquement au magasin destinataire du transfert. Le helper vérifie l'organisation, le magasin, le produit, la provenance patron, l'existence d'un mouvement déjà appliqué et le risque de dépassement numérique. Cinq assertions couvrent restauration dans le magasin initial, double restauration, magasin falsifié, vendeur non autorisé et overflow. Harnais isolé : **247 assertions**.
 
 Limite : ce helper suppose que les unités annulées reviennent physiquement au magasin de la vente. Si le retour physique se fait dans un autre magasin, il faudra enregistrer un transfert/retour de stock distinct et autorisé plutôt que de créditer arbitrairement le stock initial. L'annulation financière, la restauration de stock et le journal doivent être atomiques côté serveur.
+
+
+## Audit complémentaire — historique des réceptions d'achats (28 novembre 2026)
+
+Le validateur des réceptions partielles d'achats vérifie désormais que la date de chaque réception antérieure n'est pas postérieure à l'heure de référence de l'opération et que l'identité de son auteur correspond à un membre actuellement autorisé à enregistrer une réception d'achat dans le magasin concerné. Une date de référence invalide est refusée avant le calcul des quantités cumulées.
+
+Deux tests de non-régression couvrent l'événement antérieur daté dans le futur et l'auteur vendeur non autorisé. Le test complet n'a pas été exécuté dans cet environnement. En production, la vérification d'appartenance actuelle doit être complétée par un historique d'audit serveur immuable : le validateur pur ne prouve pas à lui seul qu'un événement historique n'a jamais été falsifié.
