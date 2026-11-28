@@ -57,3 +57,14 @@ Le prototype expose désormais `validatePurchaseStockReceipt` pour prévalider l
 ## Retours clients
 
 Le prototype expose `validateSaleReturn` et réserve `sales:return` au patron. Les retours cumulés sont bornés par les quantités et montants de la vente d'origine. Le remboursement d'une vente payée est limité au montant encaissé ; un retour sur vente à crédit sans remboursement antérieur réduit le crédit dû. Les quantités revendables et endommagées sont distinguées afin de ne remettre en stock que les unités revendables. Les ventes déjà remboursées via des règlements de dette sont bloquées jusqu'à un workflow spécifique. Toute écriture réelle doit être atomique côté serveur.
+
+
+## Extension — confirmation vendeur, réception partielle et rappels
+
+Le patron conserve la lecture et le contrôle de tous les magasins de son organisation, y compris les stocks, ventes, dettes, commandes/transferts, acceptations, refus, retards et historiques. Le vendeur ne reçoit que les droits opérationnels de son magasin affecté et ne voit pas les coûts d'achat ni le bénéfice réel.
+
+Le droit vendeur `transfers:receive` permet au vendeur affecté au magasin destinataire de confirmer une livraison. Il ne lui donne pas le droit de créer ou modifier le transfert initial. Chaque événement de réception distingue les quantités acceptées, refusées et endommagées ; seules les unités acceptées augmentent le stock du magasin destinataire. Les événements partiels s'additionnent jusqu'à la quantité expédiée. Les unités refusées ou endommagées ne sont pas ajoutées au stock et nécessitent une traçabilité dédiée pour tout retour physique.
+
+`validateStockTransferReceiptEvent` est une prévalidation pure. Le backend doit, dans une transaction atomique, relire l'adhésion courante, le transfert, l'historique des réceptions et le stock ; empêcher les doublons ; ajouter l'événement ; créditer uniquement les unités acceptées ; actualiser le statut et enregistrer l'audit. Le patron doit pouvoir consulter l'ensemble des événements et motifs.
+
+`buildStockTransferReminderSuggestion` prépare un message lorsque la date attendue (`expectedAt`) plus le délai de grâce est dépassée. Il ne l'envoie pas : un traitement planifié de confiance devra relire le transfert et l'adhésion, éviter les rappels en double et envoyer la notification au vendeur destinataire. L'envoi automatique réel n'est pas encore intégré ni testé.
