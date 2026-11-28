@@ -23,6 +23,7 @@ const {
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
+  validateDebtPaymentReversal,
   validatePurchaseRecord,
   validatePurchaseStockReceipt,
   validateExpenseRecord,
@@ -911,6 +912,52 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
 
 
 
+const reversalRecord = {
+  id: 'reversal-1', originalPaymentId: 'payment-old-1',
+  debtId: 'debt-pay-1', clientId: 'client-1',
+  organizationId: 'org-1', storeId: 'store-A',
+  amount: 3000, refundMethod: 'Orange Money',
+  reason: 'Remboursement demandé par le client',
+  idempotencyKey: 'reversal-key-1', createdBy: 'owner-1',
+  createdAt: '2026-11-27T14:30:00.000Z'
+};
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], reversalRecord, [], '2026-11-27T14:31:00.000Z').valid, true,
+  'owner can prevalidate exact repayment refund with explicit channel');
+assert.equal(validateDebtPaymentReversal(bundle, 'seller-A', debtForPayment,
+  priorPayments[0], reversalRecord, [], '2026-11-27T14:31:00.000Z').valid, false,
+  'seller cannot reverse a customer repayment');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], { ...reversalRecord, amount: 2000 }, [], '2026-11-27T14:31:00.000Z').reason,
+  'invalid_payment_reversal_fields', 'refund must equal the original repayment amount');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], { ...reversalRecord, refundMethod: 'Paiement mystère' }, [],
+  '2026-11-27T14:31:00.000Z').reason,
+  'invalid_payment_reversal_fields', 'refund channel must be explicit and supported');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], { ...reversalRecord, originalPaymentId: 'other-payment' }, [],
+  '2026-11-27T14:31:00.000Z').reason,
+  'invalid_payment_reversal_fields', 'refund must reference the exact original payment');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], reversalRecord, [{ id: 'prior-reversal' }],
+  '2026-11-27T14:31:00.000Z').reason,
+  'payment_already_reversed', 'a repayment cannot be refunded twice');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], { ...reversalRecord, createdBy: 'seller-A' }, [],
+  '2026-11-27T14:31:00.000Z').valid, false, 'refund actor cannot be forged');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], { ...reversalRecord, reason: 'ok' }, [],
+  '2026-11-27T14:31:00.000Z').reason,
+  'invalid_payment_reversal_fields', 'refund requires a meaningful reason');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  priorPayments[0], reversalRecord, [], '2026-11-27T14:40:00.000Z').reason,
+  'invalid_payment_reversal_timestamp', 'stale refund proposal is rejected');
+assert.equal(validateDebtPaymentReversal(bundle, 'owner-1', debtForPayment,
+  { ...priorPayments[0], storeId: 'store-B' }, reversalRecord, [],
+  '2026-11-27T14:31:00.000Z').reason,
+  'invalid_original_payment', 'original payment from another store cannot be refunded');
+
+
 // Purchases, expenses and sale cancellation audit controls.
 const purchaseRecord = {
   id: 'purchase-1', organizationId: 'org-1', storeId: 'store-A',
@@ -1642,4 +1689,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 385 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 395 multi-store model, permission, provenance, seller lifecycle, seller-data, debt-payment-reversal, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
