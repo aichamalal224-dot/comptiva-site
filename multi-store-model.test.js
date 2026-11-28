@@ -15,6 +15,8 @@ const {
   validateStockTransferDispatch,
   validateStockTransferReceipt,
   validateStockTransferReceiptEvent,
+  validateStockTransferDispatchMovementLink,
+  validateStockTransferReceiptMovementLink,
   buildStockTransferReminderSuggestion,
   classifyStoreStockAlert,
   projectOwnerSellerPresence,
@@ -482,6 +484,29 @@ assert.equal(validateStockTransferDispatch(bundle, 'owner-1',
   { ...transfer, createdAt: '2026-11-27T14:11:00.000Z' }, sourceTransferStock,
   '2026-11-27T14:10:00.000Z').reason,
   'invalid_transfer_dispatch_timestamp', 'future-dated transfer creation is rejected');
+
+const dispatchMovement = {
+  id: 'dispatch-move-1', idempotencyKey: 'dispatch-move-key-1',
+  movementType: 'transfer_dispatch', operationId: transfer.id,
+  organizationId: transfer.organizationId, storeId: transfer.fromStoreId,
+  productId: transfer.productId, createdBy: transfer.createdBy,
+  quantityDelta: -transfer.quantity
+};
+assert.equal(validateStockTransferDispatchMovementLink(transfer, dispatchMovement).valid, true,
+  'dispatch movement is linked to the exact transfer and source debit');
+assert.equal(validateStockTransferDispatchMovementLink(transfer,
+  { ...dispatchMovement, quantityDelta: -4 }).valid, false,
+  'dispatch movement cannot debit a different quantity');
+assert.equal(validateStockTransferDispatchMovementLink(transfer,
+  { ...dispatchMovement, storeId: 'store-B' }).valid, false,
+  'dispatch movement cannot debit the destination store');
+assert.equal(validateStockTransferDispatchMovementLink(transfer,
+  { ...dispatchMovement, operationId: 'another-transfer' }).valid, false,
+  'dispatch movement cannot be linked to another transfer');
+assert.equal(validateStockTransferDispatchMovementLink(transfer,
+  { ...dispatchMovement, quantityDelta: 5 }).valid, false,
+  'dispatch movement must be a negative stock delta');
+
 const dispatchedTransfer = { ...transfer, status: 'in_transit' };
 
 const receipt = {
@@ -587,6 +612,32 @@ assert.equal(validateStockTransferReceiptEvent(
   '2026-11-27T14:03:00.000Z'
 ).reason, 'transfer_status_receipt_history_mismatch',
   'partially received transfer cannot have a history that already accounts for the full dispatched quantity');
+
+const receiptMovement = {
+  id: 'receipt-move-1', idempotencyKey: 'receipt-move-key-1',
+  movementType: 'transfer_receipt', operationId: partialReceipt1.id,
+  organizationId: partialReceipt1.organizationId, storeId: partialReceipt1.storeId,
+  productId: partialReceipt1.productId, createdBy: partialReceipt1.receivedBy,
+  quantityDelta: partialReceipt1.acceptedQuantity
+};
+assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1, receiptMovement).valid, true,
+  'receipt movement credits exactly the accepted quantity in destination store');
+assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1,
+  { ...receiptMovement, quantityDelta: 3 }).valid, false,
+  'receipt movement cannot credit refused or damaged units');
+assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1,
+  { ...receiptMovement, storeId: 'store-A' }).valid, false,
+  'receipt movement cannot credit the source store');
+assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1,
+  { ...receiptMovement, operationId: 'another-receipt' }).valid, false,
+  'receipt movement must reference the exact receipt event');
+const refusedReceipt = { ...partialReceipt1, id: 'receipt-refused',
+  acceptedQuantity: 0, refusedQuantity: 3, damagedQuantity: 0 };
+assert.equal(validateStockTransferReceiptMovementLink(refusedReceipt, null).valid, true,
+  'fully refused receipt requires no stock movement');
+assert.equal(validateStockTransferReceiptMovementLink(refusedReceipt, receiptMovement).valid, false,
+  'fully refused receipt rejects any stock credit movement');
+
 const partialCheck1 = validateStockTransferReceiptEvent(
   bundle, 'seller-B', dispatchedTransfer, partialReceipt1, [], destinationStockSnapshot,
   '2026-11-27T14:03:00.000Z'
@@ -1585,4 +1636,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 373 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 383 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
