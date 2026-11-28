@@ -519,6 +519,22 @@ assert.equal(partialCheck1.valid, true, 'assigned destination seller can record 
 assert.equal(partialCheck1.resultingStatus, 'partially_received', 'partial delivery stays pending');
 assert.equal(partialCheck1.remainingToAccountFor, 2, 'partial receipt exposes remaining quantity');
 assert.equal(partialCheck1.resultingStockQuantity, 12, 'only accepted units enter destination stock');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', { ...transfer, fromStoreId: 'store-unknown' },
+  partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).reason, 'invalid_transfer_state',
+  'receipt rejects a transfer whose source store is not in the organization');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', { ...transfer, fromStoreId: 'store-B' },
+  partialReceipt1, [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).reason, 'invalid_transfer_state',
+  'receipt rejects a transfer whose source and destination stores are identical');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', { ...transfer, fromStoreId: undefined },
+  { ...partialReceipt1, fromStoreId: undefined }, [], destinationStockSnapshot,
+  '2026-11-27T14:03:00.000Z'
+).reason, 'invalid_transfer_state',
+  'receipt rejects a transfer missing its source store reference');
 const partialReceipt2 = {
   ...partialReceipt1, id: 'receipt-part-2', idempotencyKey: 'receipt-part-key-2',
   quantity: 2, acceptedQuantity: 1, refusedQuantity: 0, damagedQuantity: 1,
@@ -1247,4 +1263,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 298 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 301 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
