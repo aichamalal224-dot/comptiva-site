@@ -116,3 +116,16 @@ Le précontrôle du prototype impose désormais :
 Trois assertions supplémentaires couvrent le retour d'une unité surévalué, un retour historique trop élevé par unité et l'incohérence quantité/montant dans l'historique.
 
 **Limites :** ce plafond utilise le prix unitaire enregistré sur la vente. Les remises globales, taxes, prix négociés ou règles d'allocation au prorata ne sont pas définis dans le modèle actuel ; il faut les formaliser avant d'autoriser ces cas. Ce helper reste une prévalidation pure : le backend devra relire vente, retours, stock et clé d'idempotence dans une transaction atomique avant toute écriture. Aucun mouvement de stock ni remboursement réel n'a été exécuté.
+
+
+## Correction — empêcher l'annulation après un retour client (28 novembre 2026)
+
+**Risque trouvé :** le validateur d'annulation d'une vente refusait les remboursements de dettes déjà effectués, mais ne recevait pas l'historique des retours clients. Une vente partiellement retournée pouvait donc encore être annulée, et le helper d'annulation pouvait proposer de restaurer la quantité totale initialement vendue. Les unités déjà remises en stock lors du retour risquaient alors d'être comptées une seconde fois.
+
+**Correction conservatrice :** `validateSaleCancellation` accepte désormais l'historique des retours antérieurs et refuse toute annulation lorsqu'un retour existe, avec `sale_has_returns_requires_return_reversal_workflow`. `validateSaleCancellationStock` applique le même verrou avant tout calcul de restauration. Un tableau d'historique valide est exigé.
+
+**Règle métier retenue provisoirement :** après un retour client, l'annulation globale de la vente est bloquée jusqu'à la création d'un flux explicite d'annulation du retour et de ses effets financiers/stock. Il vaut mieux bloquer que restaurer des unités en double. Les ventes sans retour conservent leur chemin d'annulation existant.
+
+Quatre assertions supplémentaires couvrent le blocage dans les deux helpers et le rejet d'un historique absent/invalide. Le libellé statique du harnais passe de 346 à **350 assertions** ; les tests ne sont pas déclarés exécutés.
+
+Le backend doit toujours charger lui-même tous les retours associés à la vente, sans accepter une liste fournie par le client, puis vérifier ces données et les mouvements de stock dans une transaction atomique.
