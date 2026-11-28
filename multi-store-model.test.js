@@ -26,6 +26,7 @@ const {
   validateExpenseRecord,
   validateSaleCancellation,
   validateSaleCancellationStock,
+  validateSaleCancellationMovementLink,
   validateSaleReturn,
   validateSaleReturnMovementLink,
   validateAuditEvent,
@@ -1090,6 +1091,50 @@ assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
   { ...originalStoreStock, quantity: Number.MAX_SAFE_INTEGER }).reason,
   'sale_cancellation_stock_overflow', 'cancellation cannot overflow stock quantity');
 
+// Cancellation stock journal must match the exact cancellation and original sale.
+const cancellationMovement = {
+  id: 'movement-cancel-1', idempotencyKey: 'movement-cancel-key-1',
+  movementType: 'sale_cancellation', operationId: cancellationForStock.id,
+  organizationId: cancellableStockSale.organizationId,
+  storeId: cancellableStockSale.storeId, productId: cancellableStockSale.productId,
+  quantityDelta: cancellableStockSale.quantity, createdBy: 'owner-1'
+};
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, cancellationMovement).valid, true,
+  'sale cancellation requires its exact positive stock movement');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, null).reason,
+  'sale_cancellation_stock_movement_mismatch',
+  'cancellation cannot omit required stock restoration movement');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock,
+  { ...cancellationMovement, quantityDelta: 1 }).reason,
+  'sale_cancellation_stock_movement_mismatch',
+  'cancellation movement quantity must equal original sold quantity');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock,
+  { ...cancellationMovement, operationId: 'other-cancellation' }).reason,
+  'sale_cancellation_stock_movement_mismatch',
+  'cancellation movement must reference exact cancellation ID');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock,
+  { ...cancellationMovement, storeId: 'store-B' }).reason,
+  'sale_cancellation_stock_movement_mismatch',
+  'cancellation stock cannot be credited to another store');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  cancellableStockSale, { ...cancellationForStock, createdBy: 'seller-A' },
+  cancellationMovement).reason, 'actor_provenance_mismatch',
+  'cancellation movement link enforces authorized patron provenance');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  { ...cancellableStockSale, stockProductId: undefined, productId: undefined },
+  cancellationForStock, null).valid, true,
+  'sale without a stock product requires no stock movement');
+assert.equal(validateSaleCancellationMovementLink(bundle, 'owner-1',
+  { ...cancellableStockSale, stockProductId: undefined, productId: undefined },
+  cancellationForStock, cancellationMovement).reason,
+  'unexpected_sale_cancellation_stock_movement',
+  'sale without a stock product cannot create a stock movement');
+
 // Customer returns: quantity, refund/credit reduction and restock are bounded.
 const saleForReturn = {
   id: 'sale-return-1', organizationId: 'org-1', storeId: 'store-A',
@@ -1511,4 +1556,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 357 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 365 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
