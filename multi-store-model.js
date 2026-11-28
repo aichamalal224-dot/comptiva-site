@@ -584,7 +584,7 @@ function validateStockTransferCreation(bundle, actorUid, transfer, now = new Dat
       transfer.organizationId !== bundle.organization.id ||
       !nonEmptyString(transfer.productId) ||
       !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
-      transfer.status !== 'in_transit' || transfer.createdBy !== actorUid) {
+      transfer.status !== 'pending_dispatch' || transfer.createdBy !== actorUid) {
     return { valid: false, reason: 'invalid_transfer_fields' };
   }
   const nowMs = Date.parse(now);
@@ -622,7 +622,7 @@ function validateStockTransferDispatch(bundle, actorUid, transfer, sourceStock, 
       destinationStore.organizationId !== bundle.organization.id ||
       !nonEmptyString(transfer.productId) ||
       !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
-      transfer.status !== 'in_transit' || transfer.createdBy !== actorUid ||
+      transfer.status !== 'pending_dispatch' || transfer.createdBy !== actorUid ||
       sourceStock.organizationId !== transfer.organizationId ||
       sourceStock.storeId !== transfer.fromStoreId ||
       sourceStock.productId !== transfer.productId ||
@@ -631,8 +631,7 @@ function validateStockTransferDispatch(bundle, actorUid, transfer, sourceStock, 
   }
   const nowMs = Date.parse(now);
   const createdMs = Date.parse(transfer.createdAt);
-  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
-      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) || createdMs > nowMs) {
     return { valid: false, reason: 'invalid_transfer_dispatch_timestamp' };
   }
   const permission = authorizeStoreAction(bundle, actorUid, transfer.fromStoreId, 'transfers:create');
@@ -644,7 +643,9 @@ function validateStockTransferDispatch(bundle, actorUid, transfer, sourceStock, 
     valid: true,
     reason: 'stock_transfer_dispatch_prevalidated',
     debitedQuantity: transfer.quantity,
-    resultingSourceStockQuantity: sourceStock.quantity - transfer.quantity
+    resultingSourceStockQuantity: sourceStock.quantity - transfer.quantity,
+    resultingStatus: 'in_transit',
+    dispatchedAt: now
   };
 }
 
