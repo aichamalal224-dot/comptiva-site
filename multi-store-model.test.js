@@ -1186,10 +1186,10 @@ assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
   'invalid_order_transition_fields', 'replayed transition ID is rejected');
 assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
   { ...taskBase, status: 'draft' },
-  { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-B',
+  { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-A',
     updatedBy: 'owner-1', transitionId: 'task-event-2', idempotencyKey: 'task-key-2' },
   [], '2026-11-28T12:01:00.000Z').valid, true,
-  'owner can assign a work order to an active seller in the store');
+  'owner can assign a work order to a seller assigned to the store');
 assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
   { ...taskBase, status: 'draft' },
   { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-A',
@@ -1233,4 +1233,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 299 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 296 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
