@@ -582,6 +582,18 @@ assert.equal(validateStockTransferReceiptEvent(
   destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
 ).valid, false, 'receipt ID and idempotency replay are rejected');
 assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt2,
+  [{ ...partialReceipt1, fromStoreId: 'store-unknown' }],
+  { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
+).reason, 'invalid_receipt_history',
+  'prior receipt history must preserve the transfer source store');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt2,
+  [{ ...partialReceipt1, receivedAt: '2026-11-27T14:06:00.000Z' }],
+  { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
+).reason, 'invalid_receipt_history',
+  'future-dated prior receipt events are rejected');
+assert.equal(validateStockTransferReceiptEvent(
   bundle, 'seller-B', transfer, partialReceipt1, [],
   { ...destinationStockSnapshot, quantity: Number.MAX_SAFE_INTEGER },
   '2026-11-27T14:03:00.000Z'
@@ -1263,4 +1275,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 301 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 303 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
