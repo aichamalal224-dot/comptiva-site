@@ -57,3 +57,8 @@ Aucune donnée utilisateur, règle Firebase, branche `main` ou publication n'a �
 Le prototype ajoute des projections par liste blanche pour les ventes, dettes et remboursements. Elles exposent uniquement les données nécessaires aux opérations du magasin (montants encaissés, solde de dette, moyen de paiement, rattachements et provenance minimale) et excluent les coûts, marges, bénéfices et notes internes. Un validateur récursif rejette aussi les champs financiers sensibles dans les structures imbriquées.
 
 Cette protection reste une spécification côté modèle. Les documents lus par les vendeurs devront être physiquement dépourvus de ces champs dans Firestore ; aucune règle ne peut masquer quelques champs d'un document déjà lisible. Le harnais consolidé exécuté après ces ajouts rapporte **185 assertions réussies** ; il ne remplace pas les tests de règles, transactions et accès multi-comptes dans Firebase Emulator.
+
+
+## Complément — ventilation des contre-écritures d'annulation (28 novembre 2026)
+
+Le validateur d'annulation renvoie maintenant, en plus du montant total encaissé à contre-passer, le moyen de paiement d'origine. Pour une vente en paiement mixte, il restitue séparément les parts espèces et mobile, validées par `validateSaleSettlement`. Le montant de dette à contre-passer est désormais strictement le `creditAmount` validé, sans valeur de repli implicite. Cinq assertions supplémentaires couvrent la conservation de la ventilation mixte. Cela ne réalise pas les remboursements : la contre-écriture et le mouvement de caisse doivent encore être créés atomiquement par un backend de confiance, sans modifier l'historique original.
