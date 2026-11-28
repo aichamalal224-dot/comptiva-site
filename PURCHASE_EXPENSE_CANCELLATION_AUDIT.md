@@ -145,3 +145,19 @@ Ajout de `validateSaleReturnMovementLink` :
 Sept assertions couvrent le lien exact, la quantité, le retour source, le magasin et le cas entièrement endommagé. Le libellé statique du harnais passe de 350 à **357 assertions** ; les tests ne sont pas déclarés exécutés.
 
 Ce contrôle est un contrat de cohérence, pas une écriture transactionnelle. Le serveur doit créer le retour, le mouvement et le nouvel état du stock dans une transaction atomique, avec unicité d'idempotence. Le client ne doit pas pouvoir fournir un mouvement arbitraire ou un historique incomplet.
+
+
+## Correction — liaison stricte entre annulation et mouvement de stock (28 novembre 2026)
+
+Le helper de prévalidation d'annulation calculait la quantité à restaurer dans le magasin d'origine, mais il manquait un validateur dédié pour relier cette restauration à l'entrée exacte du journal de stock.
+
+Ajout de `validateSaleCancellationMovementLink` :
+- le mouvement doit être de type `sale_cancellation` ;
+- son `operationId` doit être l'identifiant exact de l'annulation ;
+- l'organisation, le magasin d'origine, le produit et l'auteur doivent correspondre à la vente et à l'annulation ;
+- le delta positif doit être exactement égal à la quantité initialement vendue ;
+- une vente sans produit de stock ne doit générer aucun mouvement.
+
+Huit assertions supplémentaires couvrent l'absence de mouvement, une quantité erronée, un mauvais identifiant d'annulation, un mauvais magasin, une provenance d'auteur incohérente et le cas d'une vente sans produit de stock. Le libellé statique du harnais passe de 357 à **365 assertions** ; aucune exécution des tests n'est revendiquée.
+
+Ce validateur ne remplace pas la transaction serveur : celle-ci doit charger la vente et l'annulation persistées, vérifier l'absence de mouvement déjà appliqué, puis enregistrer annulation, effets financiers, mouvement positif, stock et audit de manière atomique. Un transfert ultérieur ne change jamais le magasin qui reçoit la restauration : c'est toujours le magasin d'origine de la vente.
