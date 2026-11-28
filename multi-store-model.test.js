@@ -13,6 +13,8 @@ const {
   authorizeWithCurrentMembership,
   validateStockTransferCreation,
   validateStockTransferReceipt,
+  validateStockTransferReceiptEvent,
+  buildStockTransferReminderSuggestion,
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
@@ -429,8 +431,8 @@ assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
   '2026-11-27T14:03:00.000Z').valid, true,
   'owner can validate receipt at destination store');
 assert.equal(validateStockTransferReceipt(bundle, 'seller-B', transfer, receipt,
-  '2026-11-27T14:03:00.000Z').valid, false,
-  'seller cannot validate transfer receipt');
+  '2026-11-27T14:03:00.000Z').valid, true,
+  'seller can confirm receipt in their assigned destination store');
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', {
   ...transfer, status: 'received'
 }, receipt, '2026-11-27T14:03:00.000Z').valid, false,
@@ -454,6 +456,78 @@ assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, {
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
   '2026-11-27T14:03:00.000Z', { id: 'receipt-existing' }).reason,
   'transfer_receipt_already_applied', 'duplicate receipt is rejected even if transfer snapshot is stale');
+
+
+// Destination-store seller receipt lifecycle: partial, refused and damaged units.
+const destinationStockSnapshot = {
+  organizationId: 'org-1', storeId: 'store-B', productId: 'product-1', quantity: 10
+};
+const partialReceipt1 = {
+  transferId: 'transfer-1', organizationId: 'org-1',
+  storeId: 'store-B', fromStoreId: 'store-A', toStoreId: 'store-B',
+  id: 'receipt-part-1', idempotencyKey: 'receipt-part-key-1', productId: 'product-1',
+  quantity: 3, acceptedQuantity: 2, refusedQuantity: 1, damagedQuantity: 0,
+  receivedBy: 'seller-B', receivedAt: '2026-11-27T14:02:00.000Z'
+};
+const partialCheck1 = validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt1, [], destinationStockSnapshot,
+  '2026-11-27T14:03:00.000Z'
+);
+assert.equal(partialCheck1.valid, true, 'assigned destination seller can record partial receipt');
+assert.equal(partialCheck1.resultingStatus, 'partially_received', 'partial delivery stays pending');
+assert.equal(partialCheck1.remainingToAccountFor, 2, 'partial receipt exposes remaining quantity');
+assert.equal(partialCheck1.resultingStockQuantity, 12, 'only accepted units enter destination stock');
+const partialReceipt2 = {
+  ...partialReceipt1, id: 'receipt-part-2', idempotencyKey: 'receipt-part-key-2',
+  quantity: 2, acceptedQuantity: 1, refusedQuantity: 0, damagedQuantity: 1,
+  receivedAt: '2026-11-27T14:04:00.000Z'
+};
+const partialCheck2 = validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt2, [partialReceipt1],
+  { ...destinationStockSnapshot, quantity: 12 }, '2026-11-27T14:05:00.000Z'
+);
+assert.equal(partialCheck2.valid, true, 'second receipt event can complete a partial transfer');
+assert.equal(partialCheck2.resultingStatus, 'received_with_issues', 'damaged/refused delivery closes with issue status');
+assert.equal(partialCheck2.totalAccepted, 3, 'receipt history accumulates accepted quantity');
+assert.equal(partialCheck2.totalRefused, 1, 'receipt history accumulates refused quantity');
+assert.equal(partialCheck2.totalDamaged, 1, 'receipt history accumulates damaged quantity');
+assert.equal(partialCheck2.resultingStockQuantity, 13, 'damaged and refused units never enter stock');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-A', transfer, partialReceipt1, [], destinationStockSnapshot,
+  '2026-11-27T14:03:00.000Z'
+).valid, false, 'seller assigned to another store cannot confirm destination receipt');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, { ...partialReceipt1, quantity: 6 },
+  [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).valid, false, 'receipt event cannot exceed dispatched quantity');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, { ...partialReceipt1, acceptedQuantity: 3 },
+  [], destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).valid, false, 'accepted refused damaged quantities must reconcile');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt1, [partialReceipt1],
+  destinationStockSnapshot, '2026-11-27T14:03:00.000Z'
+).valid, false, 'receipt ID and idempotency replay are rejected');
+assert.equal(validateStockTransferReceiptEvent(
+  bundle, 'seller-B', transfer, partialReceipt1, [],
+  { ...destinationStockSnapshot, quantity: Number.MAX_SAFE_INTEGER },
+  '2026-11-27T14:03:00.000Z'
+).reason, 'destination_stock_overflow', 'destination stock overflow is rejected');
+const reminderTransfer = {
+  ...transfer, expectedAt: '2026-11-27T13:00:00.000Z', status: 'in_transit'
+};
+const reminder = buildStockTransferReminderSuggestion(
+  bundle, reminderTransfer, 'seller-B', '2026-11-27T15:00:00.000Z', 60
+);
+assert.equal(reminder.eligible, true, 'overdue transfer produces a reminder suggestion for assigned seller');
+assert.ok(reminder.message.includes('confirmation de réception'), 'reminder proposes a clear receipt confirmation message');
+assert.equal(buildStockTransferReminderSuggestion(
+  bundle, reminderTransfer, 'seller-A', '2026-11-27T15:00:00.000Z', 60
+).eligible, false, 'reminder cannot target a seller outside destination store');
+assert.equal(buildStockTransferReminderSuggestion(
+  bundle, { ...reminderTransfer, expectedAt: '2026-11-27T14:30:00.000Z' },
+  'seller-B', '2026-11-27T15:00:00.000Z', 60
+).eligible, false, 'reminder respects configured grace period');
 
 
 // Sale stock decrement: pre-validation, replay protection and stock bounds.
