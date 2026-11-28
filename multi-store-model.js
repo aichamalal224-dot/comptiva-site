@@ -1494,7 +1494,7 @@ function validateAuditEvent(bundle, actorUid, event, now = new Date().toISOStrin
 }
 
 /** Stock corrections require an owner, a reason and a replay-safe movement ID. */
-function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMovement = null) {
+function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMovement = null, now = new Date().toISOString()) {
   if (!isRecord(adjustment) || !isRecord(stock)) {
     return { valid: false, reason: 'invalid_stock_adjustment_context' };
   }
@@ -1509,13 +1509,20 @@ function validateStockAdjustment(bundle, actorUid, adjustment, stock, existingMo
       stock.organizationId !== adjustment.organizationId ||
       !Number.isSafeInteger(adjustment.delta) || adjustment.delta === 0 ||
       !Number.isSafeInteger(stock.quantity) || stock.quantity < 0 ||
+      !Number.isSafeInteger(stock.quantity + adjustment.delta) ||
       stock.quantity + adjustment.delta < 0 ||
       !nonEmptyString(adjustment.reason) ||
       adjustment.createdBy !== actorUid) {
     return { valid: false, reason: 'invalid_stock_adjustment_fields' };
   }
-  const permission = authorizeStoreAction(bundle, actorUid, adjustment.storeId, 'stock:adjust');
-  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  const provenance = validateOperationRecord(bundle, actorUid, 'stock:adjust', adjustment);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const nowMs = Date.parse(now);
+  const createdMs = Date.parse(adjustment.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_stock_adjustment_timestamp' };
+  }
   return {
     valid: true,
     reason: 'stock_adjustment_valid',
