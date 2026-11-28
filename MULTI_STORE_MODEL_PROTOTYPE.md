@@ -78,3 +78,10 @@ Les droits vendeur `transfers:read` et `transfers:receive` permettent au vendeur
 `classifyStoreStockAlert` renvoie un état rouge si le stock est nul ou inférieur/égal au seuil d'alerte du produit dans ce magasin, vert s'il est supérieur au seuil, et inconnu si les données sont invalides. Le patron doit consulter les alertes agrégées de tous ses magasins ; le vendeur ne consulte que les alertes du ou des magasins qui lui sont affectés. Le seuil doit être paramétrable par le patron et par produit/magasin. Cette fonction classe l'état mais n'envoie pas de notification.
 
 `projectOwnerSellerPresence` prépare la vue patron de présence des vendeurs : connecté si un heartbeat serveur récent confirme une session active ; déconnecté uniquement après une déconnexion explicite ; sinon « connexion non confirmée » ou « présence inconnue ». Cela évite de confondre une perte de réseau, une fermeture brutale de l'application ou un téléphone éteint avec une déconnexion volontaire. Le serveur doit maintenir les heartbeats et l'heure de dernière activité, sécuriser les écritures et gérer les sessions multi-appareils. Ces fonctions restent des prévalidations/projections pures, non intégrées à l'application.
+
+
+## Audit complémentaire — intégrité des magasins d'un transfert (28 novembre 2026)
+
+Le validateur des événements de réception vérifie maintenant que le transfert persistant référence un magasin source et un magasin destinataire distincts, tous deux existants et rattachés à l'organisation courante. Une réception ne peut donc plus être prévalidée à partir d'un transfert sans magasin source, avec un magasin source inconnu ou avec le même magasin comme origine et destination.
+
+Trois tests de non-régression ont été ajoutés pour ces cas. Ils sont présents dans le fichier de test, mais leur exécution complète n'a pas encore été réalisée. La transaction serveur doit toujours relire le transfert et l'adhésion courante, vérifier l'historique et écrire réception, stock et audit de façon atomique.
