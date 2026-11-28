@@ -934,6 +934,13 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, cancellationRecord, null, [{ id: 'repayment-1', amount: 10000 }]).reason,
   'sale_has_repayments_requires_refund_workflow', 'sale with repayments requires explicit refund workflow');
 assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, cancellationRecord, null, [], [{ id: 'return-prior' }]).reason,
+  'sale_has_returns_requires_return_reversal_workflow',
+  'sale with customer returns cannot be cancelled without a dedicated return reversal workflow');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  persistedSaleForCancel, cancellationRecord, null, [], null).reason,
+  'invalid_cancellation_context', 'cancellation requires a valid prior-return history array');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, { ...cancellationRecord, storeId: 'store-B' }, null, []).valid,
   false, 'cancellation cannot move across stores');
 assert.equal(validateSaleCancellation(bundle, 'owner-1',
@@ -1061,6 +1068,15 @@ assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
   cancellableStockSale, cancellationForStock, originalStoreStock,
   { id: 'movement-cancel-existing' }).reason,
   'sale_cancellation_stock_already_restored', 'cancellation stock cannot be restored twice');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, originalStoreStock, null,
+  [{ id: 'return-already-restocked' }]).reason,
+  'sale_has_returns_requires_return_reversal_workflow',
+  'stock cancellation cannot restore sold quantity after a prior return');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, originalStoreStock, null, null).reason,
+  'invalid_sale_cancellation_stock_context',
+  'stock cancellation requires a valid prior-return history array');
 assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
   cancellableStockSale, { ...cancellationForStock, storeId: 'store-B' },
   originalStoreStock).reason,
@@ -1465,4 +1481,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 346 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 350 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
