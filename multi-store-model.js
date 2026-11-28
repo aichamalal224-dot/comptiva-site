@@ -1197,8 +1197,8 @@ function validateExpenseRecord(bundle, actorUid, expense) {
  * debt and ledger entries. If repayments exist, a separate refund workflow
  * is mandatory; this validator rejects rather than silently erase them.
  */
-function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation, existingCancellation, linkedPayments = []) {
-  if (!isRecord(persistedSale) || !isRecord(cancellation) || !Array.isArray(linkedPayments)) {
+function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation, existingCancellation, linkedPayments = [], priorReturns = []) {
+  if (!isRecord(persistedSale) || !isRecord(cancellation) || !Array.isArray(linkedPayments) || !Array.isArray(priorReturns)) {
     return { valid: false, reason: 'invalid_cancellation_context' };
   }
   if (existingCancellation !== null && existingCancellation !== undefined) {
@@ -1209,6 +1209,9 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
   }
   if (linkedPayments.length > 0) {
     return { valid: false, reason: 'sale_has_repayments_requires_refund_workflow' };
+  }
+  if (priorReturns.length > 0) {
+    return { valid: false, reason: 'sale_has_returns_requires_return_reversal_workflow' };
   }
   if (!nonEmptyString(persistedSale.id) ||
       persistedSale.organizationId !== bundle?.organization?.id ||
@@ -1250,11 +1253,17 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
  * from trusted storage; the backend must atomically write cancellation,
  * refund/debt reversal, stock increment and audit event.
  */
-function validateSaleCancellationStock(bundle, actorUid, persistedSale, cancellation, stock, existingMovement = null) {
+function validateSaleCancellationStock(bundle, actorUid, persistedSale, cancellation, stock, existingMovement = null, priorReturns = []) {
   const modelCheck = validateOrganizationBundle(bundle);
   if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
   if (!isRecord(persistedSale) || !isRecord(cancellation) || !isRecord(stock)) {
     return { valid: false, reason: 'invalid_sale_cancellation_stock_context' };
+  }
+  if (!Array.isArray(priorReturns)) {
+    return { valid: false, reason: 'invalid_sale_cancellation_stock_context' };
+  }
+  if (priorReturns.length > 0) {
+    return { valid: false, reason: 'sale_has_returns_requires_return_reversal_workflow' };
   }
   if (existingMovement !== null && existingMovement !== undefined) {
     return { valid: false, reason: 'sale_cancellation_stock_already_restored' };
