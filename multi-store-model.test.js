@@ -60,6 +60,12 @@ assert.equal(authorizeStoreAction(bundle, 'seller-A', 'store-A', 'sales:create')
   'seller creates sales in assigned store');
 assert.equal(authorizeStoreAction(bundle, 'seller-A', 'store-A', 'stock:read').allowed, true,
   'seller shares assigned store stock');
+assert.equal(authorizeStoreAction(bundle, 'owner-1', 'store-B', 'transfers:read').allowed, true,
+  'patron can read transfer activity across all stores');
+assert.equal(authorizeStoreAction(bundle, 'seller-B', 'store-B', 'transfers:read').allowed, true,
+  'seller can read assigned-store incoming transfers');
+assert.equal(authorizeStoreAction(bundle, 'seller-B', 'store-A', 'transfers:read').allowed, false,
+  'seller cannot read transfers for another store');
 assert.equal(authorizeStoreAction(bundle, 'seller-A', 'store-B', 'stock:read').allowed, false,
   'seller cannot read another store stock');
 assert.equal(authorizeStoreAction(bundle, 'seller-A', 'store-A', 'sales:cancel').allowed, false,
@@ -1113,4 +1119,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 269 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 272 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
