@@ -29,6 +29,7 @@ const {
   validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
+  validateStockMovementRecord,
   projectSellerProduct,
   validateSellerOperationalProduct,
   validateSellerOperationalRecord,
@@ -1241,6 +1242,55 @@ assert.equal(validateStockAdjustment(bundle, 'owner-1',
   'invalid_stock_adjustment_fields', 'stock adjustment resulting quantity must remain a safe integer');
 
 
+// Immutable stock ledger: movement direction, actor/store authorization and organization-wide replay protection.
+const stockMovement = {
+  id: 'movement-sale-1', idempotencyKey: 'movement-sale-key-1',
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-rice',
+  movementType: 'sale_decrement', operationId: 'sale-stock-1',
+  quantityDelta: -3, createdBy: 'seller-A', createdAt: '2026-11-28T11:00:00.000Z'
+};
+assert.equal(validateStockMovementRecord(bundle, 'seller-A', stockMovement, [],
+  '2026-11-28T11:01:00.000Z').valid, true,
+  'assigned seller can append a sale stock-decrement movement');
+assert.equal(validateStockMovementRecord(bundle, 'seller-A',
+  { ...stockMovement, quantityDelta: 3 }, [], '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_fields', 'sale movement must decrement stock');
+assert.equal(validateStockMovementRecord(bundle, 'seller-A', stockMovement,
+  [{ id: 'old-movement', idempotencyKey: stockMovement.idempotencyKey, organizationId: 'org-1' }],
+  '2026-11-28T11:01:00.000Z').reason,
+  'stock_movement_replay', 'movement idempotency key cannot be reused in the organization');
+assert.equal(validateStockMovementRecord(bundle, 'seller-A',
+  { ...stockMovement, storeId: 'store-B' }, [], '2026-11-28T11:01:00.000Z').valid,
+  false, 'seller cannot append stock movement to another store');
+assert.equal(validateStockMovementRecord(bundle, 'seller-B',
+  { ...stockMovement, createdBy: 'seller-B' }, [], '2026-11-28T11:01:00.000Z').valid,
+  false, 'movement actor must have permission in its store');
+assert.equal(validateStockMovementRecord(bundle, 'owner-1',
+  { ...stockMovement, movementType: 'stock_adjustment', quantityDelta: 2,
+    createdBy: 'owner-1' }, [], '2026-11-28T11:01:00.000Z').valid,
+  true, 'owner can append a positive stock adjustment');
+assert.equal(validateStockMovementRecord(bundle, 'owner-1',
+  { ...stockMovement, movementType: 'stock_adjustment', quantityDelta: 0,
+    createdBy: 'owner-1' }, [], '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_fields', 'zero-quantity movement is rejected');
+assert.equal(validateStockMovementRecord(bundle, 'seller-A',
+  { ...stockMovement, createdAt: '2026-11-28T12:00:00.000Z' }, [],
+  '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_timestamp', 'future ledger movement timestamp is rejected');
+assert.equal(validateStockMovementRecord(bundle, 'seller-A',
+  { ...stockMovement, createdAt: '2026-11-28T10:00:00.000Z' }, [],
+  '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_timestamp', 'stale new ledger movement timestamp is rejected');
+assert.equal(validateStockMovementRecord(bundle, 'owner-1',
+  { ...stockMovement, organizationId: 'org-2', createdBy: 'owner-1' }, [],
+  '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_fields', 'ledger movement cannot cross organizations');
+assert.equal(validateStockMovementRecord(bundle, 'owner-1', stockMovement,
+  [{ id: 'duplicate-history', idempotencyKey: 'other-key', organizationId: 'org-1' },
+   { id: 'duplicate-history', idempotencyKey: 'another-key', organizationId: 'org-1' }],
+  '2026-11-28T11:01:00.000Z').reason,
+  'invalid_stock_movement_history', 'corrupt duplicate movement history is rejected');
+
 const auditEvent = {
   id: 'audit-1', organizationId: 'org-1', storeId: 'store-A',
   actorUid: 'seller-A', action: 'sale.created',
@@ -1415,4 +1465,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 335 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 346 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
