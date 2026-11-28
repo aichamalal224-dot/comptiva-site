@@ -831,6 +831,27 @@ assert.equal(validateSaleCancellation(bundle, 'owner-1',
   'cancellation restores stock using the canonical productId when stockProductId is absent');
 
 assert.equal(cancellationCheck.cashToReverse, 40000, 'cancellation reports cash ledger amount to reverse');
+const mixedPaidSaleForCancel = {
+  ...persistedSaleForCancel, id: 'sale-cancel-mixed', method: 'Paiement mixte',
+  cashPart: 15000, mobilePart: 25000
+};
+const mixedCancellation = {
+  ...cancellationRecord, id: 'cancel-mixed', idempotencyKey: 'cancel-mixed-key',
+  saleId: 'sale-cancel-mixed'
+};
+const mixedCancellationCheck = validateSaleCancellation(bundle, 'owner-1',
+  mixedPaidSaleForCancel, mixedCancellation, null, []);
+assert.equal(mixedCancellationCheck.valid, true,
+  'mixed-payment sale cancellation passes settlement validation');
+assert.equal(mixedCancellationCheck.cashToReverse, 40000,
+  'mixed-payment cancellation preserves total collected amount');
+assert.equal(mixedCancellationCheck.paymentMethodToReverse, 'Paiement mixte',
+  'mixed-payment cancellation retains original payment method');
+assert.equal(mixedCancellationCheck.cashPartToReverse, 15000,
+  'mixed-payment cancellation exposes exact cash reversal component');
+assert.equal(mixedCancellationCheck.mobilePartToReverse, 25000,
+  'mixed-payment cancellation exposes exact mobile reversal component');
+
 assert.equal(validateSaleCancellation(bundle, 'seller-A',
   persistedSaleForCancel, cancellationRecord, null, []).valid, false,
   'seller cannot cancel a validated sale');
@@ -1306,4 +1327,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 310 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 315 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
