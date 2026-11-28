@@ -747,13 +747,20 @@ function validateStockTransferReceiptEvent(
       !Number.isSafeInteger(destinationStock.quantity) || destinationStock.quantity < 0) {
     return { valid: false, reason: 'invalid_destination_stock_snapshot' };
   }
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) {
+    return { valid: false, reason: 'invalid_receipt_timestamp' };
+  }
   const seenIds = new Set();
   const seenKeys = new Set();
   let priorAccounted = 0, priorAccepted = 0, priorRefused = 0, priorDamaged = 0;
   for (const event of priorReceipts) {
     if (!isRecord(event) || event.transferId !== transfer.id ||
         event.organizationId !== transfer.organizationId ||
-        event.storeId !== transfer.toStoreId || event.productId !== transfer.productId ||
+        event.storeId !== transfer.toStoreId ||
+        event.fromStoreId !== transfer.fromStoreId ||
+        event.toStoreId !== transfer.toStoreId ||
+        event.productId !== transfer.productId ||
         !nonEmptyString(event.id) || !nonEmptyString(event.idempotencyKey) ||
         seenIds.has(event.id) || seenKeys.has(event.idempotencyKey) ||
         !Number.isSafeInteger(event.quantity) || event.quantity <= 0 ||
@@ -761,7 +768,8 @@ function validateStockTransferReceiptEvent(
         !Number.isSafeInteger(event.refusedQuantity) || event.refusedQuantity < 0 ||
         !Number.isSafeInteger(event.damagedQuantity) || event.damagedQuantity < 0 ||
         event.acceptedQuantity + event.refusedQuantity + event.damagedQuantity !== event.quantity ||
-        !nonEmptyString(event.receivedBy) || !Number.isFinite(Date.parse(event.receivedAt))) {
+        !nonEmptyString(event.receivedBy) || !Number.isFinite(Date.parse(event.receivedAt)) ||
+        Date.parse(event.receivedAt) > nowMs) {
       return { valid: false, reason: 'invalid_receipt_history' };
     }
     const priorPermission = authorizeStoreAction(bundle, event.receivedBy, transfer.toStoreId, 'transfers:receive');
@@ -788,8 +796,8 @@ function validateStockTransferReceiptEvent(
       receipt.receivedBy !== actorUid) {
     return { valid: false, reason: 'transfer_receipt_mismatch_or_replay' };
   }
-  const receivedMs = Date.parse(receipt.receivedAt), nowMs = Date.parse(now);
-  if (!Number.isFinite(receivedMs) || !Number.isFinite(nowMs) ||
+  const receivedMs = Date.parse(receipt.receivedAt);
+  if (!Number.isFinite(receivedMs) ||
       receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
     return { valid: false, reason: 'invalid_receipt_timestamp' };
   }
