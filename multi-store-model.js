@@ -1170,8 +1170,11 @@ function validateSaleCancellation(bundle, actorUid, persistedSale, cancellation,
     valid: true,
     reason: 'sale_cancellation_prevalidated',
     stockToRestore: (persistedSale.productId || persistedSale.stockProductId) ? persistedSale.quantity : 0,
-    debtToReverse: persistedSale.saleType === 'credit' ? persistedSale.creditAmount || persistedSale.total : 0,
-    cashToReverse: persistedSale.paidAmount || 0
+    debtToReverse: persistedSale.saleType === 'credit' ? persistedSale.creditAmount : 0,
+    cashToReverse: persistedSale.paidAmount,
+    paymentMethodToReverse: persistedSale.method || null,
+    cashPartToReverse: persistedSale.method === 'Paiement mixte' ? persistedSale.cashPart : null,
+    mobilePartToReverse: persistedSale.method === 'Paiement mixte' ? persistedSale.mobilePart : null
   };
 }
 
