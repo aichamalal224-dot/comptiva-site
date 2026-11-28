@@ -136,3 +136,19 @@ Le contrôle d'état de `validateStockTransferReceiptEvent` exige désormais, po
 Une assertion négative supplémentaire couvre ce cas. Le libellé statique du harnais passe de **365 à 366 assertions** ; les tests ne sont pas déclarés exécutés.
 
 **Limite de production :** le backend doit toujours relire le transfert et l'intégralité des événements de réception dans une transaction, calculer le statut depuis les quantités cumulées, et persister le statut final avec le dernier événement et le crédit de stock. Cette correction ne résout pas encore l'ambiguïté de cycle de vie entre la création du transfert (qui utilise déjà `in_transit`) et l'étape distincte de débit d'expédition ; ce contrat doit être clarifié avant intégration afin d'éviter un transfert présenté comme expédié avant le débit réel.
+
+
+## Correction — séparer préparation et expédition effective des transferts (28 novembre 2026)
+
+L'audit a confirmé une ambiguïté de cycle de vie : la création d'un transfert et son expédition exigeaient toutes deux le statut `in_transit`. Le modèle pouvait donc présenter comme déjà expédiée une opération dont le débit du stock source n'avait pas encore été effectué.
+
+Le contrat est maintenant séparé en deux étapes :
+- **Création :** le transfert doit être au statut `pending_dispatch`. Cela signifie qu'il est préparé/en attente d'expédition ; aucune quantité ne doit encore être retirée du stock.
+- **Expédition :** `validateStockTransferDispatch` n'accepte que `pending_dispatch`, contrôle le stock source et retourne le statut suivant `in_transit` avec l'horodatage de dispatch fourni par l'appelant. Le backend doit persister ensemble le débit du stock, le mouvement immuable et ce changement d'état dans une seule transaction.
+- **Réception :** les validateurs de réception continuent d'exiger `in_transit` ou `partially_received` ; une réception ne peut donc pas précéder l'expédition.
+
+Autre correction : une demande d'expédition ne devient plus invalide simplement parce que le transfert a attendu plus de cinq minutes. Le contrôle exige une date de création valide et non future, puis s'appuie sur le statut persistant et la transaction serveur pour empêcher le rejeu. Une date future reste refusée.
+
+Six assertions supplémentaires couvrent le statut obtenu après expédition, l'horodatage, le refus d'une seconde expédition, l'autorisation d'une expédition tardive et le rejet d'une date future. Le libellé statique du harnais passe de **366 à 372 assertions** ; les tests ne sont pas déclarés exécutés.
+
+**Migration et compatibilité :** les documents existants marqués `in_transit` doivent être considérés comme déjà expédiés uniquement si un mouvement `transfer_dispatch` correspondant existe dans le journal autoritatif. Ne pas les convertir automatiquement depuis le navigateur. Les anciens transferts sans mouvement correspondant nécessitent une réconciliation contrôlée avant intégration.
