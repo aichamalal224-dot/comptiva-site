@@ -1095,6 +1095,7 @@ function krediTrackMerchant(user){if(!user||!user.uid||user.uid===KREDI_CREATOR_
 function krediUseAccountStore(uid){STORE='comptiva_user_v1_'+uid;SUB_STORE='comptiva_subscription_v1_'+uid;db=loadDB();if(!db||typeof db!=='object'||Array.isArray(db))db={};['sales','clients','debts','payments','purchases','expenses','products'].forEach(key=>{if(!Array.isArray(db[key]))db[key]=[];else db[key]=db[key].filter(row=>row&&typeof row==='object'&&!Array.isArray(row))});subscription=loadSubscription();if(!subscription||typeof subscription!=='object'||Array.isArray(subscription))subscription={};if(!Array.isArray(subscription.requests))subscription.requests=[];if(!subscription.paymentSettings||typeof subscription.paymentSettings!=='object')subscription.paymentSettings={number:'',name:''};}
 function krediRemoteDBIsStructurallyValid(data){
   if(!data||typeof data!=='object'||Array.isArray(data))return false;
+  if(data.profile!==undefined&&(!data.profile||typeof data.profile!=='object'||Array.isArray(data.profile)||Object.keys(data.profile).some(key=>!['name','phone','address','updatedAt'].includes(key))||['name','phone','address','updatedAt'].some(key=>data.profile[key]!==undefined&&typeof data.profile[key]!=='string')))return false;
   const base=krediEmptyDB();
   for(const key of Object.keys(base)){
     if(data[key]!==undefined&&!Array.isArray(data[key]))return false;
@@ -1158,6 +1159,9 @@ function krediMergeDatabases(localData,remoteData,preferLocal){
     for(const item of second){if(!item||typeof item!=='object'||Array.isArray(item))continue;const k=String(item.id||JSON.stringify(item));map.set(k,item)}
     out[key]=Array.from(map.values());
   }
+  const localProfile=localData&&localData.profile&&typeof localData.profile==='object'&&!Array.isArray(localData.profile)?localData.profile:null;
+  const remoteProfile=remoteData&&remoteData.profile&&typeof remoteData.profile==='object'&&!Array.isArray(remoteData.profile)?remoteData.profile:null;
+  out.profile=preferLocal?(localProfile||remoteProfile||null):(remoteProfile||localProfile||null);
   return out;
 }
 async function krediInitFirebase(){try{
