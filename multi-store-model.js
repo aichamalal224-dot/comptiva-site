@@ -1133,6 +1133,58 @@ function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, 
 }
 
 
+/**
+ * Prevalidate an owner-only reversal/refund of one persisted debt payment.
+ * The payment itself remains immutable. A trusted backend must atomically
+ * append this reversal and the cash-out/audit records; this helper does not
+ * update the debt ledger or enable new repayments after a reversal.
+ */
+function validateDebtPaymentReversal(bundle, actorUid, debt, payment, reversal, priorReversals = [], now = new Date().toISOString()) {
+  if (!isRecord(debt) || !isRecord(payment) || !isRecord(reversal) ||
+      !Array.isArray(priorReversals)) {
+    return { valid: false, reason: 'invalid_payment_reversal_context' };
+  }
+  if (!nonEmptyString(debt.id) || !nonEmptyString(debt.clientId) ||
+      debt.organizationId !== bundle?.organization?.id ||
+      !nonEmptyString(debt.storeId) || !Number.isSafeInteger(debt.amount) || debt.amount <= 0 ||
+      payment.debtId !== debt.id || payment.clientId !== debt.clientId ||
+      payment.organizationId !== debt.organizationId || payment.storeId !== debt.storeId ||
+      !nonEmptyString(payment.id) || !nonEmptyString(payment.idempotencyKey) ||
+      !Number.isSafeInteger(payment.amount) || payment.amount <= 0 ||
+      !nonEmptyString(payment.createdBy) || !Number.isFinite(Date.parse(payment.createdAt)) ||
+      !authorizeStoreAction(bundle, payment.createdBy, debt.storeId, 'payments:create').allowed) {
+    return { valid: false, reason: 'invalid_original_payment' };
+  }
+  if (priorReversals.length > 0) {
+    return { valid: false, reason: 'payment_already_reversed' };
+  }
+  const allowedRefundMethods = ['Espèces', 'Orange Money', 'Mobile Money', 'Virement', 'Autre'];
+  if (reversal.originalPaymentId !== payment.id || reversal.debtId !== debt.id ||
+      reversal.clientId !== debt.clientId || reversal.organizationId !== debt.organizationId ||
+      reversal.storeId !== debt.storeId || !nonEmptyString(reversal.id) ||
+      !nonEmptyString(reversal.idempotencyKey) || reversal.amount !== payment.amount ||
+      !allowedRefundMethods.includes(reversal.refundMethod) ||
+      !nonEmptyString(reversal.reason) || reversal.reason.trim().length < 3 ||
+      reversal.createdBy !== actorUid) {
+    return { valid: false, reason: 'invalid_payment_reversal_fields' };
+  }
+  const provenance = validateOperationRecord(bundle, actorUid, 'payments:reverse', reversal);
+  if (!provenance.valid) return { valid: false, reason: provenance.reason };
+  const nowMs = Date.parse(now), createdMs = Date.parse(reversal.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000 ||
+      Date.parse(payment.createdAt) > nowMs) {
+    return { valid: false, reason: 'invalid_payment_reversal_timestamp' };
+  }
+  return {
+    valid: true,
+    reason: 'debt_payment_reversal_prevalidated',
+    reversedPaymentId: payment.id,
+    refundedAmount: payment.amount,
+    refundMethod: reversal.refundMethod
+  };
+}
+
 /** Validate an owner-only purchase before a trusted write. */
 function validatePurchaseRecord(bundle, actorUid, purchase) {
   if (!isRecord(purchase)) return { valid: false, reason: 'purchase_not_object' };
@@ -1914,6 +1966,7 @@ const api = {
   validateSaleStockDecrement,
   validateSaleSettlement,
   validateDebtPayment,
+  validateDebtPaymentReversal,
   validatePurchaseRecord,
   validatePurchaseStockReceipt,
   validateExpenseRecord,
