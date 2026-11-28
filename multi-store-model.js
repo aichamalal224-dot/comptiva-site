@@ -973,7 +973,17 @@ function validateDebtPayment(bundle, actorUid, debt, payment, existingPayments, 
         !nonEmptyString(prior.id) || seen.has(prior.id) ||
         !nonEmptyString(prior.idempotencyKey) ||
         seenIdempotencyKeys.has(prior.idempotencyKey) ||
-        !Number.isSafeInteger(prior.amount) || prior.amount <= 0) {
+        !Number.isSafeInteger(prior.amount) || prior.amount <= 0 ||
+        !nonEmptyString(prior.createdBy) ||
+        !Number.isFinite(Date.parse(prior.createdAt)) ||
+        prior.reversedAt !== undefined || prior.reversalId !== undefined ||
+        prior.status === 'reversed') {
+      return { valid: false, reason: 'invalid_existing_payment_history' };
+    }
+    const priorCreatedMs = Date.parse(prior.createdAt);
+    const nowForHistoryMs = Date.parse(now);
+    if (!Number.isFinite(nowForHistoryMs) || priorCreatedMs > nowForHistoryMs ||
+        !authorizeStoreAction(bundle, prior.createdBy, debt.storeId, 'payments:create').allowed) {
       return { valid: false, reason: 'invalid_existing_payment_history' };
     }
     seen.add(prior.id);
