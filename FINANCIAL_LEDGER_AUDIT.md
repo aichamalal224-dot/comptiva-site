@@ -73,3 +73,9 @@ Le contrôle des remboursements vérifie maintenant chaque mouvement historique 
 Le calcul des remboursements du jour ne doit pas additionner aveuglément les lignes de paiement. La fonction `paymentLedgerSummary(dateFilter)` vérifie maintenant que chaque remboursement possède un identifiant unique, référence exactement une dette existante et appartient à un historique de dette cohérent avant de produire un total. En cas de ligne orpheline, de doublon ou d'historique invalide, le total des remboursements du rapport devient « — » au lieu d'un montant potentiellement faux. Le total des dettes dans le rapport affiche également « À vérifier » si au moins un registre de dette est invalide.
 
 Cette correction est locale à l'affichage du rapport. Elle ne modifie ni les enregistrements ni le mécanisme de synchronisation. Les contre-passations de remboursements ne sont toujours pas intégrées aux calculs de soldes, et les transactions multi-appareils restent à construire. Aucun test navigateur ou Firebase n'a été exécuté pour cette modification.
+
+## Complément — export CSV des remboursements (28 novembre 2026)
+
+L'export CSV inclut maintenant une ligne distincte pour chaque remboursement, avec le client, le montant, le moyen de paiement et la date. Avant de générer le fichier, l'application contrôle les registres de dette et l'ensemble des remboursements ; si une dette est incohérente, si un remboursement est orphelin ou si l'historique présente un doublon, l'export est interrompu avec un message explicite plutôt que de produire un relevé financier incomplet ou trompeur. Les remboursements restent des lignes d'événements séparées des ventes : ils ne sont pas ajoutés au chiffre d'affaires des ventes.
+
+Vérification effectuée : relecture du code GitHub après écriture et contrôle statique de la présence des gardes et des lignes de remboursement. Aucun export réel dans un navigateur, test automatisé, test Firebase ou test multi-appareils n'a été exécuté.
