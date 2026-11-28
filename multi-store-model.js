@@ -832,6 +832,10 @@ function validateStockTransferReceiptEvent(
       return { valid: false, reason: 'receipt_history_overflow' };
     }
   }
+  if ((transfer.status === 'in_transit' && priorAccounted !== 0) ||
+      (transfer.status === 'partially_received' && priorAccounted === 0)) {
+    return { valid: false, reason: 'transfer_status_receipt_history_mismatch' };
+  }
   if (!nonEmptyString(receipt.id) || !nonEmptyString(receipt.idempotencyKey) ||
       seenIds.has(receipt.id) || seenKeys.has(receipt.idempotencyKey) ||
       receipt.transferId !== transfer.id || receipt.organizationId !== transfer.organizationId ||
