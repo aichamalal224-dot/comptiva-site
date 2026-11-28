@@ -70,3 +70,19 @@ Résultat rejoué après correction : **190 assertions réussies** dans le harna
 Le contrôle des ventes exige maintenant des quantités entières sûres pour la vente et le stock. La création d'un transfert exige une clé d'idempotence stable et refuse une opération déjà présente ; la quantité transférée doit être un entier sûr strictement positif. La réception vérifie aussi l'identité des deux magasins par rapport au transfert persistant, exige son propre identifiant et sa clé d'idempotence, et refuse une réception déjà enregistrée même si le client présente encore un ancien état « en transit ».
 
 Six cas négatifs supplémentaires couvrent l'absence de clé, le rejeu de création, la quantité fractionnaire, la falsification du magasin source, l'absence de clé de réception et le rejeu de réception. Le fichier contient **196 appels d'assertion** et le harnais JavaScript isolé passe. Ces validations restent préliminaires : seule une transaction Firestore serveur peut garantir l'absence de double débit/crédit en concurrence réelle.
+
+
+## Correction — contrôle du stock source avant expédition d'un transfert (28 novembre 2026)
+
+L'audit a relevé une lacune dans le contrat : la création d'un transfert vérifiait les magasins et la quantité demandée, mais ne prévalidait pas le stock disponible dans le magasin source. Une opération pouvait donc être déclarée « en transit » sans preuve que le magasin expéditeur détenait les unités à transférer.
+
+Ajout de `validateStockTransferDispatch`, distinct de la création du transfert. Avant toute expédition, ce contrôle exige :
+- un transfert persistant cohérent, en état `in_transit`, avec organisation, produit et magasins source/destination valides et distincts ;
+- l'identité du patron authentifié comme auteur du transfert et son droit de créer un transfert depuis le magasin source ;
+- un instantané de stock appartenant exactement à l'organisation, au magasin source et au produit du transfert ;
+- des quantités entières sûres, un stock suffisant, une proposition récente et l'absence du mouvement d'expédition déjà enregistré ;
+- le calcul de la quantité restant au magasin source après débit.
+
+Huit assertions supplémentaires couvrent l'expédition autorisée et le stock restant, le stock insuffisant, le mauvais magasin, le mouvement déjà présent, le refus du vendeur, la quantité fractionnaire, l'organisation étrangère et une proposition périmée. Le libellé statique du harnais passe de 322 à **330 assertions** ; ce nombre n'est pas une preuve d'exécution. Le test complet n'a pas été exécuté dans cette étape.
+
+**Condition impérative de production :** le serveur doit, dans une seule transaction Firestore, relire le transfert et l'adhésion patronale courante, le stock source et le mouvement d'expédition identifié par une clé stable ; puis débiter le stock, créer le mouvement immuable et confirmer l'expédition. La réception au magasin destinataire doit rester une transaction distincte, protégée par sa propre clé d'idempotence. La prévalidation JavaScript ne protège pas contre deux expéditions simultanées et n'est pas intégrée à l'application principale.
