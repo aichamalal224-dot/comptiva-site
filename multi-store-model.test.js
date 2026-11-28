@@ -825,6 +825,11 @@ const cancellationCheck = validateSaleCancellation(bundle, 'owner-1',
   persistedSaleForCancel, cancellationRecord, null, []);
 assert.equal(cancellationCheck.valid, true, 'owner can prevalidate a valid sale cancellation');
 assert.equal(cancellationCheck.stockToRestore, 2, 'cancellation signals stock quantity to restore');
+assert.equal(validateSaleCancellation(bundle, 'owner-1',
+  { ...persistedSaleForCancel, productId: 'product-rice', stockProductId: undefined },
+  cancellationRecord, null, []).stockToRestore, 2,
+  'cancellation restores stock using the canonical productId when stockProductId is absent');
+
 assert.equal(cancellationCheck.cashToReverse, 40000, 'cancellation reports cash ledger amount to reverse');
 assert.equal(validateSaleCancellation(bundle, 'seller-A',
   persistedSaleForCancel, cancellationRecord, null, []).valid, false,
@@ -963,6 +968,11 @@ assert.equal(cancellationStockCheck.restoredToStoreId, 'store-A',
   'cancelled sale stock returns to original sale store after later transfer');
 assert.equal(cancellationStockCheck.resultingStockQuantity, 6,
   'cancellation restores exactly the sold quantity to original store');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  { ...cancellableStockSale, status: 'cancelled' }, cancellationForStock,
+  originalStoreStock).reason, 'sale_already_cancelled',
+  'stock helper refuses a second restoration after sale cancellation');
+
 assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
   cancellableStockSale, cancellationForStock, originalStoreStock,
   { id: 'movement-cancel-existing' }).reason,
