@@ -1155,4 +1155,82 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 283 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+
+// Patron-to-seller work orders, supplier orders and store transfers remain distinct.
+const { validateBusinessOrderTransition } = require('./multi-store-model');
+const taskBase = {
+  id: 'task-1', workflowType: 'patron_task', organizationId: 'org-1',
+  storeId: 'store-A', status: 'assigned', assignedSellerUid: 'seller-A',
+  createdBy: 'owner-1'
+};
+const taskAccept = {
+  orderId: 'task-1', workflowType: 'patron_task', organizationId: 'org-1',
+  storeId: 'store-A', createdBy: 'owner-1', transitionId: 'task-event-1',
+  idempotencyKey: 'task-key-1', status: 'accepted', updatedBy: 'seller-A',
+  updatedAt: '2026-11-28T12:00:00.000Z'
+};
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
+  taskAccept, [], '2026-11-28T12:01:00.000Z').valid, true,
+  'assigned seller can accept patron work order');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-B', taskBase,
+  { ...taskAccept, updatedBy: 'seller-B' }, [], '2026-11-28T12:01:00.000Z').valid, false,
+  'seller from another store cannot accept work order');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
+  { ...taskAccept, status: 'refused', reason: '' }, [], '2026-11-28T12:01:00.000Z').reason,
+  'refusal_reason_required', 'seller refusal requires a reason');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
+  { ...taskAccept, status: 'completed' }, [], '2026-11-28T12:01:00.000Z').valid, false,
+  'seller cannot skip acceptance and complete assigned work');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
+  taskAccept, ['task-event-1'], '2026-11-28T12:01:00.000Z').reason,
+  'invalid_order_transition_fields', 'replayed transition ID is rejected');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
+  { ...taskBase, status: 'draft' },
+  { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-B',
+    updatedBy: 'owner-1', transitionId: 'task-event-2', idempotencyKey: 'task-key-2' },
+  [], '2026-11-28T12:01:00.000Z').valid, true,
+  'owner can assign a work order to an active seller in the store');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
+  { ...taskBase, status: 'draft' },
+  { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-A',
+    updatedBy: 'owner-1', transitionId: 'task-event-3', idempotencyKey: 'task-key-3' },
+  [], '2026-11-28T12:01:00.000Z').valid, true,
+  'owner can assign work to seller assigned to store A');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
+  { ...taskBase, status: 'draft' },
+  { ...taskAccept, status: 'assigned', assignedSellerUid: 'seller-B',
+    updatedBy: 'owner-1', transitionId: 'task-event-4', idempotencyKey: 'task-key-4' },
+  [], '2026-11-28T12:01:00.000Z').valid, false,
+  'owner cannot assign a store A task to seller assigned only to store B');
+const supplierOrder = {
+  id: 'supplier-order-1', workflowType: 'supplier_order',
+  organizationId: 'org-1', storeId: 'store-A', status: 'submitted',
+  createdBy: 'owner-1'
+};
+const supplierAccepted = {
+  orderId: 'supplier-order-1', workflowType: 'supplier_order',
+  organizationId: 'org-1', storeId: 'store-A', createdBy: 'owner-1',
+  transitionId: 'supplier-event-1', idempotencyKey: 'supplier-key-1',
+  status: 'supplier_accepted', updatedBy: 'owner-1',
+  updatedAt: '2026-11-28T12:00:00.000Z'
+};
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
+  supplierAccepted, [], '2026-11-28T12:01:00.000Z').valid, true,
+  'owner records supplier acceptance');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', supplierOrder,
+  { ...supplierAccepted, updatedBy: 'seller-A' }, [], '2026-11-28T12:01:00.000Z').valid, false,
+  'seller cannot manage supplier purchase orders');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
+  { ...supplierAccepted, status: 'supplier_refused', reason: '' },
+  [], '2026-11-28T12:01:00.000Z').reason,
+  'refusal_reason_required', 'supplier refusal requires a recorded reason');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1',
+  { ...supplierOrder, status: 'received' },
+  { ...supplierAccepted, status: 'submitted', transitionId: 'supplier-event-2',
+    idempotencyKey: 'supplier-key-2' }, [], '2026-11-28T12:01:00.000Z').valid,
+  false, 'received supplier order cannot be reopened as submitted');
+assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
+  { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
+  false, 'order transition requires a valid timestamp');
+
+console.log('PASS: 299 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
