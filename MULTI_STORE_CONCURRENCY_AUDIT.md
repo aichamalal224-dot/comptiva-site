@@ -86,3 +86,16 @@ Ajout de `validateStockTransferDispatch`, distinct de la création du transfert.
 Huit assertions supplémentaires couvrent l'expédition autorisée et le stock restant, le stock insuffisant, le mauvais magasin, le mouvement déjà présent, le refus du vendeur, la quantité fractionnaire, l'organisation étrangère et une proposition périmée. Le libellé statique du harnais passe de 322 à **330 assertions** ; ce nombre n'est pas une preuve d'exécution. Le test complet n'a pas été exécuté dans cette étape.
 
 **Condition impérative de production :** le serveur doit, dans une seule transaction Firestore, relire le transfert et l'adhésion patronale courante, le stock source et le mouvement d'expédition identifié par une clé stable ; puis débiter le stock, créer le mouvement immuable et confirmer l'expédition. La réception au magasin destinataire doit rester une transaction distincte, protégée par sa propre clé d'idempotence. La prévalidation JavaScript ne protège pas contre deux expéditions simultanées et n'est pas intégrée à l'application principale.
+
+
+## Correction — cohérence entre état du transfert et historique des réceptions (28 novembre 2026)
+
+Le contrôle des réceptions partielles cumulait correctement les quantités déclarées, mais ne rapprochait pas assez strictement cet historique de l'état persistant du transfert. Cela laissait passer deux instantanés incohérents : un transfert encore marqué `in_transit` avec des réceptions déjà enregistrées, ou un transfert marqué `partially_received` sans aucun événement de réception antérieur.
+
+Le validateur `validateStockTransferReceiptEvent` refuse maintenant ces deux incohérences :
+- `in_transit` exige un historique antérieur vide ;
+- `partially_received` exige au moins une réception antérieure validée.
+
+Deux assertions négatives supplémentaires couvrent ces états divergents. Le libellé statique du harnais passe de 330 à **332 assertions**. Les tests ne sont pas déclarés exécutés dans cette étape.
+
+Cette vérification améliore la cohérence du modèle, mais ne remplace pas le contrôle serveur : dans une transaction Firestore, le backend doit relire l'état courant du transfert et l'ensemble des événements de réception, vérifier leur cohérence et écrire le nouvel événement, le stock accepté et le nouvel état ensemble. Les événements de réception doivent être immuables et leur identifiant/idempotency key uniques au niveau de la base.
