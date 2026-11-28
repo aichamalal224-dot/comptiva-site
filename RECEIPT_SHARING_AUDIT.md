@@ -69,7 +69,7 @@ Contrôle statique du code et relecture des modifications GitHub. Aucun test aut
 - Le reçu de vente retrouve maintenant la ou les dettes liées à la vente via `saleId` et recalcule le solde à partir des remboursements réellement enregistrés dans `db.payments`.
 - Il distingue le montant encaissé au moment de la vente, les remboursements ultérieurs, le total encaissé et le solde restant. Le même calcul alimente le texte préparé pour WhatsApp et e-mail ainsi que le reçu imprimé.
 - Pour les ventes mixtes, le reçu partagé et le reçu imprimé détaillent séparément les montants espèces et Mobile Money initiaux.
-- Si l'historique d'une dette liée est incohérent (montant invalide, paiements négatifs ou paiements supérieurs à la dette), le reçu affiche « À vérifier » pour le solde au lieu de présenter un montant calculé comme fiable.
+- Si l'historique d'une dette liée est incohérent (montant non entier ou invalide, paiement non positif/non entier, paiements supérieurs à la dette, somme des dettes liées différente du crédit initial), le reçu affiche « À vérifier » pour le solde au lieu de présenter un montant calculé comme fiable.
 - Compatibilité : les ventes historiques sans dette liée par `saleId` conservent le calcul de crédit enregistré sur la vente. Leur historique de remboursement ne peut pas être reconstitué automatiquement si le lien vente-dette est absent.
 
 ### Vérifications complémentaires
