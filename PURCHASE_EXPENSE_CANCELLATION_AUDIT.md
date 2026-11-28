@@ -76,3 +76,8 @@ Limite : ce helper suppose que les unités annulées reviennent physiquement au 
 Le validateur des réceptions partielles d'achats vérifie désormais que la date de chaque réception antérieure n'est pas postérieure à l'heure de référence de l'opération et que l'identité de son auteur correspond à un membre actuellement autorisé à enregistrer une réception d'achat dans le magasin concerné. Une date de référence invalide est refusée avant le calcul des quantités cumulées.
 
 Deux tests de non-régression couvrent l'événement antérieur daté dans le futur et l'auteur vendeur non autorisé. Le test complet n'a pas été exécuté dans cet environnement. En production, la vérification d'appartenance actuelle doit être complétée par un historique d'audit serveur immuable : le validateur pur ne prouve pas à lui seul qu'un événement historique n'a jamais été falsifié.
+
+
+## Audit complémentaire — historique des retours clients (28 novembre 2026)
+
+Le contrôle des retours refuse désormais les événements antérieurs datés après l'heure de référence et vérifie que chaque auteur historique disposait de l'autorisation patronale `sales:return` pour le magasin concerné. L'heure de référence invalide est rejetée dès l'entrée du validateur. Trois tests de non-régression couvrent ces cas. Le validateur reste une prévalidation pure : l'historique doit provenir du stockage serveur de confiance et être vérifié dans la même transaction que le retour, le remboursement et la remise en stock.
