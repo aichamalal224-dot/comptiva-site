@@ -627,8 +627,7 @@ function validateStockTransferReceipt(bundle, actorUid, previousTransfer, receip
     return { valid: false, reason: 'transfer_receipt_mismatch_or_replay' };
   }
   const receivedMs = Date.parse(receipt.receivedAt);
-  const nowMs = Date.parse(now);
-  if (!Number.isFinite(receivedMs) || !Number.isFinite(nowMs) ||
+  if (!Number.isFinite(receivedMs) ||
       receivedMs > nowMs || nowMs - receivedMs > 5 * 60 * 1000) {
     return { valid: false, reason: 'invalid_receipt_timestamp' };
   }
@@ -1054,6 +1053,10 @@ function validatePurchaseStockReceipt(bundle, actorUid, purchase, receipt, prior
       !Number.isSafeInteger(stock.quantity) || stock.quantity < 0) {
     return { valid: false, reason: 'purchase_receipt_stock_mismatch' };
   }
+  const nowMs = Date.parse(now);
+  if (!Number.isFinite(nowMs)) {
+    return { valid: false, reason: 'invalid_purchase_receipt_timestamp' };
+  }
   const seenIds = new Set();
   const seenKeys = new Set();
   let alreadyReceived = 0;
@@ -1064,9 +1067,15 @@ function validatePurchaseStockReceipt(bundle, actorUid, purchase, receipt, prior
         !nonEmptyString(prior.id) || !nonEmptyString(prior.idempotencyKey) ||
         !nonEmptyString(prior.receivedBy) ||
         !Number.isFinite(Date.parse(prior.receivedAt)) ||
+        Date.parse(prior.receivedAt) > nowMs ||
         !Number.isSafeInteger(prior.quantity) || prior.quantity <= 0 ||
         seenIds.has(prior.id) || seenKeys.has(prior.idempotencyKey)) {
       return { valid: false, reason: 'invalid_or_duplicate_prior_purchase_receipt' };
+    }
+    const priorPermission = authorizeStoreAction(bundle, prior.receivedBy,
+      purchase.storeId, 'purchases:create');
+    if (!priorPermission.allowed) {
+      return { valid: false, reason: 'invalid_prior_purchase_receipt_actor' };
     }
     seenIds.add(prior.id);
     seenKeys.add(prior.idempotencyKey);
