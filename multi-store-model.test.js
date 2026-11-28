@@ -1211,7 +1211,7 @@ const adjustment = {
   id: 'adjust-1', idempotencyKey: 'adjust-key-1',
   organizationId: 'org-1', storeId: 'store-A',
   productId: 'product-rice', delta: -2,
-  reason: 'Inventaire physique', createdBy: 'owner-1'
+  reason: 'Inventaire physique', createdBy: 'owner-1', createdAt: new Date().toISOString()
 };
 const adjustmentCheck = validateStockAdjustment(bundle, 'owner-1',
   adjustment, stockSnapshotForAdjustment, null);
@@ -1228,6 +1228,18 @@ assert.equal(validateStockAdjustment(bundle, 'owner-1',
 assert.equal(validateStockAdjustment(bundle, 'owner-1', adjustment,
   stockSnapshotForAdjustment, { id: 'movement-existing' }).reason,
   'stock_adjustment_already_applied', 'stock adjustment replay is rejected');
+assert.equal(validateStockAdjustment(bundle, 'owner-1',
+  { ...adjustment, createdAt: 'not-a-date' }, stockSnapshotForAdjustment, null).reason,
+  'missing_provenance', 'stock adjustment requires complete creation provenance');
+assert.equal(validateStockAdjustment(bundle, 'owner-1',
+  { ...adjustment, createdAt: new Date(Date.now() + 60000).toISOString() },
+  stockSnapshotForAdjustment, null).reason,
+  'invalid_stock_adjustment_timestamp', 'future stock adjustment timestamp is rejected');
+assert.equal(validateStockAdjustment(bundle, 'owner-1',
+  { ...adjustment, delta: Number.MAX_SAFE_INTEGER },
+  { ...stockSnapshotForAdjustment, quantity: 1 }, null).reason,
+  'invalid_stock_adjustment_fields', 'stock adjustment resulting quantity must remain a safe integer');
+
 
 const auditEvent = {
   id: 'audit-1', organizationId: 'org-1', storeId: 'store-A',
@@ -1403,4 +1415,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 332 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 335 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
