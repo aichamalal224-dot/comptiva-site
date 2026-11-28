@@ -516,6 +516,9 @@ const receipt = {
   receivedBy: 'owner-1', receivedAt: '2026-11-27T14:02:00.000Z'
 };
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, receipt,
+  'invalid-now').reason, 'invalid_receipt_timestamp',
+  'full receipt validator rejects an invalid reference timestamp');
+assert.equal(validateStockTransferReceipt(bundle, 'owner-1', dispatchedTransfer, receipt,
   '2026-11-27T14:03:00.000Z').valid, true,
   'owner can validate receipt at destination store');
 assert.equal(validateStockTransferReceipt(bundle, 'seller-B', dispatchedTransfer, { ...receipt, receivedBy: 'seller-B' },
@@ -625,6 +628,9 @@ assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1, receiptMo
 assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1,
   { ...receiptMovement, quantityDelta: 3 }).valid, false,
   'receipt movement cannot credit refused or damaged units');
+assert.equal(validateStockTransferReceiptMovementLink(
+  { ...partialReceipt1, toStoreId: 'store-A' }, receiptMovement).valid, false,
+  'receipt movement link rejects a receipt whose store is not its declared destination');
 assert.equal(validateStockTransferReceiptMovementLink(partialReceipt1,
   { ...receiptMovement, storeId: 'store-A' }).valid, false,
   'receipt movement cannot credit the source store');
@@ -1636,4 +1642,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 383 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 386 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
