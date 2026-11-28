@@ -599,6 +599,56 @@ function validateStockTransferCreation(bundle, actorUid, transfer, now = new Dat
 }
 
 /**
+ * Prevalidate the source-stock debit when a transfer is dispatched.
+ * The trusted backend must atomically re-read the transfer, current owner
+ * membership, source inventory and dispatch movement, then write the debit,
+ * immutable movement and transfer state in one Firestore transaction.
+ */
+function validateStockTransferDispatch(bundle, actorUid, transfer, sourceStock, now = new Date().toISOString(), existingMovement = null) {
+  const modelCheck = validateOrganizationBundle(bundle);
+  if (!modelCheck.valid) return { valid: false, reason: 'invalid_organization_model' };
+  if (!isRecord(transfer) || !isRecord(sourceStock)) {
+    return { valid: false, reason: 'invalid_transfer_dispatch_context' };
+  }
+  if (existingMovement !== null && existingMovement !== undefined) {
+    return { valid: false, reason: 'transfer_dispatch_already_applied' };
+  }
+  const sourceStore = bundle.stores.find(store => store.id === transfer.fromStoreId);
+  const destinationStore = bundle.stores.find(store => store.id === transfer.toStoreId);
+  if (!nonEmptyString(transfer.id) || !nonEmptyString(transfer.idempotencyKey) ||
+      transfer.organizationId !== bundle.organization.id ||
+      !sourceStore || !destinationStore || sourceStore.id === destinationStore.id ||
+      sourceStore.organizationId !== bundle.organization.id ||
+      destinationStore.organizationId !== bundle.organization.id ||
+      !nonEmptyString(transfer.productId) ||
+      !Number.isSafeInteger(transfer.quantity) || transfer.quantity <= 0 ||
+      transfer.status !== 'in_transit' || transfer.createdBy !== actorUid ||
+      sourceStock.organizationId !== transfer.organizationId ||
+      sourceStock.storeId !== transfer.fromStoreId ||
+      sourceStock.productId !== transfer.productId ||
+      !Number.isSafeInteger(sourceStock.quantity) || sourceStock.quantity < 0) {
+    return { valid: false, reason: 'invalid_transfer_dispatch_fields' };
+  }
+  const nowMs = Date.parse(now);
+  const createdMs = Date.parse(transfer.createdAt);
+  if (!Number.isFinite(nowMs) || !Number.isFinite(createdMs) ||
+      createdMs > nowMs || nowMs - createdMs > 5 * 60 * 1000) {
+    return { valid: false, reason: 'invalid_transfer_dispatch_timestamp' };
+  }
+  const permission = authorizeStoreAction(bundle, actorUid, transfer.fromStoreId, 'transfers:create');
+  if (!permission.allowed) return { valid: false, reason: permission.reason };
+  if (sourceStock.quantity < transfer.quantity) {
+    return { valid: false, reason: 'insufficient_source_stock' };
+  }
+  return {
+    valid: true,
+    reason: 'stock_transfer_dispatch_prevalidated',
+    debitedQuantity: transfer.quantity,
+    resultingSourceStockQuantity: sourceStock.quantity - transfer.quantity
+  };
+}
+
+/**
  * Validate receipt against the persisted in-transit transfer. A trusted
  * transaction must atomically credit destination stock and mark it received.
  */
@@ -1630,6 +1680,7 @@ const api = {
   validateSellerStoreAssignment,
   authorizeWithCurrentMembership,
   validateStockTransferCreation,
+  validateStockTransferDispatch,
   validateStockTransferReceipt,
   validateStockTransferReceiptEvent,
   buildStockTransferReminderSuggestion,
