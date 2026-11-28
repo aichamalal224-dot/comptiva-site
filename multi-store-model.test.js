@@ -693,7 +693,7 @@ const debtForPayment = {
   storeId: 'store-A', amount: 10000
 };
 const priorPayments = [
-  { id: 'payment-old-1', idempotencyKey: 'payment-old-key-1', debtId: 'debt-pay-1', clientId: 'client-1', organizationId: 'org-1', storeId: 'store-A', amount: 3000 }
+  { id: 'payment-old-1', idempotencyKey: 'payment-old-key-1', debtId: 'debt-pay-1', clientId: 'client-1', organizationId: 'org-1', storeId: 'store-A', amount: 3000, createdBy: 'seller-A', createdAt: '2026-11-27T14:00:00.000Z' }
 ];
 const newPayment = {
   id: 'payment-new-1', idempotencyKey: 'payment-key-1',
@@ -758,6 +758,24 @@ assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
   newPayment, [{ ...priorPayments[0], idempotencyKey: 'payment-key-1' }], null,
   '2026-11-27T14:21:00.000Z').reason,
   'payment_already_applied', 'duplicate historical idempotency keys are rejected');
+
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], createdBy: 'seller-B' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment author must have access to the debt store');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], createdAt: '2026-11-27T14:22:00.000Z' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'future-dated historical repayment is rejected');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], reversedAt: '2026-11-27T14:10:00.000Z' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'reversed repayment requires reconciled ledger before new payment');
+assert.equal(validateDebtPayment(bundle, 'seller-A', debtForPayment,
+  newPayment, [{ ...priorPayments[0], createdBy: '' }], null,
+  '2026-11-27T14:21:00.000Z').reason,
+  'invalid_existing_payment_history', 'historical repayment without actor provenance is rejected');
+
 
 
 // Purchases, expenses and sale cancellation audit controls.
@@ -1327,4 +1345,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 315 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 319 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
