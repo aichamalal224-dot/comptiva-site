@@ -18,6 +18,7 @@ const SELLER_DEFAULT_ACTIONS = Object.freeze([
   'debts:create',
   'payments:read',
   'payments:create',
+  'transfers:read',
   'transfers:receive',
   // Seller defaults are deliberately limited to daily store operations.
   // Financial reporting, purchases, expenses and profit remain owner-only.
