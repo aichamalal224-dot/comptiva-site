@@ -430,7 +430,7 @@ const receipt = {
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', transfer, receipt,
   '2026-11-27T14:03:00.000Z').valid, true,
   'owner can validate receipt at destination store');
-assert.equal(validateStockTransferReceipt(bundle, 'seller-B', transfer, receipt,
+assert.equal(validateStockTransferReceipt(bundle, 'seller-B', transfer, { ...receipt, receivedBy: 'seller-B' },
   '2026-11-27T14:03:00.000Z').valid, true,
   'seller can confirm receipt in their assigned destination store');
 assert.equal(validateStockTransferReceipt(bundle, 'owner-1', {
