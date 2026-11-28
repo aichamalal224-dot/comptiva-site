@@ -1181,6 +1181,20 @@ assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
 assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
   { ...taskAccept, status: 'completed' }, [], '2026-11-28T12:01:00.000Z').valid, false,
   'seller cannot skip acceptance and complete assigned work');
+const taskAccepted = { ...taskBase, status: 'accepted' };
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskAccepted,
+  { ...taskAccept, status: 'completed', transitionId: 'task-event-skip',
+    idempotencyKey: 'task-key-skip' }, [], '2026-11-28T12:01:00.000Z').valid,
+  false, 'seller cannot skip the in-progress stage after acceptance');
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskAccepted,
+  { ...taskAccept, status: 'in_progress', transitionId: 'task-event-start',
+    idempotencyKey: 'task-key-start' }, [], '2026-11-28T12:01:00.000Z').valid,
+  true, 'assigned seller can start accepted work');
+const taskInProgress = { ...taskBase, status: 'in_progress' };
+assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskInProgress,
+  { ...taskAccept, status: 'completed', transitionId: 'task-event-done',
+    idempotencyKey: 'task-key-done' }, [], '2026-11-28T12:01:00.000Z').valid,
+  true, 'assigned seller can complete work after it is in progress');
 assert.equal(validateBusinessOrderTransition(bundle, 'seller-A', taskBase,
   taskAccept, ['task-event-1'], '2026-11-28T12:01:00.000Z').reason,
   'invalid_order_transition_fields', 'replayed transition ID is rejected');
@@ -1233,4 +1247,4 @@ assert.equal(validateBusinessOrderTransition(bundle, 'owner-1', supplierOrder,
   { ...supplierAccepted, updatedAt: 'not-a-date' }, [], '2026-11-28T12:01:00.000Z').valid,
   false, 'order transition requires a valid timestamp');
 
-console.log('PASS: 295 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
+console.log('PASS: 298 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
