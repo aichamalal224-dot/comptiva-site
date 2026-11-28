@@ -20,6 +20,7 @@ const {
   validatePurchaseStockReceipt,
   validateExpenseRecord,
   validateSaleCancellation,
+  validateSaleCancellationStock,
   validateSaleReturn,
   validateAuditEvent,
   validateStockAdjustment,
@@ -772,6 +773,45 @@ assert.equal(validatePurchaseStockReceipt(bundle, 'owner-1', stockPurchase,
   '2026-11-28T10:06:00.000Z').reason,
   'purchase_receipt_quantity_overflow', 'stock increment cannot exceed safe integer range');
 
+// Cancellation after a later stock transfer restores the original sale store only.
+const cancellableStockSale = {
+  id: 'sale-cancel-stock', organizationId: 'org-1', storeId: 'store-A',
+  productId: 'product-1', quantity: 2, total: 20000,
+  saleType: 'paid', paidAmount: 20000, creditAmount: 0,
+  createdBy: 'seller-A', createdAt: '2026-11-28T10:00:00.000Z'
+};
+const cancellationForStock = {
+  id: 'cancel-stock-1', idempotencyKey: 'cancel-stock-key-1',
+  saleId: 'sale-cancel-stock', organizationId: 'org-1', storeId: 'store-A',
+  createdBy: 'owner-1', createdAt: '2026-11-28T10:05:00.000Z',
+  reason: 'Annulation validée'
+};
+const originalStoreStock = {
+  organizationId: 'org-1', storeId: 'store-A', productId: 'product-1', quantity: 4
+};
+const cancellationStockCheck = validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, originalStoreStock);
+assert.equal(cancellationStockCheck.valid, true, 'owner can prevalidate stock restoration for cancellation');
+assert.equal(cancellationStockCheck.restoredToStoreId, 'store-A',
+  'cancelled sale stock returns to original sale store after later transfer');
+assert.equal(cancellationStockCheck.resultingStockQuantity, 6,
+  'cancellation restores exactly the sold quantity to original store');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock, originalStoreStock,
+  { id: 'movement-cancel-existing' }).reason,
+  'sale_cancellation_stock_already_restored', 'cancellation stock cannot be restored twice');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, { ...cancellationForStock, storeId: 'store-B' },
+  originalStoreStock).reason,
+  'invalid_sale_cancellation_stock_fields', 'cancellation cannot restore to a different store');
+assert.equal(validateSaleCancellationStock(bundle, 'seller-A',
+  cancellableStockSale, { ...cancellationForStock, createdBy: 'seller-A' },
+  originalStoreStock).valid, false, 'seller cannot restore stock through owner cancellation');
+assert.equal(validateSaleCancellationStock(bundle, 'owner-1',
+  cancellableStockSale, cancellationForStock,
+  { ...originalStoreStock, quantity: Number.MAX_SAFE_INTEGER }).reason,
+  'sale_cancellation_stock_overflow', 'cancellation cannot overflow stock quantity');
+
 // Customer returns: quantity, refund/credit reduction and restock are bounded.
 const saleForReturn = {
   id: 'sale-return-1', organizationId: 'org-1', storeId: 'store-A',
@@ -984,4 +1024,4 @@ assert.equal(validateSellerOperationalRecord({
 assert.equal(validateSellerOperationalRecord(null).valid, false,
   'seller operational record validator rejects missing objects');
 
-console.log('PASS: 240 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, sale-return and stock-transfer assertions');
+console.log('PASS: 247 multi-store model, permission, provenance, seller lifecycle, seller-data, purchase-receipt, cancellation-stock, sale-return and stock-transfer assertions');
