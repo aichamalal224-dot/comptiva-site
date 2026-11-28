@@ -20,7 +20,7 @@ Le texte partagé comprend le numéro de reçu, la date, le client, l'article, l
 - Aucun e-mail n'est envoyé automatiquement par COMPTIVA : `mailto:` ouvre l'application de messagerie de l'appareil. Il n'y a pas de serveur SMTP ni de fournisseur d'e-mail connecté.
 - Aucun message WhatsApp n'est envoyé automatiquement : WhatsApp s'ouvre avec un texte prérempli et l'utilisateur doit confirmer l'envoi.
 - Le partage actuel est un reçu textuel, pas une pièce jointe PDF. L'impression reste disponible via la page de reçu.
-- Le modèle actuel ne comporte pas de profil de commerce complet exploitable dans le reçu. Le reçu imprimé et le texte partagé affichent COMPTIVA, mais le nom personnalisé de la boutique, son adresse et son téléphone restent à intégrer depuis un profil commerçant vérifié. Ne pas inventer ces coordonnées.
+- Le profil du commerce est maintenant disponible dans l'application. Les coordonnées ne s'affichent que si le commerçant les a renseignées.
 - Les actions de partage nécessitent que la vente soit associée à une fiche client. WhatsApp exige un numéro guinéen valide au format +224 ; l'e-mail exige une adresse valide.
 - Aucun test réel sur Android, iOS, navigateur de bureau, application WhatsApp ou client e-mail n'a été exécuté dans cette étape.
 
@@ -62,3 +62,17 @@ Le profil est ajouté à la structure existante de données, qui est actuellemen
 ### Vérifications réalisées
 
 Contrôle statique du code et relecture des modifications GitHub. Aucun test automatisé exécuté, aucun essai réel d'impression ou de partage sur téléphone, aucune validation Firebase en production. La génération d'un PDF téléchargeable/joignable reste à faire.
+
+
+## Correction du calcul des reçus après remboursement — 28 novembre 2026
+
+- Le reçu de vente retrouve maintenant la ou les dettes liées à la vente via `saleId` et recalcule le solde à partir des remboursements réellement enregistrés dans `db.payments`.
+- Il distingue le montant encaissé au moment de la vente, les remboursements ultérieurs, le total encaissé et le solde restant. Le même calcul alimente le texte préparé pour WhatsApp et e-mail ainsi que le reçu imprimé.
+- Pour les ventes mixtes, le reçu partagé et le reçu imprimé détaillent séparément les montants espèces et Mobile Money initiaux.
+- Si l'historique d'une dette liée est incohérent (montant invalide, paiements négatifs ou paiements supérieurs à la dette), le reçu affiche « À vérifier » pour le solde au lieu de présenter un montant calculé comme fiable.
+- Compatibilité : les ventes historiques sans dette liée par `saleId` conservent le calcul de crédit enregistré sur la vente. Leur historique de remboursement ne peut pas être reconstitué automatiquement si le lien vente-dette est absent.
+
+### Vérifications complémentaires
+
+- Relecture statique des fonctions de calcul, impression et partage après écriture sur la branche.
+- Aucun test automatisé ni essai réel d'impression, WhatsApp ou e-mail exécuté. Aucune modification de Firebase, aucun déploiement et aucune fusion vers `main`.
